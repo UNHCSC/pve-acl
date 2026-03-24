@@ -1,0 +1,24 @@
+# Specific files to ignore (env, logs, db, etc.)
+*.toml
+*.db
+*.log
+log/
+
+# Go ignores
+vendor/
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+*.pprof
+
+# Bun/Node ignores
+node_modules/
+build/
+bun.lock
+package-lock.json
