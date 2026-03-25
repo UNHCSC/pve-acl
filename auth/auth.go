@@ -17,7 +17,7 @@ import (
 var authLog *golog.Logger = golog.New().Prefix("[Please call auth.Init() with the main logger]", golog.BoldRed)
 
 func Init(parentLog *golog.Logger) (err error) {
-	authLog = parentLog.SpawnChild().Prefix("[AUTH]", golog.BoldGreen)
+	authLog = parentLog.SpawnChild().Prefix("[AUTH]", golog.BoldYellow)
 	return
 }
 

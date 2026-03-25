@@ -8,9 +8,10 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/gofiber/fiber/v2 v2.52.12
+	github.com/gofiber/template/html/v2 v2.1.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/z46-dev/golog v0.0.0-20260324172018-d1a87bbdeb64
-	github.com/z46-dev/gomysql v0.0.0-20260119214844-2ca3df3ae1fd
+	github.com/z46-dev/gomysql v0.0.0-20260324223828-3d71250063f7
 )
 
 require (
@@ -22,6 +23,8 @@ require (
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/gofiber/template v1.8.3 // indirect
+	github.com/gofiber/utils v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

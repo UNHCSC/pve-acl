@@ -1,9 +1,11 @@
 package main
 
 import (
+	"github.com/UNHCSC/pve-acl/app"
 	"github.com/UNHCSC/pve-acl/auth"
 	"github.com/UNHCSC/pve-acl/config"
 	"github.com/UNHCSC/pve-acl/db"
+	"github.com/gofiber/fiber/v2"
 	"github.com/z46-dev/golog"
 )
 
@@ -23,5 +25,14 @@ func main() {
 
 	if err = auth.Init(log); err != nil {
 		log.Panicf("Failed to initialize auth: %v\n", err)
+	}
+
+	var fiberApp *fiber.App
+	if fiberApp, err = app.InitAndListen(log); err != nil {
+		log.Panicf("Failed to initialize app: %v\n", err)
+	} else {
+		if err = app.StartApp(fiberApp); err != nil {
+			log.Panicf("Failed to start app: %v\n", err)
+		}
 	}
 }

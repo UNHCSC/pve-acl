@@ -11,10 +11,15 @@ import (
 )
 
 var (
-	dbLog         *golog.Logger
-	LocalUsers    *gomysql.RegisteredStruct[LocalUser]
-	LocalGroups   *gomysql.RegisteredStruct[LocalGroup]
-	ProxmoxAssets *gomysql.RegisteredStruct[ProxmoxAsset]
+	dbLog                          *golog.Logger
+	LocalUsers                     *gomysql.RegisteredStruct[LocalUser]
+	LocalGroups                    *gomysql.RegisteredStruct[LocalGroup]
+	ProxmoxAssets                  *gomysql.RegisteredStruct[ProxmoxAsset]
+	LocalGroupMembershipsByUser    *gomysql.RegisteredStruct[LocalGroupMembershipByUser]
+	ProxmoxAssetAssignmentsByUser  *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByUser]
+	ProxmoxAssetAssignmentsByGroup *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByGroup]
+	LocalGroupManagementsByUser    *gomysql.RegisteredStruct[LocalGroupManagementByUser]
+	LocalGroupManagementsByGroup   *gomysql.RegisteredStruct[LocalGroupManagementByGroup]
 )
 
 func Init(parentLog *golog.Logger) (err error) {
@@ -40,6 +45,31 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 
+	if LocalGroupMembershipsByUser, err = gomysql.Register(LocalGroupMembershipByUser{}); err != nil {
+		dbLog.Errorf("Failed to register LocalGroupMembershipByUser struct: %v\n", err)
+		return
+	}
+
+	if ProxmoxAssetAssignmentsByUser, err = gomysql.Register(ProxmoxAssetAssignmentByUser{}); err != nil {
+		dbLog.Errorf("Failed to register ProxmoxAssetAssignmentByUser struct: %v\n", err)
+		return
+	}
+
+	if ProxmoxAssetAssignmentsByGroup, err = gomysql.Register(ProxmoxAssetAssignmentByGroup{}); err != nil {
+		dbLog.Errorf("Failed to register ProxmoxAssetAssignmentByGroup struct: %v\n", err)
+		return
+	}
+
+	if LocalGroupManagementsByUser, err = gomysql.Register(LocalGroupManagementByUser{}); err != nil {
+		dbLog.Errorf("Failed to register LocalGroupManagementByUser struct: %v\n", err)
+		return
+	}
+
+	if LocalGroupManagementsByGroup, err = gomysql.Register(LocalGroupManagementByGroup{}); err != nil {
+		dbLog.Errorf("Failed to register LocalGroupManagementByGroup struct: %v\n", err)
+		return
+	}
+
 	// Migrations
 	var migrationOpts gomysql.MigrationOptions
 
@@ -62,6 +92,33 @@ func Init(parentLog *golog.Logger) (err error) {
 		dbLog.Errorf("Failed to migrate ProxmoxAssets table: %v\n", err)
 		return
 	}
+
+	if err = migrate(LocalGroupMembershipsByUser, migrationOpts); err != nil {
+		dbLog.Errorf("Failed to migrate LocalGroupMembershipsByUser table: %v\n", err)
+		return
+	}
+
+	if err = migrate(ProxmoxAssetAssignmentsByUser, migrationOpts); err != nil {
+		dbLog.Errorf("Failed to migrate ProxmoxAssetAssignmentsByUser table: %v\n", err)
+		return
+	}
+
+	if err = migrate(ProxmoxAssetAssignmentsByGroup, migrationOpts); err != nil {
+		dbLog.Errorf("Failed to migrate ProxmoxAssetAssignmentsByGroup table: %v\n", err)
+		return
+	}
+
+	if err = migrate(LocalGroupManagementsByUser, migrationOpts); err != nil {
+		dbLog.Errorf("Failed to migrate LocalGroupManagementsByUser table: %v\n", err)
+		return
+	}
+
+	if err = migrate(LocalGroupManagementsByGroup, migrationOpts); err != nil {
+		dbLog.Errorf("Failed to migrate LocalGroupManagementsByGroup table: %v\n", err)
+		return
+	}
+
+	dbLog.Info("Database initialized successfully")
 
 	return
 }
