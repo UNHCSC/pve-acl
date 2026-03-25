@@ -37,3 +37,39 @@ func UsersForGroup(groupname string) (usernames []string, err error) {
 
 	return
 }
+
+func AssetIDsForUser(username string) (assetIDs []string, err error) {
+	var (
+		filter      *gomysql.Filter = gomysql.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByUser.FieldBySQLName("username"), gomysql.OpEqual, username)
+		assignments []*ProxmoxAssetAssignmentByUser
+	)
+
+	if assignments, err = ProxmoxAssetAssignmentsByUser.SelectAllWithFilter(filter); err != nil {
+		return
+	}
+
+	assetIDs = make([]string, len(assignments))
+	for i, a := range assignments {
+		assetIDs[i] = a.AssetID
+	}
+
+	return
+}
+
+func AssetIDsForGroup(groupname string) (assetIDs []string, err error) {
+	var (
+		filter      *gomysql.Filter = gomysql.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByGroup.FieldBySQLName("groupname"), gomysql.OpEqual, groupname)
+		assignments []*ProxmoxAssetAssignmentByGroup
+	)
+
+	if assignments, err = ProxmoxAssetAssignmentsByGroup.SelectAllWithFilter(filter); err != nil {
+		return
+	}
+
+	assetIDs = make([]string, len(assignments))
+	for i, a := range assignments {
+		assetIDs[i] = a.AssetID
+	}
+
+	return
+}
