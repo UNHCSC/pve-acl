@@ -41,9 +41,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	)
 
 	// API v1 auth
-	apiV1Auth.Post("/login", _noop)
-	apiV1Auth.Post("/logout", _noop)
-	apiV1Auth.Get("/status", _noop)
+	apiV1Auth.Post("/login", postLogin)
+	apiV1Auth.Post("/logout", postLogout)
+	apiV1Auth.Get("/status", getStatus)
 
 	// API v1 enums
 	apiV1Enums.Get("/asset-types", getAssetTypes)
