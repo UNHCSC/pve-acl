@@ -9,12 +9,14 @@ import "time"
 // mapping between "user1" and "group1".
 
 type (
-	ProxmoxAssetType      uint8
-	ManagementPermissions uint8
-	AssetPermissions      uint8
+	ProxmoxAssetType     uint8
+	ManagementPermission uint8
+	AssetPermission      uint8
 
 	LocalUser struct {
 		Username  string    `gomysql:"username,primary,unique" json:"username"`
+		Name      string    `gomysql:"name" json:"name"`
+		Email     string    `gomysql:"email" json:"email"`
 		Notes     string    `gomysql:"notes" json:"notes"`
 		FirstSeen time.Time `gomysql:"first_seen" json:"first_seen"`
 		LastSeen  time.Time `gomysql:"last_seen" json:"last_seen"`
@@ -32,58 +34,39 @@ type (
 		Type ProxmoxAssetType `gomysql:"type" json:"type"`
 	}
 
-	LocalGroupMembershipByUser struct {
+	LocalGroupMembership struct {
 		ID        int    `gomysql:"membership_id,primary,increment" json:"membership_id"`
 		Username  string `gomysql:"username,fkey:LocalUser.username" json:"username"`
 		Groupname string `gomysql:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
 	}
 
 	ProxmoxAssetAssignmentByUser struct {
-		ID          int              `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
-		AssetID     string           `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
-		Username    string           `gomysql:"username,fkey:LocalUser.username" json:"username"`
-		Permissions AssetPermissions `gomysql:"permissions" json:"permissions"`
+		ID          int             `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
+		AssetID     string          `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
+		Username    string          `gomysql:"username,fkey:LocalUser.username" json:"username"`
+		Permissions AssetPermission `gomysql:"permissions" json:"permissions"`
 	}
 
 	ProxmoxAssetAssignmentByGroup struct {
-		ID          int              `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
-		AssetID     string           `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
-		Groupname   string           `gomysql:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
-		Permissions AssetPermissions `gomysql:"permissions" json:"permissions"`
+		ID          int             `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
+		AssetID     string          `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
+		Groupname   string          `gomysql:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
+		Permissions AssetPermission `gomysql:"permissions" json:"permissions"`
 	}
 
 	LocalGroupManagementByUser struct {
-		ID          int                   `gomysql:"membership_id,primary,increment" json:"membership_id"`
-		Member      string                `gomysql:"member,fkey:LocalUser.username" json:"member"`
-		MemberOf    string                `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
-		Permissions ManagementPermissions `gomysql:"permissions" json:"permissions"`
+		ID          int                  `gomysql:"membership_id,primary,increment" json:"membership_id"`
+		Member      string               `gomysql:"member,fkey:LocalUser.username" json:"member"`
+		MemberOf    string               `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
+		Permissions ManagementPermission `gomysql:"permissions" json:"permissions"`
 	}
 
 	LocalGroupManagementByGroup struct {
-		ID          int                   `gomysql:"membership_id,primary,increment" json:"membership_id"`
-		Member      string                `gomysql:"member,fkey:LocalGroup.groupname" json:"member"`
-		MemberOf    string                `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
-		Permissions ManagementPermissions `gomysql:"permissions" json:"permissions"`
+		ID          int                  `gomysql:"membership_id,primary,increment" json:"membership_id"`
+		Member      string               `gomysql:"member,fkey:LocalGroup.groupname" json:"member"`
+		MemberOf    string               `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
+		Permissions ManagementPermission `gomysql:"permissions" json:"permissions"`
 	}
-)
-
-const (
-	ProxmoxAssetTypeVM ProxmoxAssetType = iota
-	ProxmoxAssetTypeCT
-)
-
-const (
-	PermissionsNone         AssetPermissions = 0               // Cannot see or do anything with the asset
-	PermissionsView         AssetPermissions = 1 << (iota - 1) // Can view asset details and status, no actions
-	PermissionsVNC                                             // Can use VNC console
-	PermissionsPowerControl                                    // Can perform power actions (start, stop, reboot)
-	PermissionsManage                                          // Can edit basic asset properties supported by system (may be expanded in future)
-)
-
-const (
-	ManagementPermissionsNone                   ManagementPermissions = 0               // No special perms
-	ManagementPermissionsUserAssets             ManagementPermissions = 1 << (iota - 1) // Can manage assets assigned to users in group this is bound to (LocalGroupManagementByUser, LocalGroupManagementByGroup)
-	ManagementPermissionsManageLocalPermissions                                         // Can create/edit/delete LocalGroupManagementByUser and LocalGroupManagementByGroup entries for a certain group
 )
 
 // Note that full site administrators are configured through config.toml

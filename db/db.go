@@ -15,7 +15,7 @@ var (
 	LocalUsers                     *gomysql.RegisteredStruct[LocalUser]
 	LocalGroups                    *gomysql.RegisteredStruct[LocalGroup]
 	ProxmoxAssets                  *gomysql.RegisteredStruct[ProxmoxAsset]
-	LocalGroupMembershipsByUser    *gomysql.RegisteredStruct[LocalGroupMembershipByUser]
+	LocalGroupMembershipsByUser    *gomysql.RegisteredStruct[LocalGroupMembership]
 	ProxmoxAssetAssignmentsByUser  *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByUser]
 	ProxmoxAssetAssignmentsByGroup *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByGroup]
 	LocalGroupManagementsByUser    *gomysql.RegisteredStruct[LocalGroupManagementByUser]
@@ -45,7 +45,7 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 
-	if LocalGroupMembershipsByUser, err = gomysql.Register(LocalGroupMembershipByUser{}); err != nil {
+	if LocalGroupMembershipsByUser, err = gomysql.Register(LocalGroupMembership{}); err != nil {
 		dbLog.Errorf("Failed to register LocalGroupMembershipByUser struct: %v\n", err)
 		return
 	}

@@ -37,6 +37,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 		apiV1Users  fiber.Router = apiV1.Group("/users")
 		apiV1Groups fiber.Router = apiV1.Group("/groups")
 		apiV1Assets fiber.Router = apiV1.Group("/assets")
+		apiV1ACL    fiber.Router = apiV1.Group("/acl")
 	)
 
 	// API v1 auth
@@ -45,8 +46,12 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Auth.Get("/status", _noop)
 
 	// API v1 enums
-	apiV1Enums.Get("/permissions", _noop)
-	apiV1Enums.Get("/assettypes", _noop)
+	apiV1Enums.Get("/asset-types", getAssetTypes)
+	apiV1Enums.Get("/asset-types/reverse", getAssetTypesReverse)
+	apiV1Enums.Get("/asset-permissions", getAssetPermissions)
+	apiV1Enums.Get("/asset-permissions/reverse", getAssetPermissionsReverse)
+	apiV1Enums.Get("/management-permissions", getManagementPermissions)
+	apiV1Enums.Get("/management-permissions/reverse", getManagementPermissionsReverse)
 
 	// API v1 users
 	apiV1Users.Get("/me", _noop)
@@ -64,6 +69,15 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Assets.Get("/some/:assetnames", _noop)
 	apiV1Assets.Post("/update/:assetnames", _noop)
 	apiV1Assets.Post("/create", _noop)
+
+	// API v1 ACL
+	apiV1ACL.Get("/groupsForUser/:username", getGroupsForUser)
+	apiV1ACL.Get("/usersForGroup/:groupname", getUsersForGroup)
+	apiV1ACL.Get("/assetsForUser/:username", _noop)
+	apiV1ACL.Get("/assetsForGroup/:groupname", _noop)
+	apiV1ACL.Get("/assignmentsForAsset/:assetid", _noop)
+	apiV1ACL.Post("/updateAssetAssignments", _noop) // body will have sets of additions, changes, and deletions to apply
+	apiV1ACL.Post("/updateGroupManagement", _noop)
 
 	return
 }
