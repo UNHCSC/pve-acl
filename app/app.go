@@ -16,7 +16,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	templateEngine.Reload(config.Config.WebServer.ReloadTemplatesOnEachRender)
 
 	app = fiber.New(fiber.Config{
-		Views: templateEngine,
+		Views:   templateEngine,
+		Network: "tcp",
 	})
 
 	// Statics

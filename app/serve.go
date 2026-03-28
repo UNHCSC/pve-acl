@@ -12,8 +12,10 @@ import (
 
 func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (err error) {
 	var (
-		redirectApp *fiber.App = fiber.New()
-		targetPort  string
+		redirectApp *fiber.App = fiber.New(fiber.Config{
+			Network: "tcp",
+		})
+		targetPort string
 	)
 
 	if _, targetPort, err = net.SplitHostPort(targetAddress); err != nil {
@@ -21,7 +23,7 @@ func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (e
 	}
 
 	redirectApp.Use(func(c *fiber.Ctx) error {
-		var targetScheme, host string = "http", net.JoinHostPort(c.Hostname(), targetPort)
+		var targetScheme, host string = "http", net.JoinHostPort(trimIPv6HostBrackets(c.Hostname()), targetPort)
 
 		if useTLS {
 			targetScheme = "https"
@@ -41,6 +43,10 @@ func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (e
 	}()
 
 	return
+}
+
+func trimIPv6HostBrackets(host string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
 }
 
 func StartApp(app *fiber.App) (err error) {
