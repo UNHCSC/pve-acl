@@ -1,0 +1,649 @@
+<div class="dashboard-shell">
+    <aside class="dashboard-sidebar">
+        <a href="/" class="brand-mark">
+            <span class="brand-icon">PC</span>
+            <span>PVE Cloud</span>
+        </a>
+
+        <nav class="dashboard-nav" aria-label="Dashboard navigation">
+            <button type="button" class="is-active" data-view-tab="overview">Overview</button>
+            <button type="button" data-view-tab="projects">Projects</button>
+            <button type="button" data-view-tab="people">People</button>
+            <button type="button" data-view-tab="identity">Identity</button>
+            <button type="button" data-view-tab="access">Access</button>
+        </nav>
+    </aside>
+
+    <div class="dashboard-main" data-dashboard>
+        <header class="dashboard-topbar">
+            <div>
+                <p class="eyebrow">Control plane</p>
+                <h1 data-view-title>Overview</h1>
+            </div>
+            <div class="dashboard-actions">
+                <a href="/login" class="button-primary" data-sign-in-action>Sign in</a>
+                <div class="account-menu" data-account-menu hidden>
+                    <button class="account-button" type="button" data-account-toggle>
+                        <span class="account-avatar" data-user-initials>--</span>
+                        <span data-account-label>Account</span>
+                    </button>
+                    <div class="account-dropdown" data-account-dropdown hidden>
+                        <div class="account-summary">
+                            <strong data-user-name>Not signed in</strong>
+                            <span data-account-email></span>
+                            <span data-user-meta></span>
+                        </div>
+                        <button class="logout-button" type="button" data-logout-action>Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-content">
+            <section class="dashboard-view is-active" data-view="overview">
+                <div class="metric-grid" aria-label="Cloud summary">
+                    <article class="metric-card">
+                        <span class="panel-label">Organizations</span>
+                        <strong data-count="organizations">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="panel-label">Projects</span>
+                        <strong data-count="projects">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="panel-label">Users</span>
+                        <strong data-count="users">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="panel-label">Audit events</span>
+                        <strong data-count="auditEvents">--</strong>
+                    </article>
+                </div>
+
+                <section class="dashboard-grid">
+                    <article class="dashboard-panel">
+                        <div class="panel-heading compact-heading">
+                            <div>
+                                <span class="panel-label">System data</span>
+                                <h2>Local tables</h2>
+                            </div>
+                        </div>
+                        <div class="table-count-grid">
+                            <div><span>Groups</span><strong data-count="groups">--</strong></div>
+                            <div><span>Roles</span><strong data-count="roles">--</strong></div>
+                            <div><span>Permissions</span><strong data-count="permissions">--</strong></div>
+                            <div><span>Role bindings</span><strong data-count="roleBindings">--</strong></div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel">
+                        <div class="panel-heading compact-heading">
+                            <div>
+                                <span class="panel-label">Recents</span>
+                                <h2>Recent work</h2>
+                            </div>
+                        </div>
+                        <div class="recent-list" data-recent-list>
+                            <div class="empty-state">No recent activity yet.</div>
+                        </div>
+                    </article>
+                </section>
+            </section>
+
+            <section class="dashboard-view" data-view="projects" hidden>
+                <article class="dashboard-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="panel-label">Projects</span>
+                            <h2>Local project registry</h2>
+                        </div>
+                        <button class="button-primary" type="button" data-open-project-modal>Create project</button>
+                    </div>
+
+                    <p class="form-message" data-project-message></p>
+
+                    <div class="data-table" data-project-table>
+                        <div class="data-table-head">
+                            <span>Name</span>
+                            <span>Slug</span>
+                            <span>Status</span>
+                            <span></span>
+                        </div>
+                        <div data-project-list>
+                            <div class="empty-state">No projects loaded.</div>
+                        </div>
+                    </div>
+                </article>
+
+                <section class="project-detail-page" data-project-detail hidden>
+                    <div class="project-detail-shell">
+                        <header class="project-detail-header">
+                            <div>
+                                <span class="panel-label">Project</span>
+                                <h2 data-project-detail-name>Project</h2>
+                                <p data-project-detail-description>No description</p>
+                            </div>
+                            <div class="project-detail-actions">
+                                <button class="icon-button row-menu-button" type="button" data-project-actions-toggle title="Project actions">⋯</button>
+                                <div class="row-menu" data-project-actions-menu hidden>
+                                    <button class="danger-action" type="button" data-project-delete>Delete project</button>
+                                </div>
+                                <button class="button-secondary" type="button" data-close-project-detail>Close</button>
+                            </div>
+                        </header>
+
+                        <div class="project-detail-content">
+                            <section class="project-detail-main">
+                                <div class="detail-body">
+                                    <dl class="detail-list expanded-detail-list">
+                                        <div><dt>Slug</dt><dd data-project-detail-slug>--</dd></div>
+                                        <div><dt>Status</dt><dd data-project-detail-status>--</dd></div>
+                                        <div><dt>Members</dt><dd data-project-member-count>--</dd></div>
+                                        <div><dt>Project ID</dt><dd data-project-detail-id>--</dd></div>
+                                        <div><dt>UUID</dt><dd data-project-detail-uuid>--</dd></div>
+                                        <div><dt>Organization</dt><dd data-project-detail-org>--</dd></div>
+                                        <div><dt>Type</dt><dd data-project-detail-type>--</dd></div>
+                                        <div><dt>Created</dt><dd data-project-detail-created>--</dd></div>
+                                        <div><dt>Updated</dt><dd data-project-detail-updated>--</dd></div>
+                                    </dl>
+                                </div>
+
+                                <section class="dashboard-panel project-members-panel">
+                                    <div class="panel-heading">
+                                        <div>
+                                            <span class="panel-label">Members</span>
+                                            <h3>Project access</h3>
+                                        </div>
+                                        <div class="project-access-actions">
+                                            <div class="segmented-control" data-project-access-tabs>
+                                                <button class="is-active" type="button" data-project-access-tab="user">Users</button>
+                                                <button type="button" data-project-access-tab="group">Groups</button>
+                                            </div>
+                                            <button class="button-primary compact-button" type="button" data-open-project-member-popover>Add user</button>
+                                        </div>
+                                    </div>
+                                    <div class="compact-list" data-project-membership-list>
+                                        <div class="empty-state">No members loaded.</div>
+                                    </div>
+                                </section>
+                            </section>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <section class="dashboard-view" data-view="people" hidden>
+                <article class="dashboard-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="panel-label">People</span>
+                            <h2>Local users</h2>
+                        </div>
+                        <button class="button-primary" type="button" data-open-user-modal>Create user</button>
+                    </div>
+                    <div class="data-table">
+                        <div class="data-table-head people-table-head">
+                            <span>User</span>
+                            <span>Email</span>
+                            <span>Auth</span>
+                        </div>
+                        <div data-user-list>
+                            <div class="empty-state">No users loaded.</div>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+            <section class="dashboard-view" data-view="identity" hidden>
+                <section class="dashboard-grid">
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Identity</span>
+                                <h2>Current session</h2>
+                            </div>
+                        </div>
+                        <div class="identity-panel large-identity">
+                            <div class="identity-avatar" data-user-initials>--</div>
+                            <div>
+                                <strong data-user-name>Not signed in</strong>
+                                <span data-user-meta>Open a session to load live identity data.</span>
+                                <span data-user-admin>--</span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Membership</span>
+                                <h2>Current grants</h2>
+                            </div>
+                        </div>
+                        <div class="table-count-grid">
+                            <div><span>Groups</span><strong data-user-groups>--</strong></div>
+                            <div><span>Roles</span><strong data-user-role-count>--</strong></div>
+                            <div><span>Role bindings</span><strong data-user-binding-count>--</strong></div>
+                            <div><span>Admin</span><strong data-user-admin>--</strong></div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Groups</span>
+                                <h2>My groups</h2>
+                            </div>
+                        </div>
+                        <div class="compact-list" data-my-group-list>
+                            <div class="empty-state">No groups loaded.</div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Roles</span>
+                                <h2>My roles</h2>
+                            </div>
+                        </div>
+                        <div class="compact-list" data-my-role-list>
+                            <div class="empty-state">No roles loaded.</div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel wide-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Bindings</span>
+                                <h2>Role bindings</h2>
+                            </div>
+                        </div>
+                        <div class="compact-list" data-my-binding-list>
+                            <div class="empty-state">No role bindings loaded.</div>
+                        </div>
+                    </article>
+                </section>
+            </section>
+
+            <section class="dashboard-view" data-view="access" hidden>
+                <section class="access-grid">
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Groups</span>
+                                <h2>Cloud groups</h2>
+                            </div>
+                            <button class="button-primary" type="button" data-open-group-modal>Create group</button>
+                        </div>
+                        <div class="compact-list" data-group-list>
+                            <div class="empty-state">No groups loaded.</div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Roles</span>
+                                <h2>Role catalog</h2>
+                            </div>
+                            <button class="button-primary" type="button" data-open-role-modal>Create role</button>
+                        </div>
+                        <div class="compact-list" data-role-list>
+                            <div class="empty-state">No roles loaded.</div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel access-grants-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Access grants</span>
+                                <h2>Who can do what</h2>
+                            </div>
+                            <button class="button-primary" type="button" data-open-grant-modal>Bind role</button>
+                        </div>
+                        <div class="compact-list" data-access-grant-list>
+                            <div class="empty-state">No access grants loaded.</div>
+                        </div>
+                    </article>
+
+                    <article class="dashboard-panel permissions-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <span class="panel-label">Permissions</span>
+                                <h2>Permission catalog</h2>
+                            </div>
+                        </div>
+                        <div class="permission-cloud" data-permission-list></div>
+                    </article>
+                </section>
+            </section>
+        </main>
+    </div>
+</div>
+
+<div class="floating-popover" data-project-member-popover hidden>
+    <form class="modal-form compact-popover-form" data-project-membership-form>
+        <div class="popover-heading">
+            <span class="panel-label" data-project-member-kicker>Direct user access</span>
+            <h3 data-project-member-title>Add user</h3>
+            <p data-project-member-copy>Resolve a local user or sync an IPA user by username, email, or display name.</p>
+        </div>
+        <input type="hidden" name="subjectType" value="user" data-project-subject-type />
+        <div data-project-user-fields>
+            <label class="field-group">
+                <span class="field-label">User</span>
+                <input class="field-input" type="text" name="userRef" list="project-user-options" data-project-user-input placeholder="username, email, or display name" />
+                <datalist id="project-user-options" data-project-user-options></datalist>
+            </label>
+        </div>
+        <div data-project-group-fields hidden>
+            <label class="field-group">
+                <span class="field-label">Project group</span>
+                <select class="field-input" name="groupRef" data-project-group-select></select>
+            </label>
+        </div>
+        <label class="field-group">
+            <span class="field-label">Role</span>
+            <select class="field-input" name="projectRole">
+                <option value="viewer">Viewer</option>
+                <option value="operator">Operator</option>
+                <option value="developer">Developer</option>
+                <option value="manager">Manager</option>
+                <option value="owner">Owner</option>
+            </select>
+        </label>
+        <div class="modal-actions">
+            <button class="button-secondary" type="button" data-close-project-member-popover>Cancel</button>
+            <button class="button-primary" type="submit" data-project-member-submit>Add user</button>
+        </div>
+        <p class="form-message compact-form-message" data-project-member-message></p>
+    </form>
+</div>
+
+<div class="modal-backdrop" data-group-members-modal hidden>
+    <section class="modal-panel membership-modal-panel" role="dialog" aria-modal="true" aria-labelledby="group-members-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Groups</span>
+                <h2 id="group-members-modal-title" data-group-members-title>Manage members</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-group-members-modal aria-label="Close">x</button>
+        </div>
+        <div class="membership-transfer">
+            <div class="membership-role-control">
+                <label class="field-group">
+                    <span class="field-label">Role for added users</span>
+                    <select class="field-input" data-group-membership-role>
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="owner">Owner</option>
+                    </select>
+                </label>
+                <div class="inline-role-editor">
+                    <label class="field-group">
+                        <span class="field-label">Role for selected members</span>
+                        <select class="field-input" data-group-member-edit-role>
+                            <option value="member">Member</option>
+                            <option value="manager">Manager</option>
+                            <option value="owner">Owner</option>
+                        </select>
+                    </label>
+                    <button class="button-secondary" type="button" data-group-member-role-update>Update role</button>
+                </div>
+            </div>
+            <section>
+                <span class="field-label">Available users</span>
+                <select class="transfer-list" data-available-users multiple></select>
+            </section>
+            <div class="transfer-actions">
+                <button class="button-secondary" type="button" data-transfer-add>&gt;</button>
+                <button class="button-secondary" type="button" data-transfer-add-all>&gt;&gt;</button>
+                <button class="button-secondary" type="button" data-transfer-remove>&lt;</button>
+                <button class="button-secondary" type="button" data-transfer-remove-all>&lt;&lt;</button>
+            </div>
+            <section>
+                <span class="field-label">Group members</span>
+                <select class="transfer-list" data-group-users multiple></select>
+            </section>
+        </div>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-project-modal hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="project-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Projects</span>
+                <h2 id="project-modal-title">Create project</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-project-modal aria-label="Close">x</button>
+        </div>
+
+        <form class="modal-form" data-project-form>
+            <label class="field-group">
+                <span class="field-label">Name</span>
+                <input class="field-input" type="text" name="name" placeholder="Blue Team Practice" required />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Slug</span>
+                <input class="field-input" type="text" name="slug" placeholder="blue-team-practice" />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Description</span>
+                <input class="field-input" type="text" name="description" placeholder="Shared local project shell" />
+            </label>
+
+            <div class="modal-actions">
+                <button class="button-secondary" type="button" data-close-project-modal>Cancel</button>
+                <button class="button-primary" type="submit">Create project</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-user-modal hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">People</span>
+                <h2 id="user-modal-title">Create user</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-user-modal aria-label="Close">x</button>
+        </div>
+        <form class="modal-form" data-user-form>
+            <label class="field-group">
+                <span class="field-label">Username</span>
+                <input class="field-input" type="text" name="username" required />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Full name</span>
+                <input class="field-input" type="text" name="displayName" />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Email</span>
+                <input class="field-input" type="email" name="email" />
+            </label>
+            <div class="modal-actions">
+                <button class="button-secondary" type="button" data-close-user-modal>Cancel</button>
+                <button class="button-primary" type="submit">Create user</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-group-modal hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="group-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Access</span>
+                <h2 id="group-modal-title">Create group</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-group-modal aria-label="Close">x</button>
+        </div>
+        <form class="modal-form" data-group-form>
+            <label class="field-group">
+                <span class="field-label">Name</span>
+                <input class="field-input" type="text" name="name" required />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Slug</span>
+                <input class="field-input" type="text" name="slug" />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Type</span>
+                <select class="field-input" name="groupType">
+                    <option value="custom">Custom</option>
+                    <option value="project">Project</option>
+                    <option value="course">Course</option>
+                    <option value="course_role">Course role</option>
+                    <option value="student_group">Student group</option>
+                    <option value="club">Club</option>
+                    <option value="competition">Competition</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </label>
+            <label class="field-group">
+                <span class="field-label">Parent group</span>
+                <select class="field-input" name="parentGroupID" data-group-parent-select>
+                    <option value="">None</option>
+                </select>
+            </label>
+            <label class="field-group">
+                <span class="field-label">Membership source</span>
+                <select class="field-input" name="syncSource" data-group-sync-source>
+                    <option value="local">Local only</option>
+                    <option value="ldap">Sync with LDAP</option>
+                </select>
+            </label>
+            <div data-group-ldap-fields hidden>
+                <label class="field-group">
+                    <span class="field-label">LDAP group name</span>
+                    <input class="field-input" type="text" name="externalID" placeholder="admins" />
+                </label>
+                <label class="checkbox-field">
+                    <input type="checkbox" name="syncMembership" checked />
+                    <span>Sync membership from LDAP</span>
+                </label>
+            </div>
+            <label class="field-group">
+                <span class="field-label">Description</span>
+                <input class="field-input" type="text" name="description" />
+            </label>
+            <div class="modal-actions">
+                <button class="button-secondary" type="button" data-close-group-modal>Cancel</button>
+                <button class="button-primary" type="submit">Create group</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-role-modal hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Access</span>
+                <h2 id="role-modal-title">Create role</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-role-modal aria-label="Close">x</button>
+        </div>
+        <form class="modal-form" data-role-form>
+            <label class="field-group">
+                <span class="field-label">Name</span>
+                <input class="field-input" type="text" name="name" required />
+            </label>
+            <label class="field-group">
+                <span class="field-label">Description</span>
+                <input class="field-input" type="text" name="description" />
+            </label>
+            <div class="modal-actions">
+                <button class="button-secondary" type="button" data-close-role-modal>Cancel</button>
+                <button class="button-primary" type="submit">Create role</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-grant-modal hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="grant-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Access grants</span>
+                <h2 id="grant-modal-title">Bind role</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-grant-modal aria-label="Close">x</button>
+        </div>
+        <form class="modal-form" data-grant-form>
+            <label class="field-group">
+                <span class="field-label">Subject type</span>
+                <select class="field-input" name="subjectType" data-grant-subject-type>
+                    <option value="group">Group</option>
+                    <option value="user">User</option>
+                </select>
+            </label>
+            <div data-grant-group-fields>
+                <label class="field-group">
+                    <span class="field-label">Group</span>
+                    <select class="field-input" name="groupID" data-grant-group-select></select>
+                </label>
+            </div>
+            <div data-grant-user-fields hidden>
+                <label class="field-group">
+                    <span class="field-label">User</span>
+                    <select class="field-input" name="userID" data-grant-user-select></select>
+                </label>
+            </div>
+            <label class="field-group">
+                <span class="field-label">Role</span>
+                <select class="field-input" name="roleID" data-grant-role-select></select>
+            </label>
+            <label class="field-group">
+                <span class="field-label">Scope</span>
+                <select class="field-input" name="scopeType">
+                    <option value="global">Global</option>
+                    <option value="org">Organization</option>
+                    <option value="course">Course</option>
+                    <option value="project">Project</option>
+                    <option value="group">Group</option>
+                    <option value="resource">Resource</option>
+                </select>
+            </label>
+            <label class="field-group">
+                <span class="field-label">Scope ID</span>
+                <input class="field-input" type="number" name="scopeID" min="1" placeholder="Leave empty for global or whole scope" />
+            </label>
+            <div class="modal-actions">
+                <button class="button-secondary" type="button" data-close-grant-modal>Cancel</button>
+                <button class="button-primary" type="submit">Bind role</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div class="modal-backdrop" data-role-permissions-modal hidden>
+    <section class="modal-panel membership-modal-panel" role="dialog" aria-modal="true" aria-labelledby="role-permissions-modal-title">
+        <div class="panel-heading">
+            <div>
+                <span class="panel-label">Roles</span>
+                <h2 id="role-permissions-modal-title" data-role-permissions-title>Manage permissions</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-role-permissions-modal aria-label="Close">x</button>
+        </div>
+        <div class="membership-transfer">
+            <section>
+                <span class="field-label">Available permissions</span>
+                <select class="transfer-list" data-available-permissions multiple></select>
+            </section>
+            <div class="transfer-actions">
+                <button class="button-secondary" type="button" data-permission-add>&gt;</button>
+                <button class="button-secondary" type="button" data-permission-add-all>&gt;&gt;</button>
+                <button class="button-secondary" type="button" data-permission-remove>&lt;</button>
+                <button class="button-secondary" type="button" data-permission-remove-all>&lt;&lt;</button>
+            </div>
+            <section>
+                <span class="field-label">Role permissions</span>
+                <select class="transfer-list" data-role-permissions multiple></select>
+            </section>
+        </div>
+    </section>
+</div>

@@ -5,7 +5,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/UNHCSC/pve-acl/auth"
+	"github.com/UNHCSC/proxman/auth"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -34,8 +34,11 @@ func postLogin(c *fiber.Ctx) (err error) {
 	if user, err = auth.Authenticate(username, password); err == nil {
 		if token, err = user.Token.SignedString(jwtSigningKey); err == nil {
 			c.Cookie(&fiber.Cookie{
-				Name:  "Authorization",
-				Value: token,
+				Name:     "Authorization",
+				Value:    token,
+				Path:     "/",
+				HTTPOnly: true,
+				SameSite: "Lax",
 			})
 
 			err = c.Redirect(redirect)
@@ -44,8 +47,12 @@ func postLogin(c *fiber.Ctx) (err error) {
 	}
 
 	err = c.Render("login", fiber.Map{
-		"Title":      "Login",
-		"LoginError": err.Error(),
+		"Title":         "Login",
+		"Description":   "Authenticate with your directory credentials to access Proxmox VE ACL.",
+		"CanonicalPath": "/login",
+		"BodyClass":     "login-page",
+		"Redirect":      redirect,
+		"LoginError":    err.Error(),
 	}, "layout")
 	return
 }
@@ -60,6 +67,7 @@ func postLogout(c *fiber.Ctx) (err error) {
 	c.Cookie(&fiber.Cookie{
 		Name:    "Authorization",
 		Value:   "",
+		Path:    "/",
 		Expires: time.Now().Add(-time.Hour),
 	})
 

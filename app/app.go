@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/UNHCSC/pve-acl/config"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/z46-dev/golog"
@@ -24,6 +24,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	app.Static("/static", "./client/static")
 
 	// Pages
+	app.Get("/", getHome)
+	app.Get("/dashboard", getDashboard)
+	app.Get("/login", getLogin)
 
 	// API
 	var (
@@ -33,18 +36,23 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 
 	// API v1
 	var (
-		apiV1Auth   fiber.Router = apiV1.Group("/auth")
-		apiV1Enums  fiber.Router = apiV1.Group("/enums")
-		apiV1Users  fiber.Router = apiV1.Group("/users")
-		apiV1Groups fiber.Router = apiV1.Group("/groups")
-		apiV1Assets fiber.Router = apiV1.Group("/assets")
-		apiV1ACL    fiber.Router = apiV1.Group("/acl")
+		apiV1Auth     fiber.Router = apiV1.Group("/auth")
+		apiV1Enums    fiber.Router = apiV1.Group("/enums")
+		apiV1System   fiber.Router = apiV1.Group("/system")
+		apiV1Users    fiber.Router = apiV1.Group("/users")
+		apiV1Groups   fiber.Router = apiV1.Group("/groups")
+		apiV1Roles    fiber.Router = apiV1.Group("/roles")
+		apiV1Projects fiber.Router = apiV1.Group("/projects")
+		apiV1Assets   fiber.Router = apiV1.Group("/assets")
+		apiV1ACL      fiber.Router = apiV1.Group("/acl")
 	)
 
 	// API v1 auth
 	apiV1Auth.Post("/login", postLogin)
 	apiV1Auth.Post("/logout", postLogout)
 	apiV1Auth.Get("/status", getStatus)
+
+	apiV1.Use(requireAPIAuth)
 
 	// API v1 enums
 	apiV1Enums.Get("/asset-types", getAssetTypes)
@@ -54,16 +62,64 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Enums.Get("/management-permissions", getManagementPermissions)
 	apiV1Enums.Get("/management-permissions/reverse", getManagementPermissionsReverse)
 
+	// API v1 system
+	apiV1System.Get("/summary", getSystemSummary)
+	apiV1System.Get("/access", getAccessData)
+
+	// API v1 access grants
+	apiV1.Get("/role-bindings", getRoleBindings)
+	apiV1.Post("/role-bindings", postCreateRoleBinding)
+	apiV1.Delete("/role-bindings/:bindingID", deleteRoleBinding)
+
 	// API v1 users
-	apiV1Users.Get("/me", _noop)
+	apiV1.Get("/users", getUsers)
+	apiV1.Post("/users", postCreateUser)
+	apiV1Users.Get("/me", getCurrentUser)
+	apiV1Users.Get("/me/access", getCurrentUserAccess)
+	apiV1Users.Get("/resolve", getResolveUser)
+	apiV1Users.Get("/", getUsers)
+	apiV1Users.Post("/", postCreateUser)
 	apiV1Users.Get("/search", _noop)
 	apiV1Users.Get("/some/:usernames", _noop)
 	apiV1Users.Post("/update/:usernames", _noop)
 
 	// API v1 groups
+	apiV1.Get("/groups", getCloudGroups)
+	apiV1.Post("/groups", postCreateCloudGroup)
+	apiV1Groups.Get("/", getCloudGroups)
+	apiV1Groups.Post("/", postCreateCloudGroup)
+	apiV1Groups.Get("/:id/memberships", getGroupMemberships)
+	apiV1Groups.Post("/:id/memberships", postCreateGroupMembership)
+	apiV1Groups.Patch("/:id/memberships/:membershipID", patchGroupMembership)
+	apiV1Groups.Delete("/:id/memberships/:membershipID", deleteGroupMembership)
+	apiV1Groups.Get("/:id/role-bindings", getGroupRoleBindings)
+	apiV1Groups.Post("/:id/role-bindings", postCreateGroupRoleBinding)
+	apiV1Groups.Delete("/:id/role-bindings/:bindingID", deleteGroupRoleBinding)
 	apiV1Groups.Get("/search", _noop)
 	apiV1Groups.Get("/some/:groupnames", _noop)
 	apiV1Groups.Post("/update/:groupnames", _noop)
+	apiV1Groups.Get("/:id", getCloudGroupByID)
+
+	// API v1 roles
+	apiV1.Get("/roles", getRoles)
+	apiV1.Post("/roles", postCreateRole)
+	apiV1Roles.Get("/", getRoles)
+	apiV1Roles.Post("/", postCreateRole)
+	apiV1Roles.Get("/:id/permissions", getRolePermissions)
+	apiV1Roles.Post("/:id/permissions", postCreateRolePermission)
+	apiV1Roles.Delete("/:id/permissions/:permissionID", deleteRolePermission)
+
+	// API v1 projects
+	apiV1.Get("/projects", getProjects)
+	apiV1.Post("/projects", postCreateProject)
+	apiV1Projects.Get("/", getProjects)
+	apiV1Projects.Post("/", postCreateProject)
+	apiV1Projects.Get("/:id/memberships", getProjectMemberships)
+	apiV1Projects.Post("/:id/memberships", postCreateProjectMembership)
+	apiV1Projects.Patch("/:id/memberships/:membershipID", patchProjectMembership)
+	apiV1Projects.Delete("/:id/memberships/:membershipID", deleteProjectMembership)
+	apiV1Projects.Get("/:slug", getProjectBySlug)
+	apiV1Projects.Delete("/:slug", deleteProjectBySlug)
 
 	// API v1 assets
 	apiV1Assets.Get("/search", _noop)

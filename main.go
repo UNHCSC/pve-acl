@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/UNHCSC/pve-acl/app"
-	"github.com/UNHCSC/pve-acl/auth"
-	"github.com/UNHCSC/pve-acl/config"
-	"github.com/UNHCSC/pve-acl/db"
+	"github.com/UNHCSC/proxman/app"
+	"github.com/UNHCSC/proxman/auth"
+	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/proxman/db"
 	"github.com/gofiber/fiber/v2"
 	"github.com/z46-dev/golog"
 )
@@ -21,6 +21,10 @@ func main() {
 
 	if err = db.Init(log); err != nil {
 		log.Panicf("Failed to initialize database: %v\n", err)
+	}
+
+	if err = db.EnsureInitialSetup(); err != nil {
+		log.Panicf("Failed to complete initial setup: %v\n", err)
 	}
 
 	if err = auth.Init(log); err != nil {

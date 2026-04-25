@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/UNHCSC/pve-acl/config"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/z46-dev/golog"

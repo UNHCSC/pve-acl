@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="{{.Description}}" />
+    {{if .CanonicalPath}}<link rel="canonical" href="{{.CanonicalPath}}" />{{end}}
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/build/site.css" />
+    <script src="/static/build/site.js" defer></script>
+</head>
+
+<body class="{{.BodyClass}}">
+    {{embed}}
+    <div class="toast-stack" data-toast-stack></div>
+</body>
+
+</html>

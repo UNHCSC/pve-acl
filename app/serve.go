@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/UNHCSC/pve-acl/config"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/gofiber/fiber/v2"
 )
 

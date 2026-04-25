@@ -5,7 +5,7 @@ import (
 	"os"
 	"slices"
 
-	"github.com/UNHCSC/pve-acl/config"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/z46-dev/golog"
 	"github.com/z46-dev/gomysql"
 )
@@ -20,6 +20,29 @@ var (
 	ProxmoxAssetAssignmentsByGroup *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByGroup]
 	LocalGroupManagementsByUser    *gomysql.RegisteredStruct[LocalGroupManagementByUser]
 	LocalGroupManagementsByGroup   *gomysql.RegisteredStruct[LocalGroupManagementByGroup]
+	Users                          *gomysql.RegisteredStruct[User]
+	CloudGroups                    *gomysql.RegisteredStruct[CloudGroup]
+	CloudGroupMemberships          *gomysql.RegisteredStruct[CloudGroupMembership]
+	Organizations                  *gomysql.RegisteredStruct[Organization]
+	Courses                        *gomysql.RegisteredStruct[Course]
+	Projects                       *gomysql.RegisteredStruct[Project]
+	ProjectMemberships             *gomysql.RegisteredStruct[ProjectMembership]
+	Roles                          *gomysql.RegisteredStruct[Role]
+	Permissions                    *gomysql.RegisteredStruct[Permission]
+	RolePermissions                *gomysql.RegisteredStruct[RolePermission]
+	RoleBindings                   *gomysql.RegisteredStruct[RoleBinding]
+	QuotaPolicies                  *gomysql.RegisteredStruct[QuotaPolicy]
+	QuotaBindings                  *gomysql.RegisteredStruct[QuotaBinding]
+	Resources                      *gomysql.RegisteredStruct[Resource]
+	ProxmoxClusters                *gomysql.RegisteredStruct[ProxmoxCluster]
+	ProxmoxNodes                   *gomysql.RegisteredStruct[ProxmoxNode]
+	VirtualMachines                *gomysql.RegisteredStruct[VirtualMachine]
+	Containers                     *gomysql.RegisteredStruct[Container]
+	VirtualNetworks                *gomysql.RegisteredStruct[VirtualNetwork]
+	Jobs                           *gomysql.RegisteredStruct[Job]
+	JobLogs                        *gomysql.RegisteredStruct[JobLog]
+	AuditEvents                    *gomysql.RegisteredStruct[AuditEvent]
+	Secrets                        *gomysql.RegisteredStruct[Secret]
 )
 
 func Init(parentLog *golog.Logger) (err error) {
@@ -30,47 +53,6 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 
-	if LocalUsers, err = gomysql.Register(LocalUser{}); err != nil {
-		dbLog.Errorf("Failed to register LocalUser struct: %v\n", err)
-		return
-	}
-
-	if LocalGroups, err = gomysql.Register(LocalGroup{}); err != nil {
-		dbLog.Errorf("Failed to register LocalGroup struct: %v\n", err)
-		return
-	}
-
-	if ProxmoxAssets, err = gomysql.Register(ProxmoxAsset{}); err != nil {
-		dbLog.Errorf("Failed to register ProxmoxAsset struct: %v\n", err)
-		return
-	}
-
-	if LocalGroupMembershipsByUser, err = gomysql.Register(LocalGroupMembership{}); err != nil {
-		dbLog.Errorf("Failed to register LocalGroupMembershipByUser struct: %v\n", err)
-		return
-	}
-
-	if ProxmoxAssetAssignmentsByUser, err = gomysql.Register(ProxmoxAssetAssignmentByUser{}); err != nil {
-		dbLog.Errorf("Failed to register ProxmoxAssetAssignmentByUser struct: %v\n", err)
-		return
-	}
-
-	if ProxmoxAssetAssignmentsByGroup, err = gomysql.Register(ProxmoxAssetAssignmentByGroup{}); err != nil {
-		dbLog.Errorf("Failed to register ProxmoxAssetAssignmentByGroup struct: %v\n", err)
-		return
-	}
-
-	if LocalGroupManagementsByUser, err = gomysql.Register(LocalGroupManagementByUser{}); err != nil {
-		dbLog.Errorf("Failed to register LocalGroupManagementByUser struct: %v\n", err)
-		return
-	}
-
-	if LocalGroupManagementsByGroup, err = gomysql.Register(LocalGroupManagementByGroup{}); err != nil {
-		dbLog.Errorf("Failed to register LocalGroupManagementByGroup struct: %v\n", err)
-		return
-	}
-
-	// Migrations
 	var migrationOpts gomysql.MigrationOptions
 
 	if len(os.Args) > 1 && slices.Contains(os.Args, "--allow-destructive-migrations") {
@@ -78,47 +60,115 @@ func Init(parentLog *golog.Logger) (err error) {
 		dbLog.Warning("Destructive migrations are enabled!")
 	}
 
-	if err = migrate(LocalUsers, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate LocalUsers table: %v\n", err)
+	if err = registerAndMigrate("LocalUsers", &LocalUsers, LocalUser{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(LocalGroups, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate LocalGroups table: %v\n", err)
+	if err = registerAndMigrate("LocalGroups", &LocalGroups, LocalGroup{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(ProxmoxAssets, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate ProxmoxAssets table: %v\n", err)
+	if err = registerAndMigrate("ProxmoxAssets", &ProxmoxAssets, ProxmoxAsset{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(LocalGroupMembershipsByUser, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate LocalGroupMembershipsByUser table: %v\n", err)
+	if err = registerAndMigrate("LocalGroupMembershipsByUser", &LocalGroupMembershipsByUser, LocalGroupMembership{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(ProxmoxAssetAssignmentsByUser, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate ProxmoxAssetAssignmentsByUser table: %v\n", err)
+	if err = registerAndMigrate("ProxmoxAssetAssignmentsByUser", &ProxmoxAssetAssignmentsByUser, ProxmoxAssetAssignmentByUser{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(ProxmoxAssetAssignmentsByGroup, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate ProxmoxAssetAssignmentsByGroup table: %v\n", err)
+	if err = registerAndMigrate("ProxmoxAssetAssignmentsByGroup", &ProxmoxAssetAssignmentsByGroup, ProxmoxAssetAssignmentByGroup{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(LocalGroupManagementsByUser, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate LocalGroupManagementsByUser table: %v\n", err)
+	if err = registerAndMigrate("LocalGroupManagementsByUser", &LocalGroupManagementsByUser, LocalGroupManagementByUser{}, migrationOpts); err != nil {
 		return
 	}
-
-	if err = migrate(LocalGroupManagementsByGroup, migrationOpts); err != nil {
-		dbLog.Errorf("Failed to migrate LocalGroupManagementsByGroup table: %v\n", err)
+	if err = registerAndMigrate("LocalGroupManagementsByGroup", &LocalGroupManagementsByGroup, LocalGroupManagementByGroup{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Users", &Users, User{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("CloudGroups", &CloudGroups, CloudGroup{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("CloudGroupMemberships", &CloudGroupMemberships, CloudGroupMembership{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Organizations", &Organizations, Organization{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Courses", &Courses, Course{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Projects", &Projects, Project{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("ProjectMemberships", &ProjectMemberships, ProjectMembership{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Roles", &Roles, Role{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Permissions", &Permissions, Permission{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("RolePermissions", &RolePermissions, RolePermission{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("RoleBindings", &RoleBindings, RoleBinding{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("QuotaPolicies", &QuotaPolicies, QuotaPolicy{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("QuotaBindings", &QuotaBindings, QuotaBinding{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Resources", &Resources, Resource{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("ProxmoxClusters", &ProxmoxClusters, ProxmoxCluster{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("ProxmoxNodes", &ProxmoxNodes, ProxmoxNode{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("VirtualMachines", &VirtualMachines, VirtualMachine{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Containers", &Containers, Container{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("VirtualNetworks", &VirtualNetworks, VirtualNetwork{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Jobs", &Jobs, Job{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("JobLogs", &JobLogs, JobLog{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("AuditEvents", &AuditEvents, AuditEvent{}, migrationOpts); err != nil {
+		return
+	}
+	if err = registerAndMigrate("Secrets", &Secrets, Secret{}, migrationOpts); err != nil {
 		return
 	}
 
 	dbLog.Info("Database initialized successfully")
+
+	return
+}
+
+func registerAndMigrate[T any](name string, target **gomysql.RegisteredStruct[T], model T, opts gomysql.MigrationOptions) (err error) {
+	if *target, err = gomysql.Register(model); err != nil {
+		dbLog.Errorf("Failed to register %s struct: %v\n", name, err)
+		return
+	}
+
+	if err = migrate(*target, opts); err != nil {
+		dbLog.Errorf("Failed to migrate %s table: %v\n", name, err)
+		return
+	}
 
 	return
 }

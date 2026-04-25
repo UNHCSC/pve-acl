@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/UNHCSC/pve-acl/db"
+	"github.com/UNHCSC/proxman/db"
 	"github.com/gofiber/fiber/v2"
 )
 

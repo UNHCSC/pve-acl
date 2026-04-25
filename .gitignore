@@ -22,3 +22,6 @@ node_modules/
 build/
 bun.lock
 package-lock.json
+
+# IDE/editor specific ignores
+.codex

@@ -20,6 +20,152 @@ const (
 	ManagementPermissionsManageLocalPermissions                                        // Can create/edit/delete LocalGroupManagementByUser and LocalGroupManagementByGroup entries for a certain group
 )
 
+const (
+	GroupTypeAdmin GroupType = iota
+	GroupTypeClub
+	GroupTypeCompetition
+	GroupTypeCourse
+	GroupTypeCourseRole
+	GroupTypeStudentGroup
+	GroupTypeProject
+	GroupTypeCustom
+)
+
+const (
+	CloudGroupSyncSourceLocal = "local"
+	CloudGroupSyncSourceLDAP  = "ldap"
+)
+
+const (
+	RoleBindingSubjectUser RoleBindingSubject = iota
+	RoleBindingSubjectGroup
+)
+
+const (
+	RoleBindingScopeGlobal RoleBindingScope = iota
+	RoleBindingScopeOrg
+	RoleBindingScopeCourse
+	RoleBindingScopeProject
+	RoleBindingScopeGroup
+	RoleBindingScopeResource
+)
+
+const (
+	ProjectTypeAdmin ProjectType = iota
+	ProjectTypeClub
+	ProjectTypeCompetition
+	ProjectTypeCourse
+	ProjectTypeStudent
+	ProjectTypeGroup
+	ProjectTypeLab
+	ProjectTypeCustom
+)
+
+const (
+	ProjectMemberSubjectUser ProjectMemberSubject = iota
+	ProjectMemberSubjectGroup
+)
+
+const (
+	ProjectRoleViewer ProjectRole = iota
+	ProjectRoleOperator
+	ProjectRoleDeveloper
+	ProjectRoleManager
+	ProjectRoleOwner
+)
+
+const (
+	OwnerTypeUser OwnerType = iota
+	OwnerTypeGroup
+	OwnerTypeProject
+	OwnerTypeCourse
+	OwnerTypeOrganization
+)
+
+const (
+	ResourceTypeVM ResourceType = iota
+	ResourceTypeCT
+	ResourceTypeNetwork
+	ResourceTypeTemplate
+	ResourceTypeVolume
+	ResourceTypeSecret
+	ResourceTypeTerraformWorkspace
+	ResourceTypeAnsibleInventory
+)
+
+const (
+	ResourceStatusCreating ResourceStatus = iota
+	ResourceStatusReady
+	ResourceStatusUpdating
+	ResourceStatusDeleting
+	ResourceStatusDeleted
+	ResourceStatusError
+	ResourceStatusUnknown
+)
+
+const (
+	NetworkTypeBridge NetworkType = iota
+	NetworkTypeVLAN
+	NetworkTypeVXLAN
+	NetworkTypeSDNZone
+	NetworkTypeIsolated
+	NetworkTypeRouted
+	NetworkTypeNAT
+)
+
+const (
+	PowerStateRunning PowerState = iota
+	PowerStateStopped
+	PowerStatePaused
+	PowerStateUnknown
+)
+
+const (
+	JobTypeProxmox JobType = iota
+	JobTypeTerraform
+	JobTypeAnsible
+	JobTypeLabDeploy
+	JobTypeLabDestroy
+	JobTypeSync
+	JobTypeCleanup
+)
+
+const (
+	JobStatusQueued JobStatus = iota
+	JobStatusRunning
+	JobStatusSucceeded
+	JobStatusFailed
+	JobStatusCancelled
+)
+
+const (
+	JobLogStreamStdout JobLogStream = iota
+	JobLogStreamStderr
+	JobLogStreamSystem
+)
+
+const (
+	SecretTypeProxmoxToken SecretType = iota
+	SecretTypeSSHKey
+	SecretTypePassword
+	SecretTypeAPIToken
+	SecretTypeTerraformVar
+	SecretTypeAnsibleVar
+)
+
+const (
+	SecretOwnerTypeSystem SecretOwnerType = iota
+	SecretOwnerTypeUser
+	SecretOwnerTypeGroup
+	SecretOwnerTypeProject
+)
+
+const (
+	MembershipRoleMember MembershipRole = iota
+	MembershipRoleManager
+	MembershipRoleOwner
+)
+
 var (
 	AssetTypes map[ProxmoxAssetType]string = map[ProxmoxAssetType]string{
 		ProxmoxAssetTypeVM: "Virtual Machine",

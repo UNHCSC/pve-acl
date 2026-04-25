@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/UNHCSC/pve-acl/config"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/go-ldap/ldap/v3"
 )
 
@@ -55,6 +55,55 @@ type LDAPConn struct {
 	conn            *ldap.Conn
 	Username        string
 	IsAuthenticated bool
+}
+
+type LDAPUser struct {
+	Username    string
+	DisplayName string
+	Email       string
+}
+
+func LookupUser(username string) (*LDAPUser, bool, error) {
+	var conn *ldap.Conn
+	var err error
+	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+		return nil, false, err
+	}
+	defer conn.Close()
+
+	var result *ldap.SearchResult
+	if result, err = conn.Search(ldap.NewSearchRequest(
+		getFilter(), ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false,
+		fmt.Sprintf("(|(uid=%s)(mail=%s)(displayName=%s)(cn=%s))",
+			ldap.EscapeFilter(username),
+			ldap.EscapeFilter(username),
+			ldap.EscapeFilter(username),
+			ldap.EscapeFilter(username),
+		),
+		[]string{"uid", "displayName", "mail", "cn"},
+		nil,
+	)); err != nil {
+		return nil, false, err
+	}
+
+	if len(result.Entries) == 0 {
+		return nil, false, nil
+	}
+
+	entry := result.Entries[0]
+	displayName := entry.GetAttributeValue("displayName")
+	if displayName == "" {
+		displayName = entry.GetAttributeValue("cn")
+	}
+	user := &LDAPUser{
+		Username:    entry.GetAttributeValue("uid"),
+		DisplayName: displayName,
+		Email:       entry.GetAttributeValue("mail"),
+	}
+	if user.Username == "" {
+		user.Username = username
+	}
+	return user, true, nil
 }
 
 func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {

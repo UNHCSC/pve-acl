@@ -1,21 +1,34 @@
 import MiniCssExtractPlugin from "mini-css-extract-plugin";
 import TerserPlugin from "terser-webpack-plugin";
 import CssMinimizerPlugin from "css-minimizer-webpack-plugin";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const entriesDirectory = path.resolve(__dirname, "src/entries");
+
+function getEntries() {
+    const files = fs.readdirSync(entriesDirectory, { withFileTypes: true });
+
+    return files
+        .filter((file) => file.isFile() && file.name.endsWith(".js"))
+        .reduce((entryMap, file) => {
+            entryMap[path.parse(file.name).name] = path.join(entriesDirectory, file.name);
+            return entryMap;
+        }, {});
+}
 
 export default function (env = Object.create(null), argv = Object.create(null)) {
     const mode = argv.mode || env.mode || "development";
     const isProduction = mode === "production";
-    const baseDestination = isProduction ? "dist/build" : "src/build";
 
     return {
         mode: mode,
         bail: false,
         watch: !isProduction,
+        devtool: isProduction ? false : "source-map",
 
         watchOptions: {
             aggregateTimeout: 200,
@@ -65,11 +78,7 @@ export default function (env = Object.create(null), argv = Object.create(null)) 
             })
         ],
 
-        entry: {
-            index: `${__dirname}/src/js/index.js`,
-            admin: `${__dirname}/src/js/admin.js`,
-            renderToHitbox: `${__dirname}/src/js/renderToHitbox.js`
-        },
+        entry: getEntries(),
 
         resolve: {
             extensions: [".js"]
@@ -84,7 +93,7 @@ export default function (env = Object.create(null), argv = Object.create(null)) 
 
         output: {
             filename: "[name].js",
-            path: `${__dirname}/${baseDestination}`,
+            path: path.resolve(__dirname, "static/build"),
             clean: true
         }
     };

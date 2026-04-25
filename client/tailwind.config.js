@@ -1,3 +1,3 @@
 export default {
-    content: ["./src/**/*.{html,js,css}"],
+    content: ["./views/**/*.html", "./src/**/*.{js,css}"],
 };

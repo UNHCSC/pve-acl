@@ -1,0 +1,449 @@
+package app
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+
+	"github.com/UNHCSC/proxman/db"
+	"github.com/gofiber/fiber/v2"
+)
+
+func TestProjectAPIListAndCreate(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-admin", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Get("/api/v1/projects", getProjects)
+	fiberApp.Post("/api/v1/projects", postCreateProject)
+
+	createBody := bytes.NewBufferString(`{"name":"Blue Team Practice","description":"Local project shell"}`)
+	createReq := httptest.NewRequest("POST", "/api/v1/projects", createBody)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createReq.Header.Set("Content-Type", "application/json")
+
+	createResp, err := fiberApp.Test(createReq)
+	if err != nil {
+		t.Fatalf("create route returned error: %v", err)
+	}
+	if createResp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201, got %d", createResp.StatusCode)
+	}
+
+	listReq := httptest.NewRequest("GET", "/api/v1/projects", nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	listResp, err := fiberApp.Test(listReq)
+	if err != nil {
+		t.Fatalf("list route returned error: %v", err)
+	}
+	if listResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", listResp.StatusCode)
+	}
+
+	var projects []db.Project
+	if err := json.NewDecoder(listResp.Body).Decode(&projects); err != nil {
+		t.Fatalf("decode projects: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected one project, got %d", len(projects))
+	}
+	if projects[0].Slug != "blue-team-practice" {
+		t.Fatalf("expected slug blue-team-practice, got %q", projects[0].Slug)
+	}
+
+	memberships, err := db.ProjectMembershipsForProject(projects[0].ID)
+	if err != nil {
+		t.Fatalf("ProjectMembershipsForProject returned error: %v", err)
+	}
+	if len(memberships) != 1 {
+		t.Fatalf("expected creator owner membership, got %d memberships", len(memberships))
+	}
+	if memberships[0].SubjectType != db.ProjectMemberSubjectUser || memberships[0].ProjectRole != db.ProjectRoleOwner {
+		t.Fatalf("expected creator owner membership, got %#v", memberships[0])
+	}
+}
+
+func TestProjectAPIDeniesNonAdminCreate(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-viewer", false)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Post("/api/v1/projects", postCreateProject)
+
+	createBody := bytes.NewBufferString(`{"name":"Denied Project"}`)
+	createReq := httptest.NewRequest("POST", "/api/v1/projects", createBody)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := fiberApp.Test(createReq)
+	if err != nil {
+		t.Fatalf("create route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectAPISiteAdminCanViewAnyProject(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "CSC Team",
+		Description: "Created by site admin",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "site-admin", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Get("/api/v1/projects/:slug", getProjectBySlug)
+
+	req := httptest.NewRequest("GET", "/api/v1/projects/"+project.Slug, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("project detail route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectAPINotFoundIsNotUnauthorized(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "site-admin", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Get("/api/v1/projects/:slug", getProjectBySlug)
+
+	req := httptest.NewRequest("GET", "/api/v1/projects/missing-project", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("project detail route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectAPICreatorCanViewCreatedProject(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-creator", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Post("/api/v1/projects", postCreateProject)
+	fiberApp.Get("/api/v1/projects/:slug", getProjectBySlug)
+
+	createBody := bytes.NewBufferString(`{"name":"CSC Team","slug":"csc-team"}`)
+	createReq := httptest.NewRequest("POST", "/api/v1/projects", createBody)
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createReq.Header.Set("Content-Type", "application/json")
+
+	createResp, err := fiberApp.Test(createReq)
+	if err != nil {
+		t.Fatalf("create route returned error: %v", err)
+	}
+	if createResp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201, got %d", createResp.StatusCode)
+	}
+
+	viewReq := httptest.NewRequest("GET", "/api/v1/projects/csc-team", nil)
+	viewReq.Header.Set("Authorization", "Bearer "+token)
+
+	viewResp, err := fiberApp.Test(viewReq)
+	if err != nil {
+		t.Fatalf("view route returned error: %v", err)
+	}
+	if viewResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", viewResp.StatusCode)
+	}
+}
+
+func TestProjectAPIOwnerMembershipCanViewProject(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Owner Visible",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+
+	dbUser, _, err := db.EnsureUser("project-owner", "Project Owner", "owner@example.test", "local", "project-owner")
+	if err != nil {
+		t.Fatalf("EnsureUser returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+		t.Fatalf("EnsureProjectMembership returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-owner", false)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Get("/api/v1/projects/:slug", getProjectBySlug)
+
+	req := httptest.NewRequest("GET", "/api/v1/projects/"+project.Slug, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("view route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectMembershipsIncludeHumanReadableSubjects(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Readable Members",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	dbUser, _, err := db.EnsureUser("readable-user", "Readable User", "readable@example.test", "local", "readable-user")
+	if err != nil {
+		t.Fatalf("EnsureUser returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+		t.Fatalf("EnsureProjectMembership returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "readable-user", false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Get("/api/v1/projects/:id/memberships", getProjectMemberships)
+
+	req := httptest.NewRequest("GET", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("membership route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode memberships: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected one membership, got %d", len(body))
+	}
+	subject, ok := body[0]["subject"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected subject payload, got %#v", body[0])
+	}
+	if subject["label"] != "Readable User" {
+		t.Fatalf("expected readable label, got %#v", subject["label"])
+	}
+}
+
+func TestProjectManagerCanAddProjectMembershipByRef(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Scoped Access",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	manager, _, err := db.EnsureUser("project-manager", "Project Manager", "manager@example.test", "local", "project-manager")
+	if err != nil {
+		t.Fatalf("EnsureUser manager returned error: %v", err)
+	}
+	target, _, err := db.EnsureUser("project-target", "Project Target", "target@example.test", "local", "project-target")
+	if err != nil {
+		t.Fatalf("EnsureUser target returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+		t.Fatalf("EnsureProjectMembership manager returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-manager", false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Post("/api/v1/projects/:id/memberships", postCreateProjectMembership)
+
+	req := httptest.NewRequest("POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships", bytes.NewBufferString(`{
+		"subjectType": "user",
+		"subjectRef": "project-target",
+		"projectRole": "developer"
+	}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("membership route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	memberships, err := db.ProjectMembershipsForProject(project.ID)
+	if err != nil {
+		t.Fatalf("ProjectMembershipsForProject returned error: %v", err)
+	}
+	for _, membership := range memberships {
+		if membership.SubjectType == db.ProjectMemberSubjectUser && membership.SubjectID == target.ID && membership.ProjectRole == db.ProjectRoleDeveloper {
+			return
+		}
+	}
+	t.Fatalf("expected target developer membership, got %#v", memberships)
+}
+
+func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Patch Membership",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	manager, _, err := db.EnsureUser("project-role-manager", "Project Role Manager", "manager@example.test", "local", "project-role-manager")
+	if err != nil {
+		t.Fatalf("EnsureUser manager returned error: %v", err)
+	}
+	target, _, err := db.EnsureUser("project-role-target", "Project Role Target", "target@example.test", "local", "project-role-target")
+	if err != nil {
+		t.Fatalf("EnsureUser target returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+		t.Fatalf("EnsureProjectMembership manager returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, target.ID, db.ProjectRoleViewer); err != nil {
+		t.Fatalf("EnsureProjectMembership target returned error: %v", err)
+	}
+
+	var targetMembership *db.ProjectMembership
+	memberships, err := db.ProjectMembershipsForProject(project.ID)
+	if err != nil {
+		t.Fatalf("ProjectMembershipsForProject returned error: %v", err)
+	}
+	for _, membership := range memberships {
+		if membership.SubjectID == target.ID {
+			targetMembership = membership
+			break
+		}
+	}
+	if targetMembership == nil {
+		t.Fatal("expected target membership")
+	}
+
+	token := authenticateTestUser(t, "project-role-manager", false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Patch("/api/v1/projects/:id/memberships/:membershipID", patchProjectMembership)
+
+	req := httptest.NewRequest("PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships/"+strconv.Itoa(targetMembership.ID), bytes.NewBufferString(`{
+		"projectRole": "owner"
+	}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("patch membership route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	updated, err := db.ProjectMemberships.Select(targetMembership.ID)
+	if err != nil {
+		t.Fatalf("ProjectMemberships.Select returned error: %v", err)
+	}
+	if updated == nil || updated.ProjectRole != db.ProjectRoleOwner {
+		t.Fatalf("expected target owner membership, got %#v", updated)
+	}
+}
+
+func TestProjectAPIDeleteRemovesProject(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Delete Me",
+		ProjectType: db.ProjectTypeCustom,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "delete-admin", true)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Delete("/api/v1/projects/:slug", deleteProjectBySlug)
+
+	req := httptest.NewRequest("DELETE", "/api/v1/projects/"+project.Slug, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("delete route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+
+	if _, found, err := db.GetProjectBySlug(project.Slug); err != nil || found {
+		t.Fatalf("expected project to be deleted, found=%v err=%v", found, err)
+	}
+}
