@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Lab Cloud Manager is a self-service cloud control plane for managing cybersecurity lab infrastructure backed by Proxmox. Its goal is to provide AWS-like organization, ownership, quotas, permissions, automation, and repeatable lab deployment workflows while preserving raw Proxmox access for trusted infrastructure administrators.
+Organesson Cloud is a self-service cloud control plane for managing shared virtualization infrastructure backed by Proxmox. Its goal is to provide AWS-like organization, ownership, quotas, permissions, automation, and repeatable deployment workflows while preserving raw Proxmox access for trusted infrastructure administrators.
 
 The system exists to support:
 
@@ -18,7 +18,7 @@ The system exists to support:
 
 Proxmox remains the hypervisor and infrastructure backend.
 
-Lab Cloud Manager owns the higher-level cloud concepts:
+Organesson Cloud owns the higher-level cloud concepts:
 
 - Organizations
 - Projects

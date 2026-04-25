@@ -1,11 +1,22 @@
-import { ReactNode } from "react";
+import { Children, useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Detail, EmptyDetail, EmptyState, PanelHeading } from "../components/common";
-import type { ModalKey, OrgNode, Organization, Project, ProjectMembership, ProjectTree, Selection } from "../types";
+import type { ModalKey, OrgNode, Organization, Project, ProjectMembership, Selection } from "../types";
+import { findOrg, orgContains } from "../tree";
 import { classNames, roleLabel, subjectTypeLabel } from "../ui-helpers";
+
+const MIN_SIDEBAR_WIDTH = 260;
+const MAX_SIDEBAR_WIDTH = 560;
+
+type DraggedItem =
+    | { type: "org"; org: Organization }
+    | { type: "project"; project: Project }
+    | null;
+
+type ProjectMemberSubject = "user" | "group";
 
 type DirectoryViewProps = {
     orgTree: OrgNode[];
-    tree: ProjectTree | null;
     expanded: Set<number>;
     selection: Selection;
     selectedOrg: OrgNode | null;
@@ -18,34 +29,197 @@ type DirectoryViewProps = {
     selectOrg: (org: Organization) => void;
     selectProject: (project: Project) => void;
     openModal: (modal: ModalKey, context?: Organization | Project | null) => void;
-    moveOrg: (org: Organization) => void;
-    moveProject: (project: Project) => void;
+    moveOrg: (org: Organization, parentOrgID: number | null) => Promise<void> | void;
+    moveProject: (project: Project, organizationID: number) => Promise<void> | void;
     deleteOrg: (org: Organization) => void;
     deleteProject: (project: Project) => void;
-    addProjectMember: () => void;
+    addProjectMember: (subjectType: ProjectMemberSubject) => void;
     updateProjectMember: (membership: ProjectMembership, role: string) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 };
 
+type TreeRuntime = {
+    canDropOnOrg: (target: OrgNode) => boolean;
+    canDropOnRoot: () => boolean;
+    clearDrag: () => void;
+    clearDropTarget: () => void;
+    dragState: DraggedItem;
+    dropOnOrg: (event: ReactDragEvent, target: OrgNode) => void;
+    dropOnRoot: (event: ReactDragEvent) => void;
+    dropTarget: string | null;
+    markOrgDropTarget: (event: ReactDragEvent, target: OrgNode) => void;
+    markRootDropTarget: (event: ReactDragEvent) => void;
+    startOrgDrag: (event: ReactDragEvent, org: Organization) => void;
+    startProjectDrag: (event: ReactDragEvent, project: Project) => void;
+};
+
 export function DirectoryView(props: DirectoryViewProps) {
+    const browserRef = useRef<HTMLDivElement>(null);
+    const [dragState, setDragState] = useState<DraggedItem>(null);
+    const [dropTarget, setDropTarget] = useState<string | null>(null);
+    const [resizing, setResizing] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(340);
+
+    useEffect(() => {
+        if (!resizing) {
+            return;
+        }
+
+        const resize = (event: PointerEvent) => {
+            const bounds = browserRef.current?.getBoundingClientRect();
+            if (!bounds) {
+                return;
+            }
+            const maxWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - bounds.left - 360));
+            const nextWidth = Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, event.clientX - bounds.left));
+            setSidebarWidth(nextWidth);
+        };
+        const stop = () => setResizing(false);
+
+        window.addEventListener("pointermove", resize);
+        window.addEventListener("pointerup", stop);
+        document.body.classList.add("is-resizing-directory");
+        return () => {
+            window.removeEventListener("pointermove", resize);
+            window.removeEventListener("pointerup", stop);
+            document.body.classList.remove("is-resizing-directory");
+        };
+    }, [resizing]);
+
+    const canDropOnOrg = (target: OrgNode) => {
+        if (!dragState) {
+            return false;
+        }
+        if (dragState.type === "project") {
+            return dragState.project.organization_id !== target.id;
+        }
+
+        if (dragState.org.id === target.id || dragState.org.parent_org_id === target.id) {
+            return false;
+        }
+        const draggedNode = findOrg(props.orgTree, dragState.org.id);
+        return draggedNode ? !orgContains(draggedNode, target.id) : false;
+    };
+
+    const canDropOnRoot = () => dragState?.type === "org" && dragState.org.parent_org_id !== null;
+
+    const clearDrag = () => {
+        setDragState(null);
+        setDropTarget(null);
+    };
+
+    const startOrgDrag = (event: ReactDragEvent, org: Organization) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", `org:${org.id}`);
+        setDragState({ type: "org", org });
+        setDropTarget(null);
+        props.setOpenMenu(null);
+    };
+
+    const startProjectDrag = (event: ReactDragEvent, project: Project) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", `project:${project.id}`);
+        setDragState({ type: "project", project });
+        setDropTarget(null);
+        props.setOpenMenu(null);
+    };
+
+    const markOrgDropTarget = (event: ReactDragEvent, target: OrgNode) => {
+        if (!canDropOnOrg(target)) {
+            event.dataTransfer.dropEffect = "none";
+            return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropTarget(`org-${target.id}`);
+    };
+
+    const markRootDropTarget = (event: ReactDragEvent) => {
+        if (!canDropOnRoot()) {
+            event.dataTransfer.dropEffect = "none";
+            return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropTarget("root");
+    };
+
+    const dropOnOrg = (event: ReactDragEvent, target: OrgNode) => {
+        event.preventDefault();
+        if (!canDropOnOrg(target) || !dragState) {
+            clearDrag();
+            return;
+        }
+        const dropped = dragState;
+        clearDrag();
+        if (dropped.type === "org") {
+            void props.moveOrg(dropped.org, target.id);
+        } else {
+            void props.moveProject(dropped.project, target.id);
+        }
+    };
+
+    const dropOnRoot = (event: ReactDragEvent) => {
+        event.preventDefault();
+        if (!canDropOnRoot() || dragState?.type !== "org") {
+            clearDrag();
+            return;
+        }
+        const org = dragState.org;
+        clearDrag();
+        void props.moveOrg(org, null);
+    };
+
+    const runtime: TreeRuntime = {
+        canDropOnOrg,
+        canDropOnRoot,
+        clearDrag,
+        clearDropTarget: () => setDropTarget(null),
+        dragState,
+        dropOnOrg,
+        dropOnRoot,
+        dropTarget,
+        markOrgDropTarget,
+        markRootDropTarget,
+        startOrgDrag,
+        startProjectDrag
+    };
+
     return (
         <section className="dashboard-view is-active">
-            <div className="project-browser">
+            <div
+                className={classNames("project-browser", resizing && "is-resizing")}
+                ref={browserRef}
+                style={{ "--directory-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+            >
                 <aside className="project-tree-sidebar">
-                    <div className="project-tree-heading">
-                        <div>
-                            <span className="panel-label">Organization tree</span>
-                            <h2>Directory</h2>
-                        </div>
-                        <span className="tree-count-pill">{props.tree?.projects.length || 0} projects</span>
-                    </div>
                     <div className="project-tree" aria-label="Organization and project tree">
                         {props.orgTree.length === 0 && <EmptyState>No organizations are visible yet.</EmptyState>}
+                        {dragState?.type === "org" && (
+                            <div
+                                className={classNames("tree-root-drop", dropTarget === "root" && "is-drop-target", canDropOnRoot() && "can-drop")}
+                                onDragLeave={() => setDropTarget(null)}
+                                onDragOver={runtime.markRootDropTarget}
+                                onDrop={runtime.dropOnRoot}
+                            >
+                                Root level
+                            </div>
+                        )}
                         {props.orgTree.map((node) => (
-                            <TreeNode key={node.id} node={node} depth={0} {...props} />
+                            <TreeNode key={node.id} node={node} depth={0} runtime={runtime} {...props} />
                         ))}
                     </div>
                 </aside>
+
+                <button
+                    type="button"
+                    className="project-sidebar-resizer"
+                    aria-label="Resize directory sidebar"
+                    onPointerDown={(event: ReactPointerEvent<HTMLButtonElement>) => {
+                        event.preventDefault();
+                        setResizing(true);
+                    }}
+                />
 
                 <div className="project-render-pane">
                     {props.selection?.type === "org" && props.selectedOrg && <OrgDetail org={props.selectedOrg} />}
@@ -66,58 +240,72 @@ export function DirectoryView(props: DirectoryViewProps) {
     );
 }
 
-function TreeNode(props: DirectoryViewProps & { node: OrgNode; depth: number }) {
-    const { node, depth } = props;
-    const { node: _node, depth: _depth, ...directoryProps } = props;
+function TreeNode(props: DirectoryViewProps & { node: OrgNode; depth: number; runtime: TreeRuntime }) {
+    const { node, depth, runtime } = props;
+    const { node: _node, depth: _depth, runtime: _runtime, ...directoryProps } = props;
     const expanded = props.expanded.has(node.id);
     const selected = props.selection?.type === "org" && props.selection.id === node.id;
     const menuKey = `org-${node.id}`;
+    const isDragged = runtime.dragState?.type === "org" && runtime.dragState.org.id === node.id;
+    const canDrop = runtime.canDropOnOrg(node);
 
     return (
         <>
-            <div className={classNames("tree-row", selected && "is-selected")} style={{ "--tree-depth": depth } as React.CSSProperties}>
+            <div
+                className={classNames("tree-row", expanded && "is-expanded", selected && "is-selected", isDragged && "is-dragging", canDrop && "can-drop", runtime.dropTarget === menuKey && "is-drop-target")}
+                draggable
+                onDragEnd={runtime.clearDrag}
+                onDragLeave={runtime.clearDropTarget}
+                onDragOver={(event) => runtime.markOrgDropTarget(event, node)}
+                onDragStart={(event) => runtime.startOrgDrag(event, node)}
+                onDrop={(event) => runtime.dropOnOrg(event, node)}
+                style={{ "--tree-depth": depth } as CSSProperties}
+            >
                 <button type="button" className="tree-toggle" disabled={node.children.length + node.projects.length === 0} onClick={() => props.toggleOrg(node.id)} aria-label={expanded ? "Collapse organization" : "Expand organization"}>
                     {expanded ? "−" : "+"}
                 </button>
                 <button type="button" className="tree-label" onClick={() => props.selectOrg(node)} title={node.name}>
-                    <span className="tree-kind-badge">O</span>
                     <span>{node.name}</span>
                 </button>
                 <TreeActions open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
                     <button type="button" onClick={() => props.openModal("org", node)}>New organization</button>
                     <button type="button" onClick={() => props.openModal("project", node)}>New project</button>
-                    {node.parent_org_id !== null && <button type="button" onClick={() => props.moveOrg(node)}>Move</button>}
                     {node.parent_org_id !== null && <button type="button" className="danger-action" onClick={() => props.deleteOrg(node)}>Delete</button>}
                 </TreeActions>
             </div>
-            {expanded && (
-                <>
+            <div className={classNames("tree-children", expanded && "is-expanded")} aria-hidden={!expanded}>
+                <div className="tree-children-inner">
                     {node.children.map((child) => (
-                        <TreeNode key={child.id} {...directoryProps} node={child} depth={depth + 1} />
+                        <TreeNode key={child.id} {...directoryProps} runtime={runtime} node={child} depth={depth + 1} />
                     ))}
                     {node.projects.map((project) => (
-                        <ProjectTreeRow key={project.id} {...directoryProps} project={project} depth={depth + 1} />
+                        <ProjectTreeRow key={project.id} {...directoryProps} runtime={runtime} project={project} depth={depth + 1} />
                     ))}
-                </>
-            )}
+                </div>
+            </div>
         </>
     );
 }
 
-function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: number }) {
-    const { project, depth } = props;
+function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: number; runtime: TreeRuntime }) {
+    const { project, depth, runtime } = props;
     const selected = props.selection?.type === "project" && props.selection.id === project.id;
     const menuKey = `project-${project.id}`;
+    const isDragged = runtime.dragState?.type === "project" && runtime.dragState.project.id === project.id;
 
     return (
-        <div className={classNames("tree-row tree-project-row", selected && "is-selected")} style={{ "--tree-depth": depth } as React.CSSProperties}>
+        <div
+            className={classNames("tree-row tree-project-row", selected && "is-selected", isDragged && "is-dragging")}
+            draggable
+            onDragEnd={runtime.clearDrag}
+            onDragStart={(event) => runtime.startProjectDrag(event, project)}
+            style={{ "--tree-depth": depth } as CSSProperties}
+        >
             <span className="tree-toggle" aria-hidden="true" />
             <button type="button" className="tree-label" onClick={() => props.selectProject(project)} title={project.name}>
-                <span className="tree-kind-badge project-kind-badge">P</span>
                 <span>{project.name}</span>
             </button>
             <TreeActions open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
-                <button type="button" onClick={() => props.moveProject(project)}>Move</button>
                 <button type="button" className="danger-action" onClick={() => props.deleteProject(project)}>Delete</button>
             </TreeActions>
         </div>
@@ -125,6 +313,8 @@ function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: n
 }
 
 function TreeActions({ children, open, setOpen }: { children: ReactNode; open: boolean; setOpen: (open: boolean) => void }) {
+    const [position, setPosition] = useState<CSSProperties>({});
+
     return (
         <div className="tree-actions">
             <button
@@ -133,12 +323,26 @@ function TreeActions({ children, open, setOpen }: { children: ReactNode; open: b
                 aria-label="More actions"
                 onClick={(event) => {
                     event.stopPropagation();
+                    const width = 176;
+                    const height = Math.min(280, Math.max(44, Children.count(children) * 41 + 2));
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
+                    setPosition({
+                        left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+                        maxHeight: height,
+                        top
+                    });
                     setOpen(!open);
                 }}
             >
                 ...
             </button>
-            {open && <div className="row-menu tree-inline-menu">{children}</div>}
+            {open && createPortal(
+                <div className="row-menu tree-inline-menu" style={position} onClick={(event) => event.stopPropagation()}>
+                    {children}
+                </div>,
+                document.body
+            )}
         </div>
     );
 }
@@ -172,10 +376,21 @@ function ProjectDetail(props: {
     project: Project;
     memberships: ProjectMembership[];
     loading: boolean;
-    addProjectMember: () => void;
+    addProjectMember: (subjectType: ProjectMemberSubject) => void;
     updateProjectMember: (membership: ProjectMembership, role: string) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 }) {
+    const [membershipView, setMembershipView] = useState<ProjectMemberSubject | "roles">("user");
+    const userMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "user");
+    const groupMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "group");
+    const visibleMemberships = membershipView === "group" ? groupMemberships : userMemberships;
+    const roleCounts = props.memberships.reduce<Record<string, number>>((counts, membership) => {
+        const role = roleLabel(membership.project_role);
+        counts[role] = (counts[role] || 0) + 1;
+        return counts;
+    }, {});
+    const canAddMember = membershipView === "user" || membershipView === "group";
+
     return (
         <article className="project-detail-page">
             <header className="project-detail-header">
@@ -186,9 +401,6 @@ function ProjectDetail(props: {
                 </div>
                 <div className="project-detail-actions">
                     <span className="detail-status-pill">{props.project.is_active === false ? "inactive" : "active"}</span>
-                    <button className="button-primary compact-button" type="button" onClick={props.addProjectMember}>
-                        Add member
-                    </button>
                 </div>
             </header>
             <div className="project-detail-content">
@@ -198,15 +410,44 @@ function ProjectDetail(props: {
                         <Detail label="Slug">{props.project.slug}</Detail>
                         <Detail label="Organization ID">{props.project.organization_id}</Detail>
                         <Detail label="Direct members">{props.memberships.length}</Detail>
+                        <Detail label="Users">{userMemberships.length}</Detail>
+                        <Detail label="Groups">{groupMemberships.length}</Detail>
                     </dl>
                 </section>
                 <section className="dashboard-panel project-members-panel">
-                    <PanelHeading label="Access" title="Project members" />
+                    <PanelHeading
+                        label="Access"
+                        title="Project members"
+                        action={
+                            canAddMember ? (
+                                <button className="button-primary compact-button" type="button" onClick={() => props.addProjectMember(membershipView)}>
+                                    Add {membershipView}
+                                </button>
+                            ) : null
+                        }
+                    />
+                    <div className="segmented-control project-member-tabs" role="tablist" aria-label="Project membership views">
+                        {[
+                            ["user", "Users", userMemberships.length],
+                            ["group", "Groups", groupMemberships.length],
+                            ["roles", "Roles", Object.keys(roleCounts).length]
+                        ].map(([key, label, count]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                className={membershipView === key ? "is-active" : ""}
+                                onClick={() => setMembershipView(key as ProjectMemberSubject | "roles")}
+                            >
+                                <span>{label}</span>
+                                <strong>{count}</strong>
+                            </button>
+                        ))}
+                    </div>
                     {props.loading && <EmptyState>Loading project members...</EmptyState>}
-                    {!props.loading && props.memberships.length === 0 && <EmptyState>No direct project members.</EmptyState>}
-                    {!props.loading && props.memberships.length > 0 && (
+                    {!props.loading && membershipView !== "roles" && visibleMemberships.length === 0 && <EmptyState>No direct {membershipView} memberships.</EmptyState>}
+                    {!props.loading && membershipView !== "roles" && visibleMemberships.length > 0 && (
                         <div className="compact-list">
-                            {props.memberships.map((membership) => (
+                            {visibleMemberships.map((membership) => (
                                 <div className="compact-list-row action-list-row" key={membership.id}>
                                     <div>
                                         <strong>{membership.subject?.label || membership.subject?.name || membership.subject?.username || `Subject ${membership.subject_id}`}</strong>
@@ -224,6 +465,16 @@ function ProjectDetail(props: {
                                             Remove
                                         </button>
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {!props.loading && membershipView === "roles" && (
+                        <div className="table-count-grid project-role-grid">
+                            {["viewer", "operator", "developer", "manager", "owner"].map((role) => (
+                                <div key={role}>
+                                    <span>{role}</span>
+                                    <strong>{roleCounts[role] || 0}</strong>
                                 </div>
                             ))}
                         </div>

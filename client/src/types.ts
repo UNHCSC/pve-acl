@@ -1,6 +1,7 @@
 export type ToastKind = "info" | "success" | "warning";
 export type ViewKey = "overview" | "directory" | "people" | "identity" | "access";
-export type ModalKey = "org" | "project" | "user" | "group" | "role" | "grant" | "project-member" | "move-org" | "move-project" | null;
+export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
+export type ModalKey = "org" | "project" | "user" | "group" | "role" | "grant" | "project-member" | null;
 export type Selection =
     | { type: "org"; id: number }
     | { type: "project"; id: number; slug: string }
@@ -17,7 +18,15 @@ export type Summary = {
         groupCount?: number;
         isSiteAdmin?: boolean;
     };
-    capabilities: Record<string, boolean>;
+    capabilities: {
+        canCreateProjects?: boolean;
+        canManageUsers?: boolean;
+        canManageGroups?: boolean;
+        canManageRoles?: boolean;
+        canManageOrgs?: boolean;
+        canViewUsers?: boolean;
+        canViewAccess?: boolean;
+    };
 };
 
 export type Organization = {

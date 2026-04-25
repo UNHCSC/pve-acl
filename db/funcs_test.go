@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/z46-dev/golog"
 	"github.com/z46-dev/gomysql"
 )

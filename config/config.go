@@ -20,7 +20,7 @@ type Configuration struct {
 	} `toml:"ldap"` // LDAP configuration
 
 	Database struct {
-		File string `toml:"file" default:"proxman.db" validate:"required"` // Path to the MySQL database file
+		File string `toml:"file" default:"organesson.db" validate:"required"` // Path to the MySQL database file
 	} `toml:"database"` // Database configuration
 
 	Proxmox struct {

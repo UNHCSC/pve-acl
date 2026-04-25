@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/z46-dev/gomysql"
 )
 
@@ -73,7 +73,7 @@ func EnsureInitialSetup() (err error) {
 		}
 	}
 
-	role, createdRole, err := ensureRole(DefaultLabAdminRoleName, "Full system-level authority across the lab cloud manager.", true, now)
+	role, createdRole, err := ensureRole(DefaultLabAdminRoleName, "Full system-level authority across Organesson Cloud.", true, now)
 	if err != nil {
 		return
 	}

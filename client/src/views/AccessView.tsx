@@ -1,33 +1,50 @@
 import { CompactList, EmptyState, PanelHeading } from "../components/common";
-import type { AccessData, RoleBinding } from "../types";
+import type { AccessData, RoleBinding, Summary } from "../types";
 import { scopeTypeLabel } from "../ui-helpers";
 
 export function AccessView({
     access,
+    capabilities,
     openGroup,
     openRole,
     openGrant,
     deleteGrant
 }: {
     access: AccessData;
+    capabilities: Summary["capabilities"];
     openGroup: () => void;
     openRole: () => void;
     openGrant: () => void;
     deleteGrant: (grant: RoleBinding) => void;
 }) {
+    const canManageGroups = Boolean(capabilities.canManageGroups);
+    const canManageRoles = Boolean(capabilities.canManageRoles);
+
     return (
         <section className="dashboard-view is-active">
             <div className="access-grid">
                 <article className="dashboard-panel">
-                    <PanelHeading label="Groups" title="Cloud groups" action={<button className="button-primary compact-button" type="button" onClick={openGroup}>New group</button>} />
+                    <PanelHeading
+                        label="Groups"
+                        title="Cloud groups"
+                        action={canManageGroups ? <button className="button-primary compact-button" type="button" onClick={openGroup}>New group</button> : null}
+                    />
                     <CompactList items={access.groups} render={(group) => <><strong>{group.name}</strong><span>{group.slug} / {group.member_count || 0} members</span></>} />
                 </article>
                 <article className="dashboard-panel">
-                    <PanelHeading label="Roles" title="Permission sets" action={<button className="button-primary compact-button" type="button" onClick={openRole}>New role</button>} />
+                    <PanelHeading
+                        label="Roles"
+                        title="Permission sets"
+                        action={canManageRoles ? <button className="button-primary compact-button" type="button" onClick={openRole}>New role</button> : null}
+                    />
                     <CompactList items={access.roles} render={(role) => <><strong>{role.name}</strong><span>{role.description || `${role.permission_count || 0} permissions`}</span></>} />
                 </article>
                 <article className="dashboard-panel access-grants-panel">
-                    <PanelHeading label="Grants" title="Role bindings" action={<button className="button-primary compact-button" type="button" onClick={openGrant}>New binding</button>} />
+                    <PanelHeading
+                        label="Grants"
+                        title="Role bindings"
+                        action={canManageRoles ? <button className="button-primary compact-button" type="button" onClick={openGrant}>New binding</button> : null}
+                    />
                     <div className="compact-list">
                         {access.roleBindings.length === 0 && <EmptyState>No role bindings found.</EmptyState>}
                         {access.roleBindings.map((grant) => (
@@ -38,9 +55,11 @@ export function AccessView({
                                         {grant.subject?.label || grant.subject?.name || `Subject ${grant.subject_id}`} / {scopeTypeLabel(grant.scope_type)} {grant.scope_id || ""}
                                     </span>
                                 </div>
-                                <button className="button-secondary compact-button danger-button" type="button" onClick={() => deleteGrant(grant)}>
-                                    Delete
-                                </button>
+                                {canManageRoles && (
+                                    <button className="button-secondary compact-button danger-button" type="button" onClick={() => deleteGrant(grant)}>
+                                        Delete
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

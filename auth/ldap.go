@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/go-ldap/ldap/v3"
 )
 

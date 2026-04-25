@@ -3,9 +3,9 @@ package app
 import (
 	"strings"
 
-	"github.com/UNHCSC/proxman/auth"
-	"github.com/UNHCSC/proxman/config"
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/auth"
+	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 

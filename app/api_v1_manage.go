@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/UNHCSC/proxman/auth"
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/auth"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -60,6 +60,11 @@ type rolePermissionRequest struct {
 }
 
 func getUsers(c *fiber.Ctx) error {
+	allowed, err := requirePermission(c, "user.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || !allowed {
+		return err
+	}
+
 	users, err := db.ListUsers()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load users"})
@@ -93,6 +98,11 @@ func postCreateUser(c *fiber.Ctx) error {
 }
 
 func getCloudGroups(c *fiber.Ctx) error {
+	allowed, err := requirePermission(c, "group.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || !allowed {
+		return err
+	}
+
 	groups, err := db.ListCloudGroups()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load groups"})
@@ -155,6 +165,13 @@ func getCloudGroupByID(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
+	allowed, err := currentUserCanManageGroup(c, groupID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
 
 	group, found, err := db.GetCloudGroupByID(groupID)
 	if err != nil {
@@ -175,6 +192,13 @@ func getGroupMemberships(c *fiber.Ctx) error {
 	groupID, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
+	}
+	allowed, err := currentUserCanManageGroup(c, groupID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
 	memberships, err := db.CloudGroupMembershipsForGroup(groupID)
@@ -304,6 +328,13 @@ func getGroupRoleBindings(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
+	allowed, err := currentUserCanManageGroup(c, groupID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
 
 	bindings, err := db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, groupID)
 	if err != nil {
@@ -377,6 +408,11 @@ func deleteGroupRoleBinding(c *fiber.Ctx) error {
 }
 
 func getRoleBindings(c *fiber.Ctx) error {
+	allowed, err := requirePermission(c, "role.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || !allowed {
+		return err
+	}
+
 	bindings, err := db.RoleBindings.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role bindings"})
@@ -680,6 +716,11 @@ func syncUserFromLDAP(ref string) (*db.User, bool, error) {
 }
 
 func getRoles(c *fiber.Ctx) error {
+	allowed, err := requirePermission(c, "role.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || !allowed {
+		return err
+	}
+
 	roles, err := db.Roles.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load roles"})
@@ -724,6 +765,11 @@ func postCreateRole(c *fiber.Ctx) error {
 }
 
 func getRolePermissions(c *fiber.Ctx) error {
+	allowed, err := requirePermission(c, "role.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || !allowed {
+		return err
+	}
+
 	role, err := roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)

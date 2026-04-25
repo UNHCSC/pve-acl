@@ -1,4 +1,4 @@
-import type { OrgNode, Organization, Project, ProjectTree, Selection } from "./types";
+import type { OrgNode, Project, ProjectTree, Selection } from "./types";
 
 export function buildOrgTree(tree: ProjectTree | null): OrgNode[] {
     if (!tree) {
@@ -46,20 +46,6 @@ export function findOrg(nodes: OrgNode[], id: number): OrgNode | null {
 
 export function findProject(tree: ProjectTree | null, id: number): Project | null {
     return tree?.projects.find((project) => project.id === id) || null;
-}
-
-export function flattenOrgTree(nodes: OrgNode[]): Array<Organization & { depth: number }> {
-    const items: Array<Organization & { depth: number }> = [];
-    const visit = (node: OrgNode, depth: number) => {
-        items.push({ ...node, depth });
-        for (const child of node.children) {
-            visit(child, depth + 1);
-        }
-    };
-    for (const node of nodes) {
-        visit(node, 0);
-    }
-    return items;
 }
 
 export function orgContains(root: OrgNode, orgID: number): boolean {

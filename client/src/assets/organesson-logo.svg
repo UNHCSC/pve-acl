@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+    <title id="title">Organesson Cloud logo</title>
+    <desc id="desc">A rounded square mark with a connected organization tree inside an orange O.</desc>
+    <defs>
+        <linearGradient id="bg" x1="84" y1="56" x2="430" y2="456" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#2b3a46" />
+            <stop offset="1" stop-color="#131a21" />
+        </linearGradient>
+        <linearGradient id="ring" x1="126" y1="106" x2="392" y2="416" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#ffb15a" />
+            <stop offset="0.48" stop-color="#e57000" />
+            <stop offset="1" stop-color="#b84d00" />
+        </linearGradient>
+        <linearGradient id="node" x1="166" y1="146" x2="348" y2="360" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#ffffff" />
+            <stop offset="1" stop-color="#dce6ee" />
+        </linearGradient>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.28" />
+        </filter>
+    </defs>
+    <rect width="512" height="512" rx="112" fill="url(#bg)" />
+    <path
+        d="M256 92c91 0 164 73 164 164s-73 164-164 164S92 347 92 256 165 92 256 92Zm0 72c-51 0-92 41-92 92s41 92 92 92 92-41 92-92-41-92-92-92Z"
+        fill="url(#ring)"
+        filter="url(#softShadow)"
+        fill-rule="evenodd"
+    />
+    <path d="M256 208v55M201 303l55-40 55 40" fill="none" stroke="#f8fafc" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="256" cy="190" r="35" fill="url(#node)" />
+    <circle cx="181" cy="318" r="32" fill="url(#node)" />
+    <circle cx="331" cy="318" r="32" fill="url(#node)" />
+    <circle cx="256" cy="264" r="25" fill="#263746" />
+</svg>

@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/UNHCSC/proxman/auth"
+	"github.com/UNHCSC/organesson/auth"
 )
 
 func authenticateTestUser(t *testing.T, username string, admin bool) string {

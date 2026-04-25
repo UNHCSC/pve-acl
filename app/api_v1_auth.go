@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/UNHCSC/proxman/auth"
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/auth"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -32,10 +32,16 @@ func initPersistentJWTSigningKey() error {
 	if keyDir == "" || keyDir == "." {
 		keyDir = "."
 	}
-	keyPath := filepath.Join(keyDir, ".pve-acl-session-key")
+	keyPath := filepath.Join(keyDir, ".organesson-session-key")
+	legacyKeyPath := filepath.Join(keyDir, ".pve-acl-session-key")
 
 	if key, err := os.ReadFile(keyPath); err == nil && len(key) >= 32 {
 		jwtSigningKey = key
+		return nil
+	}
+	if key, err := os.ReadFile(legacyKeyPath); err == nil && len(key) >= 32 {
+		jwtSigningKey = key
+		_ = os.WriteFile(keyPath, key, 0600)
 		return nil
 	}
 
@@ -82,7 +88,7 @@ func postLogin(c *fiber.Ctx) (err error) {
 
 	err = c.Render("login", fiber.Map{
 		"Title":         "Login",
-		"Description":   "Authenticate with your directory credentials to access Proxmox VE ACL.",
+		"Description":   "Authenticate with your directory credentials to access Organesson Cloud.",
 		"CanonicalPath": "/login",
 		"BodyClass":     "login-page",
 		"Redirect":      redirect,

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/UNHCSC/proxman/config"
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 	"github.com/z46-dev/golog"
 	"github.com/z46-dev/gomysql"
@@ -67,11 +67,15 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 		t.Fatalf("insert membership: %v", err)
 	}
 
+	token := authenticateTestUser(t, "acl-admin", true)
 	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
 	fiberApp.Get("/api/v1/acl/groupsForUser/:username", getGroupsForUser)
 	fiberApp.Get("/api/v1/acl/usersForGroup/:groupname", getUsersForGroup)
 
-	groupResp, err := fiberApp.Test(httptest.NewRequest("GET", "/api/v1/acl/groupsForUser/alice", nil))
+	groupReq := httptest.NewRequest("GET", "/api/v1/acl/groupsForUser/alice", nil)
+	groupReq.Header.Set("Authorization", "Bearer "+token)
+	groupResp, err := fiberApp.Test(groupReq)
 	if err != nil {
 		t.Fatalf("groups route returned error: %v", err)
 	}
@@ -87,7 +91,9 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 		t.Fatalf("expected groups to contain %q, got %#v", group.Groupname, groups)
 	}
 
-	userResp, err := fiberApp.Test(httptest.NewRequest("GET", "/api/v1/acl/usersForGroup/teaching-staff", nil))
+	userReq := httptest.NewRequest("GET", "/api/v1/acl/usersForGroup/teaching-staff", nil)
+	userReq.Header.Set("Authorization", "Bearer "+token)
+	userResp, err := fiberApp.Test(userReq)
 	if err != nil {
 		t.Fatalf("users route returned error: %v", err)
 	}

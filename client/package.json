@@ -3,27 +3,28 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "vite --host 127.0.0.1 --port 5173",
-        "devel": "vite build --mode development --watch --clearScreen false",
-        "build": "vite build",
+        "assets": "bun run scripts/build-assets.ts",
+        "devel": "bun run assets && vite build --mode development --watch --clearScreen false",
+        "build": "bun run assets && vite build",
         "check": "tsc --noEmit"
     },
     "devDependencies": {
-        "@types/bun": "latest"
+        "@types/bun": "latest",
+        "sharp": "^0.34.5"
     },
     "dependencies": {
-        "@fontsource-variable/public-sans": "^5.2.6",
-        "@fontsource/ibm-plex-mono": "^5.2.6",
-        "@fontsource/source-serif-4": "^5.2.6",
-        "@tailwindcss/postcss": "^4.1.18",
+        "@fontsource-variable/public-sans": "^5.2.7",
+        "@fontsource/ibm-plex-mono": "^5.2.7",
+        "@fontsource/source-serif-4": "^5.2.9",
+        "@tailwindcss/postcss": "^4.2.4",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^6.0.1",
-        "postcss": "^8.4.49",
+        "postcss": "^8.5.10",
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "react-router-dom": "^7.14.2",
-        "tailwindcss": "^4.1.18",
+        "tailwindcss": "^4.2.4",
         "typescript": "^6.0.3",
         "vite": "^8.0.10"
     }

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/gofiber/fiber/v2"
 )
 

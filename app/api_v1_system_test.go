@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 

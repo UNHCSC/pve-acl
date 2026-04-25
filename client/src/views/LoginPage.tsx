@@ -4,7 +4,7 @@ export function LoginPage({ redirect, loginError }: { redirect: string; loginErr
             <section className="login-shell">
                 <div className="space-y-4">
                     <p className="eyebrow">Console</p>
-                    <h1 className="section-title">Sign in to PVE Cloud.</h1>
+                    <h1 className="section-title">Sign in to Organesson Cloud.</h1>
                     <p className="section-copy">Use your directory credentials to manage projects, quotas, and access.</p>
                 </div>
 

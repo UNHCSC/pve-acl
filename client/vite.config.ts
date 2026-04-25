@@ -15,9 +15,11 @@ export default defineConfig({
             },
             output: {
                 assetFileNames: (assetInfo) => {
-                    if (assetInfo.name && assetInfo.name.endsWith(".css")) {
+                    const name = assetInfo.name || assetInfo.names.find(Boolean) || assetInfo.originalFileName || assetInfo.originalFileNames.find(Boolean) || "";
+                    if (name.endsWith(".css")) {
                         return "site.css";
                     }
+
                     return "[name][extname]";
                 },
                 entryFileNames: "site.js"

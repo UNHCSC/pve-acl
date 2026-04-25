@@ -1,31 +1,35 @@
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { AccessData, ProjectTree, Selection, ViewKey } from "../types";
+import type { AccessData, ProjectTree, Selection, Summary, ViewKey } from "../types";
 import { formatCount } from "../ui-helpers";
 
 export function OverviewView({
     counts,
     tree,
     access,
+    capabilities,
     setView,
     selectProject
 }: {
     counts: Record<string, number>;
     tree: ProjectTree | null;
     access: AccessData;
+    capabilities: Summary["capabilities"];
     setView: (view: ViewKey) => void;
     selectProject: (selection: Selection) => void;
 }) {
     const recentProjects = (tree?.projects || []).slice(0, 5);
+    const metrics = [
+        ["Organizations", "organizations"],
+        ["Projects", "projects"],
+        ...(capabilities.canViewUsers ? [["Users", "users"]] : []),
+        ...(counts.auditEvents ? [["Audit events", "auditEvents"]] : [])
+    ];
+    const showAccessPanels = Boolean(capabilities.canViewAccess);
 
     return (
         <section className="dashboard-view is-active">
             <div className="metric-grid" aria-label="Cloud summary">
-                {[
-                    ["Organizations", "organizations"],
-                    ["Projects", "projects"],
-                    ["Users", "users"],
-                    ["Audit events", "auditEvents"]
-                ].map(([label, key]) => (
+                {metrics.map(([label, key]) => (
                     <article className="metric-card" key={key}>
                         <span className="panel-label">{label}</span>
                         <strong>{formatCount(counts[key])}</strong>
@@ -34,22 +38,24 @@ export function OverviewView({
             </div>
 
             <section className="dashboard-grid">
-                <article className="dashboard-panel">
-                    <PanelHeading label="System data" title="Local tables" />
-                    <div className="table-count-grid">
-                        {[
-                            ["Groups", "groups"],
-                            ["Roles", "roles"],
-                            ["Permissions", "permissions"],
-                            ["Role bindings", "roleBindings"]
-                        ].map(([label, key]) => (
-                            <div key={key}>
-                                <span>{label}</span>
-                                <strong>{formatCount(counts[key])}</strong>
-                            </div>
-                        ))}
-                    </div>
-                </article>
+                {showAccessPanels && (
+                    <article className="dashboard-panel">
+                        <PanelHeading label="System data" title="Local tables" />
+                        <div className="table-count-grid">
+                            {[
+                                ["Groups", "groups"],
+                                ["Roles", "roles"],
+                                ["Permissions", "permissions"],
+                                ["Role bindings", "roleBindings"]
+                            ].map(([label, key]) => (
+                                <div key={key}>
+                                    <span>{label}</span>
+                                    <strong>{formatCount(counts[key])}</strong>
+                                </div>
+                            ))}
+                        </div>
+                    </article>
+                )}
 
                 <article className="dashboard-panel">
                     <PanelHeading label="Directory" title="Recent projects" action={<TextButton onClick={() => setView("directory")}>Open</TextButton>} />
@@ -77,17 +83,19 @@ export function OverviewView({
                     </div>
                 </article>
 
-                <article className="dashboard-panel wide-panel">
-                    <PanelHeading label="Access" title="Permissions available" />
-                    <div className="permission-cloud">
-                        {access.permissions.slice(0, 24).map((permission) => (
-                            <span className="permission-pill" key={permission.id}>
-                                {permission.name}
-                            </span>
-                        ))}
-                        {access.permissions.length === 0 && <span className="permission-pill">No permissions loaded</span>}
-                    </div>
-                </article>
+                {showAccessPanels && (
+                    <article className="dashboard-panel wide-panel">
+                        <PanelHeading label="Access" title="Permissions available" />
+                        <div className="permission-cloud">
+                            {access.permissions.slice(0, 24).map((permission) => (
+                                <span className="permission-pill" key={permission.id}>
+                                    {permission.name}
+                                </span>
+                            ))}
+                            {access.permissions.length === 0 && <span className="permission-pill">No permissions loaded</span>}
+                        </div>
+                    </article>
+                )}
             </section>
         </section>
     );

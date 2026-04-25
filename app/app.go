@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/z46-dev/golog"

@@ -1,4 +1,4 @@
-module github.com/UNHCSC/proxman
+module github.com/UNHCSC/organesson
 
 go 1.25.8
 

@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -10,13 +10,6 @@ func getSystemSummary(c *fiber.Ctx) error {
 	if dbUser == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "authentication required",
-		})
-	}
-
-	counts, err := systemCounts()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to load system summary",
 		})
 	}
 
@@ -57,6 +50,20 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"error": "failed to check organization permissions",
 		})
 	}
+	canViewAccess := canManageRoles
+
+	counts, err := systemCounts(c, fiber.Map{
+		"canManageUsers":  canManageUsers,
+		"canManageGroups": canManageGroups,
+		"canManageRoles":  canManageRoles,
+		"canManageOrgs":   canManageOrgs,
+		"canViewAccess":   canViewAccess,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to load system summary",
+		})
+	}
 
 	return c.JSON(fiber.Map{
 		"counts": counts,
@@ -75,31 +82,87 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"canManageGroups":   canManageGroups,
 			"canManageRoles":    canManageRoles,
 			"canManageOrgs":     canManageOrgs,
+			"canViewUsers":      canManageUsers,
+			"canViewAccess":     canViewAccess,
 		},
 	})
 }
 
-func systemCounts() (fiber.Map, error) {
+func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (fiber.Map, error) {
 	counts := fiber.Map{}
 
-	for key, countFn := range map[string]func() (int64, error){
-		"users":         db.Users.Count,
-		"groups":        db.CloudGroups.Count,
-		"organizations": db.Organizations.Count,
-		"projects":      db.Projects.Count,
-		"roles":         db.Roles.Count,
-		"permissions":   db.Permissions.Count,
-		"roleBindings":  db.RoleBindings.Count,
-		"auditEvents":   db.AuditEvents.Count,
-	} {
-		count, err := countFn()
-		if err != nil {
+	projectCount, orgCount, err := visibleDirectoryCounts(c)
+	if err != nil {
+		return nil, err
+	}
+	counts["projects"] = projectCount
+	counts["organizations"] = orgCount
+
+	counts["users"] = int64(0)
+	if capabilities["canManageUsers"] == true {
+		if counts["users"], err = db.Users.Count(); err != nil {
 			return nil, err
 		}
-		counts[key] = count
+	}
+
+	counts["groups"] = int64(0)
+	if capabilities["canManageGroups"] == true || capabilities["canViewAccess"] == true {
+		if counts["groups"], err = db.CloudGroups.Count(); err != nil {
+			return nil, err
+		}
+	}
+
+	counts["roles"] = int64(0)
+	counts["permissions"] = int64(0)
+	counts["roleBindings"] = int64(0)
+	if capabilities["canManageRoles"] == true {
+		if counts["roles"], err = db.Roles.Count(); err != nil {
+			return nil, err
+		}
+		if counts["permissions"], err = db.Permissions.Count(); err != nil {
+			return nil, err
+		}
+		if counts["roleBindings"], err = db.RoleBindings.Count(); err != nil {
+			return nil, err
+		}
+	}
+
+	counts["auditEvents"] = int64(0)
+	if currentUserIsSiteAdmin(c) {
+		if counts["auditEvents"], err = db.AuditEvents.Count(); err != nil {
+			return nil, err
+		}
 	}
 
 	return counts, nil
+}
+
+func visibleDirectoryCounts(c *fiber.Ctx) (int64, int64, error) {
+	orgs, err := db.ListOrganizations()
+	if err != nil {
+		return 0, 0, err
+	}
+	projects, err := db.ListProjects()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	visibleProjects := make([]fiber.Map, 0, len(projects))
+	for _, project := range projects {
+		allowed, allowErr := currentUserCanViewProject(c, project)
+		if allowErr != nil {
+			return 0, 0, allowErr
+		}
+		if allowed {
+			visibleProjects = append(visibleProjects, fiber.Map{"organization_id": project.OrganizationID})
+		}
+	}
+
+	visibleOrgs, err := visibleOrganizationIDs(c, orgs, visibleProjects)
+	if err != nil {
+		return 0, 0, err
+	}
+	return int64(len(visibleProjects)), int64(len(visibleOrgs)), nil
 }
 
 func currentUserCanCreateProjects(c *fiber.Ctx) (bool, error) {

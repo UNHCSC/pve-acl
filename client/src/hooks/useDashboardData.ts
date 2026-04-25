@@ -32,10 +32,26 @@ export function useDashboardData(showError: (message: string) => void) {
         setUsers(await apiFetch<User[]>("/api/v1/users"));
     };
 
+    const clearRestrictedData = () => {
+        setUsers([]);
+        setAccess({ groups: [], roles: [], permissions: [], roleBindings: [] });
+    };
+
     const refreshAll = async () => {
         setLoading(true);
         try {
-            await Promise.all([loadSummary(), loadTree(), loadAccess(), loadMyAccess(), loadUsers()]);
+            const nextSummary = await apiFetch<Summary>("/api/v1/system/summary");
+            setSummary(nextSummary);
+            clearRestrictedData();
+
+            const loads: Array<Promise<unknown>> = [loadTree(), loadMyAccess()];
+            if (nextSummary.capabilities.canViewAccess) {
+                loads.push(loadAccess());
+            }
+            if (nextSummary.capabilities.canViewUsers) {
+                loads.push(loadUsers());
+            }
+            await Promise.all(loads);
         } finally {
             setLoading(false);
         }

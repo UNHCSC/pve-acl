@@ -4,14 +4,16 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { apiFetch } from "./api";
+import { ThemeSettings } from "./components/ThemeSettings";
 import { ToastStack } from "./components/common";
-import { GrantModal, GroupModal, MoveOrgModal, MoveProjectModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal, UserModal } from "./components/modals";
+import { GrantModal, GroupModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal, UserModal } from "./components/modals";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDirectorySelection } from "./hooks/useDirectorySelection";
 import { useProjectMemberships } from "./hooks/useProjectMemberships";
 import { useToasts } from "./hooks/useToasts";
 import "./styles/site.css";
-import type { Group, ModalKey, Organization, Project, Role, RoleBinding, User, ViewKey } from "./types";
+import type { Group, ModalKey, Organization, Project, Role, RoleBinding, ThemeKey, User, ViewKey } from "./types";
+import { applyTheme, readStoredTheme } from "./theme";
 import { viewTitles } from "./types";
 import { classNames, displayUser, initialView, initials } from "./ui-helpers";
 import { AccessView } from "./views/AccessView";
@@ -22,12 +24,32 @@ import { LoginPage } from "./views/LoginPage";
 import { OverviewView } from "./views/OverviewView";
 import { PeopleView } from "./views/PeopleView";
 
+applyTheme(readStoredTheme());
+
+function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean; canViewAccess?: boolean } } | null) {
+    if (view === "people") {
+        return Boolean(summary?.capabilities.canViewUsers);
+    }
+    if (view === "access") {
+        return Boolean(summary?.capabilities.canViewAccess);
+    }
+    return true;
+}
+
+function allowedViews(summary: { capabilities: { canViewUsers?: boolean; canViewAccess?: boolean } } | null): ViewKey[] {
+    return (Object.keys(viewTitles) as ViewKey[]).filter((key) => viewIsAllowed(key, summary));
+}
+
 function DashboardApp() {
     const [view, setViewState] = useState<ViewKey>(initialView);
     const [modal, setModal] = useState<ModalKey>(null);
     const [modalContext, setModalContext] = useState<Organization | Project | null>(null);
     const [openMenu, setOpenMenu] = useState<string | null>(null);
+    const [navOpen, setNavOpen] = useState(false);
     const [accountOpen, setAccountOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [theme, setTheme] = useState<ThemeKey>(readStoredTheme);
+    const [projectMemberSubjectType, setProjectMemberSubjectType] = useState<"user" | "group">("user");
 
     const { toasts, showToast } = useToasts();
     const { access, loadAccess, loadMyAccess, loadSummary, loadTree, loadUsers, myAccess, summary, tree, users } = useDashboardData((message) => showToast(message, "warning"));
@@ -40,6 +62,12 @@ function DashboardApp() {
         window.addEventListener("popstate", handler);
         return () => window.removeEventListener("popstate", handler);
     }, []);
+
+    useEffect(() => {
+        if (!viewIsAllowed(view, summary)) {
+            setView("overview");
+        }
+    }, [summary, view]);
 
     useEffect(() => {
         if (!openMenu) {
@@ -59,7 +87,40 @@ function DashboardApp() {
         };
     }, [openMenu]);
 
+    useEffect(() => {
+        applyTheme(theme);
+    }, [theme]);
+
+    useEffect(() => {
+        if (!accountOpen && !settingsOpen) {
+            return;
+        }
+        const closeMenus = (event: MouseEvent) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest("[data-topbar-menu]")) {
+                return;
+            }
+            setAccountOpen(false);
+            setSettingsOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setAccountOpen(false);
+                setSettingsOpen(false);
+            }
+        };
+        window.addEventListener("click", closeMenus);
+        window.addEventListener("keydown", closeOnEscape);
+        return () => {
+            window.removeEventListener("click", closeMenus);
+            window.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [accountOpen, settingsOpen]);
+
     const setView = (nextView: ViewKey) => {
+        if (!viewIsAllowed(nextView, summary)) {
+            nextView = "overview";
+        }
         setViewState(nextView);
         const url = new URL(window.location.href);
         url.searchParams.set("view", nextView);
@@ -172,13 +233,28 @@ function DashboardApp() {
     return (
         <div className="dashboard-shell">
             <aside className="dashboard-sidebar">
-                <a href="/" className="brand-mark">
-                    <span className="brand-icon">PC</span>
-                    <span>PVE Cloud</span>
-                </a>
-                <nav className="dashboard-nav" aria-label="Dashboard navigation">
-                    {(Object.keys(viewTitles) as ViewKey[]).map((key) => (
-                        <button key={key} type="button" className={view === key ? "is-active" : ""} onClick={() => setView(key)}>
+                <div className="dashboard-sidebar-header">
+                    <a href="/" className="brand-mark">
+                        <img className="brand-logo" src="/static/logo.svg" alt="" aria-hidden="true" />
+                        <span>Organesson Cloud</span>
+                    </a>
+                    <button className="nav-menu-button" type="button" aria-label="Open dashboard navigation" aria-expanded={navOpen} onClick={() => setNavOpen((open) => !open)}>
+                        <span />
+                        <span />
+                        <span />
+                    </button>
+                </div>
+                <nav className={classNames("dashboard-nav", navOpen && "is-open")} aria-label="Dashboard navigation">
+                    {allowedViews(summary).map((key) => (
+                        <button
+                            key={key}
+                            type="button"
+                            className={view === key ? "is-active" : ""}
+                            onClick={() => {
+                                setView(key);
+                                setNavOpen(false);
+                            }}
+                        >
                             {viewTitles[key]}
                         </button>
                     ))}
@@ -192,9 +268,29 @@ function DashboardApp() {
                         <h1>{viewTitles[view]}</h1>
                     </div>
                     <div className="dashboard-actions">
+                        <ThemeSettings
+                            open={settingsOpen}
+                            setOpen={(open) => {
+                                setSettingsOpen(open);
+                                if (open) {
+                                    setAccountOpen(false);
+                                }
+                            }}
+                            theme={theme}
+                            setTheme={setTheme}
+                        />
                         {summary ? (
-                            <div className="account-menu">
-                                <button className="account-button" type="button" onClick={() => setAccountOpen((open) => !open)}>
+                            <div className="account-menu" data-topbar-menu>
+                                <button
+                                    className="account-button"
+                                    type="button"
+                                    aria-haspopup="menu"
+                                    aria-expanded={accountOpen}
+                                    onClick={() => {
+                                        setAccountOpen((open) => !open);
+                                        setSettingsOpen(false);
+                                    }}
+                                >
                                     <span className="account-avatar">{initials(displayUser(summary.currentUser))}</span>
                                     <span>{displayUser(summary.currentUser)}</span>
                                 </button>
@@ -218,11 +314,10 @@ function DashboardApp() {
                 </header>
 
                 <main className="dashboard-content">
-                    {view === "overview" && <OverviewView counts={counts} tree={tree} access={access} setView={setView} selectProject={setSelection} />}
+                    {view === "overview" && <OverviewView counts={counts} tree={tree} access={access} capabilities={summary?.capabilities || {}} setView={setView} selectProject={setSelection} />}
                     {view === "directory" && (
                         <DirectoryView
                             orgTree={orgTree}
-                            tree={tree}
                             expanded={expanded}
                             selection={selection}
                             selectedOrg={selectedOrg}
@@ -235,11 +330,14 @@ function DashboardApp() {
                             selectOrg={(org) => setSelection({ type: "org", id: org.id })}
                             selectProject={(project) => setSelection({ type: "project", id: project.id, slug: project.slug })}
                             openModal={openContextModal}
-                            moveOrg={(org) => openContextModal("move-org", org)}
-                            moveProject={(project) => openContextModal("move-project", project)}
+                            moveOrg={(org, parentOrgID) => mutateWithToast(() => moveOrg(org, parentOrgID))}
+                            moveProject={(project, organizationID) => mutateWithToast(() => moveProject(project, organizationID))}
                             deleteOrg={(org) => mutateWithToast(() => deleteOrg(org))}
                             deleteProject={(project) => mutateWithToast(() => deleteProject(project))}
-                            addProjectMember={() => openContextModal("project-member", activeProject || selectedProject)}
+                            addProjectMember={(subjectType) => {
+                                setProjectMemberSubjectType(subjectType);
+                                openContextModal("project-member", activeProject || selectedProject);
+                            }}
                             updateProjectMember={(membership, nextRole) =>
                                 mutateWithToast(async () => {
                                     if (!activeProject) {
@@ -265,11 +363,12 @@ function DashboardApp() {
                             }
                         />
                     )}
-                    {view === "people" && <PeopleView users={users} openCreate={() => openContextModal("user")} />}
+                    {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canCreate={Boolean(summary.capabilities.canManageUsers)} openCreate={() => openContextModal("user")} />}
                     {view === "identity" && <IdentityView summary={summary} myAccess={myAccess} />}
-                    {view === "access" && (
+                    {view === "access" && summary?.capabilities.canViewAccess && (
                         <AccessView
                             access={access}
+                            capabilities={summary.capabilities}
                             openGroup={() => openContextModal("group")}
                             openRole={() => openContextModal("role")}
                             openGrant={() => openContextModal("grant")}
@@ -352,33 +451,10 @@ function DashboardApp() {
             )}
             {modal === "project-member" && (
                 <ProjectMemberModal
-                    groups={access.groups}
-                    users={users}
+                    defaultSubjectType={projectMemberSubjectType}
                     onClose={() => setModal(null)}
                     onSubmit={async (values) => {
                         await addProjectMember(values);
-                        setModal(null);
-                    }}
-                />
-            )}
-            {modal === "move-org" && modalContext && "parent_org_id" in modalContext && (
-                <MoveOrgModal
-                    org={modalContext}
-                    orgTree={orgTree}
-                    onClose={() => setModal(null)}
-                    onSubmit={async (parentOrgID) => {
-                        await moveOrg(modalContext, parentOrgID);
-                        setModal(null);
-                    }}
-                />
-            )}
-            {modal === "move-project" && modalContext && "organization_id" in modalContext && (
-                <MoveProjectModal
-                    project={modalContext}
-                    orgTree={orgTree}
-                    onClose={() => setModal(null)}
-                    onSubmit={async (organizationID) => {
-                        await moveProject(modalContext, organizationID);
                         setModal(null);
                     }}
                 />
@@ -398,7 +474,19 @@ if (mount) {
 
 const homeMount = document.getElementById("home-root");
 if (homeMount) {
-    createRoot(homeMount).render(<HomePage currentYear={homeMount.dataset.currentYear || new Date().getFullYear().toString()} />);
+    const currentYear = homeMount.dataset.currentYear || new Date().getFullYear().toString();
+
+    function HomeRoot() {
+        const [theme, setTheme] = useState<ThemeKey>(readStoredTheme);
+
+        useEffect(() => {
+            applyTheme(theme);
+        }, [theme]);
+
+        return <HomePage currentYear={currentYear} theme={theme} setTheme={setTheme} />;
+    }
+
+    createRoot(homeMount).render(<HomeRoot />);
 }
 
 const loginMount = document.getElementById("login-root");

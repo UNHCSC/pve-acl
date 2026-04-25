@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 )
 
 func TestEnsureInitialSetupSeedsCoreRows(t *testing.T) {

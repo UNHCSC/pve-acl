@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	"github.com/UNHCSC/proxman/auth"
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/auth"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -74,6 +74,17 @@ func getResolveUser(c *fiber.Ctx) error {
 	query := strings.TrimSpace(c.Query("query"))
 	if query == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query is required"})
+	}
+
+	dbUser := currentDBUser(c)
+	if dbUser == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
+	}
+	if !strings.EqualFold(query, dbUser.Username) && !strings.EqualFold(query, dbUser.Email) && !strings.EqualFold(query, dbUser.DisplayName) {
+		allowed, err := requirePermission(c, "user.manage", db.RoleBindingScopeGlobal, nil)
+		if err != nil || !allowed {
+			return err
+		}
 	}
 
 	users, err := db.ListUsers()

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/UNHCSC/proxman/auth"
+	"github.com/UNHCSC/organesson/auth"
 	"github.com/gofiber/fiber/v2"
 )
 

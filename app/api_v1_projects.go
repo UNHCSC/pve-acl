@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/UNHCSC/proxman/db"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -103,8 +103,18 @@ func getProjectTree(c *fiber.Ctx) error {
 		visibleProjects = append(visibleProjects, item)
 	}
 
-	orgItems := make([]fiber.Map, 0, len(orgs))
+	visibleOrgIDs, err := visibleOrganizationIDs(c, orgs, visibleProjects)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "permission check failed",
+		})
+	}
+
+	orgItems := make([]fiber.Map, 0, len(visibleOrgIDs))
 	for _, org := range orgs {
+		if !visibleOrgIDs[org.ID] {
+			continue
+		}
 		orgItems = append(orgItems, organizationResponse(org))
 	}
 
@@ -112,6 +122,51 @@ func getProjectTree(c *fiber.Ctx) error {
 		"organizations": orgItems,
 		"projects":      visibleProjects,
 	})
+}
+
+func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjects []fiber.Map) (map[int]bool, error) {
+	visible := map[int]bool{}
+	if currentUserIsSiteAdmin(c) {
+		for _, org := range orgs {
+			visible[org.ID] = true
+		}
+		return visible, nil
+	}
+
+	for _, project := range visibleProjects {
+		orgID, _ := project["organization_id"].(int)
+		if orgID == 0 {
+			continue
+		}
+		if err := addOrganizationAncestors(visible, orgID); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, org := range orgs {
+		allowed, err := currentUserCan(c, "org.manage", db.RoleBindingScopeOrg, &org.ID)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			if err := addOrganizationAncestors(visible, org.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return visible, nil
+}
+
+func addOrganizationAncestors(visible map[int]bool, orgID int) error {
+	ancestors, err := db.OrganizationAncestorIDs(orgID)
+	if err != nil {
+		return err
+	}
+	for _, ancestorID := range ancestors {
+		visible[ancestorID] = true
+	}
+	return nil
 }
 
 func postCreateProject(c *fiber.Ctx) error {

@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Field, Select, SimpleFormModal, Textarea } from "./common";
-import { flattenOrgTree, findOrg, orgContains } from "../tree";
-import type { AccessData, Group, OrgNode, Organization, Project, User } from "../types";
-import { displayUser } from "../ui-helpers";
+import type { AccessData, Organization, Project } from "../types";
 
 export function OrgModal({
     context,
@@ -235,17 +233,15 @@ export function GrantModal({
 }
 
 export function ProjectMemberModal({
-    users,
-    groups,
+    defaultSubjectType = "user",
     onSubmit,
     onClose
 }: {
-    users: User[];
-    groups: Group[];
+    defaultSubjectType?: "user" | "group";
     onSubmit: (values: { subjectType: string; subjectRef: string; projectRole: string }) => Promise<void>;
     onClose: () => void;
 }) {
-    const [subjectType, setSubjectType] = useState("user");
+    const [subjectType, setSubjectType] = useState<"user" | "group">(defaultSubjectType);
 
     return (
         <SimpleFormModal
@@ -262,18 +258,12 @@ export function ProjectMemberModal({
         >
             <label className="field-group">
                 <span className="field-label">Subject type</span>
-                <select className="field-input" value={subjectType} onChange={(event) => setSubjectType(event.target.value)}>
+                <select className="field-input" value={subjectType} onChange={(event) => setSubjectType(event.target.value as "user" | "group")}>
                     <option value="user">User</option>
                     <option value="group">Group</option>
                 </select>
             </label>
-            <Select name="subjectRef" label={subjectType === "user" ? "User" : "Group"} required>
-                {(subjectType === "user" ? users : groups).map((subject) => (
-                    <option key={subject.id} value={"username" in subject ? subject.username : subject.slug}>
-                        {"username" in subject ? displayUser(subject) : subject.name}
-                    </option>
-                ))}
-            </Select>
+            <Field name="subjectRef" label={subjectType === "user" ? "Username" : "Group slug"} required />
             <Select name="projectRole" label="Role" defaultValue="viewer">
                 {["viewer", "operator", "developer", "manager", "owner"].map((role) => (
                     <option key={role} value={role}>
@@ -281,121 +271,6 @@ export function ProjectMemberModal({
                     </option>
                 ))}
             </Select>
-        </SimpleFormModal>
-    );
-}
-
-export function MoveOrgModal({
-    org,
-    orgTree,
-    onClose,
-    onSubmit
-}: {
-    org: Organization;
-    orgTree: OrgNode[];
-    onClose: () => void;
-    onSubmit: (parentOrgID: number | null) => Promise<void>;
-}) {
-    const currentParent = org.parent_org_id ?? null;
-    const [targetID, setTargetID] = useState<number | null>(currentParent);
-    const sourceNode = findOrg(orgTree, org.id);
-    const options = flattenOrgTree(orgTree).filter((option) => {
-        if (option.id === org.id) {
-            return false;
-        }
-        return !sourceNode || !orgContains(sourceNode, option.id);
-    });
-
-    return (
-        <OrgPickerModal
-            title={`Move ${org.name}`}
-            label="Organization"
-            selectedID={targetID}
-            allowRoot
-            orgs={options}
-            rootLabel="Root level"
-            onSelect={setTargetID}
-            onClose={onClose}
-            onSubmit={() => onSubmit(targetID)}
-        />
-    );
-}
-
-export function MoveProjectModal({
-    project,
-    orgTree,
-    onClose,
-    onSubmit
-}: {
-    project: Project;
-    orgTree: OrgNode[];
-    onClose: () => void;
-    onSubmit: (organizationID: number) => Promise<void>;
-}) {
-    const [targetID, setTargetID] = useState<number | null>(project.organization_id);
-    const options = flattenOrgTree(orgTree);
-
-    return (
-        <OrgPickerModal
-            title={`Move ${project.name}`}
-            label="Project"
-            selectedID={targetID}
-            orgs={options}
-            onSelect={setTargetID}
-            onClose={onClose}
-            onSubmit={() => {
-                if (targetID) {
-                    return onSubmit(targetID);
-                }
-                return Promise.resolve();
-            }}
-        />
-    );
-}
-
-function OrgPickerModal({
-    title,
-    label,
-    orgs,
-    selectedID,
-    allowRoot = false,
-    rootLabel,
-    onSelect,
-    onSubmit,
-    onClose
-}: {
-    title: string;
-    label: string;
-    orgs: Array<Organization & { depth: number }>;
-    selectedID: number | null;
-    allowRoot?: boolean;
-    rootLabel?: string;
-    onSelect: (id: number | null) => void;
-    onSubmit: () => Promise<void>;
-    onClose: () => void;
-}) {
-    return (
-        <SimpleFormModal title={title} label={label} onClose={onClose} onSubmit={() => onSubmit()}>
-            <div className="org-picker-list" role="radiogroup" aria-label="Organization destination">
-                {allowRoot && (
-                    <button type="button" className={selectedID === null ? "is-selected" : ""} onClick={() => onSelect(null)}>
-                        <span className="org-picker-indent" />
-                        <span>
-                            <strong>{rootLabel || "No parent"}</strong>
-                            <small>Top of the organization tree</small>
-                        </span>
-                    </button>
-                )}
-                {orgs.map((org) => (
-                    <button key={org.id} type="button" className={selectedID === org.id ? "is-selected" : ""} onClick={() => onSelect(org.id)}>
-                        <span className="org-picker-indent" style={{ width: `${org.depth * 18}px` }} />
-                        <span>
-                            <strong>{org.name}</strong>
-                            <small>{org.slug}</small>
-                        </span>
-                    </button>
-                ))}
-            </div>
         </SimpleFormModal>
     );
 }

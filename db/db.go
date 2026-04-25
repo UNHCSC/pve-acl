@@ -5,7 +5,7 @@ import (
 	"os"
 	"slices"
 
-	"github.com/UNHCSC/proxman/config"
+	"github.com/UNHCSC/organesson/config"
 	"github.com/z46-dev/golog"
 	"github.com/z46-dev/gomysql"
 )
@@ -62,90 +62,119 @@ func Init(parentLog *golog.Logger) (err error) {
 	if err = registerAndMigrate("LocalUsers", &LocalUsers, LocalUser{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("LocalGroups", &LocalGroups, LocalGroup{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProxmoxAssets", &ProxmoxAssets, ProxmoxAsset{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("LocalGroupMembershipsByUser", &LocalGroupMembershipsByUser, LocalGroupMembership{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProxmoxAssetAssignmentsByUser", &ProxmoxAssetAssignmentsByUser, ProxmoxAssetAssignmentByUser{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProxmoxAssetAssignmentsByGroup", &ProxmoxAssetAssignmentsByGroup, ProxmoxAssetAssignmentByGroup{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("LocalGroupManagementsByUser", &LocalGroupManagementsByUser, LocalGroupManagementByUser{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("LocalGroupManagementsByGroup", &LocalGroupManagementsByGroup, LocalGroupManagementByGroup{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Users", &Users, User{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("CloudGroups", &CloudGroups, CloudGroup{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("CloudGroupMemberships", &CloudGroupMemberships, CloudGroupMembership{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Organizations", &Organizations, Organization{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Projects", &Projects, Project{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProjectMemberships", &ProjectMemberships, ProjectMembership{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Roles", &Roles, Role{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Permissions", &Permissions, Permission{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("RolePermissions", &RolePermissions, RolePermission{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("RoleBindings", &RoleBindings, RoleBinding{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("QuotaPolicies", &QuotaPolicies, QuotaPolicy{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("QuotaBindings", &QuotaBindings, QuotaBinding{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Resources", &Resources, Resource{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProxmoxClusters", &ProxmoxClusters, ProxmoxCluster{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("ProxmoxNodes", &ProxmoxNodes, ProxmoxNode{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("VirtualMachines", &VirtualMachines, VirtualMachine{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Containers", &Containers, Container{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("VirtualNetworks", &VirtualNetworks, VirtualNetwork{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Jobs", &Jobs, Job{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("JobLogs", &JobLogs, JobLog{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("AuditEvents", &AuditEvents, AuditEvent{}, migrationOpts); err != nil {
 		return
 	}
+
 	if err = registerAndMigrate("Secrets", &Secrets, Secret{}, migrationOpts); err != nil {
 		return
 	}
