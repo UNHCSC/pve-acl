@@ -50,8 +50,8 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 		LastSeen:  now,
 	}
 	group := &db.LocalGroup{
-		Groupname:   "course-tas",
-		DisplayName: "Course TAs",
+		Groupname:   "teaching-staff",
+		DisplayName: "Teaching Staff",
 	}
 
 	if err := db.LocalUsers.Insert(user); err != nil {
@@ -87,7 +87,7 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 		t.Fatalf("expected groups to contain %q, got %#v", group.Groupname, groups)
 	}
 
-	userResp, err := fiberApp.Test(httptest.NewRequest("GET", "/api/v1/acl/usersForGroup/course-tas", nil))
+	userResp, err := fiberApp.Test(httptest.NewRequest("GET", "/api/v1/acl/usersForGroup/teaching-staff", nil))
 	if err != nil {
 		t.Fatalf("users route returned error: %v", err)
 	}

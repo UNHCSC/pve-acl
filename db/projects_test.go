@@ -9,9 +9,9 @@ func TestCreateProjectUsesDefaultOrganization(t *testing.T) {
 	}
 
 	project, err := CreateProject(ProjectCreateInput{
-		Name:        "Course Lab",
+		Name:        "Training Lab",
 		Description: "Local-only test project",
-		ProjectType: ProjectTypeCourse,
+		ProjectType: ProjectTypeLab,
 	})
 	if err != nil {
 		t.Fatalf("CreateProject returned error: %v", err)
@@ -20,8 +20,8 @@ func TestCreateProjectUsesDefaultOrganization(t *testing.T) {
 	if project.ID == 0 {
 		t.Fatal("expected project ID to be set")
 	}
-	if project.Slug != "course-lab" {
-		t.Fatalf("expected slug course-lab, got %q", project.Slug)
+	if project.Slug != "training-lab" {
+		t.Fatalf("expected slug training-lab, got %q", project.Slug)
 	}
 	if !project.IsActive {
 		t.Fatal("expected project to be active")
@@ -42,10 +42,10 @@ func TestCreateProjectRejectsDuplicateSlug(t *testing.T) {
 		t.Fatalf("EnsureInitialSetup returned error: %v", err)
 	}
 
-	if _, err := CreateProject(ProjectCreateInput{Name: "Course Lab"}); err != nil {
+	if _, err := CreateProject(ProjectCreateInput{Name: "Training Lab"}); err != nil {
 		t.Fatalf("first CreateProject returned error: %v", err)
 	}
-	if _, err := CreateProject(ProjectCreateInput{Name: "Course Lab"}); err == nil {
+	if _, err := CreateProject(ProjectCreateInput{Name: "Training Lab"}); err == nil {
 		t.Fatal("expected duplicate project slug to be rejected")
 	}
 }

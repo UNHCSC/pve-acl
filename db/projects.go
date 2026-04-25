@@ -13,7 +13,6 @@ type ProjectCreateInput struct {
 	Slug           string
 	Description    string
 	OrganizationID int
-	CourseID       *int
 	ProjectType    ProjectType
 }
 
@@ -58,7 +57,6 @@ func CreateProject(input ProjectCreateInput) (*Project, error) {
 	project := &Project{
 		UUID:           uuid,
 		OrganizationID: input.OrganizationID,
-		CourseID:       input.CourseID,
 		Name:           input.Name,
 		Slug:           input.Slug,
 		ProjectType:    input.ProjectType,
@@ -147,6 +145,23 @@ func UpdateProjectMembershipRole(membershipID int, role ProjectRole) (*ProjectMe
 		return nil, err
 	}
 	return membership, nil
+}
+
+func UpdateProject(project *Project) error {
+	project.Name = strings.TrimSpace(project.Name)
+	project.Slug = slugify(project.Slug)
+	if project.Name == "" {
+		return fmt.Errorf("project name is required")
+	}
+	if project.Slug == "" {
+		project.Slug = slugify(project.Name)
+	}
+	if project.Slug == "" {
+		return fmt.Errorf("project slug is required")
+	}
+	project.Description = strings.TrimSpace(project.Description)
+	project.UpdatedAt = time.Now().UTC()
+	return Projects.Update(project)
 }
 
 func DeleteProject(projectID int) error {

@@ -29,6 +29,8 @@ const (
 	AuthPermsAdministrator                  // Can do everything
 )
 
+const SessionDuration = 12 * time.Hour
+
 func (p authPerms) String() string {
 	switch p {
 	case AuthPermsAdministrator:
@@ -37,6 +39,17 @@ func (p authPerms) String() string {
 		return "user"
 	default:
 		return "none"
+	}
+}
+
+func authPermsFromString(value string) authPerms {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case AuthPermsAdministrator.String():
+		return AuthPermsAdministrator
+	case AuthPermsUser.String():
+		return AuthPermsUser
+	default:
+		return AuthPermsNone
 	}
 }
 
@@ -96,7 +109,7 @@ func GetActiveUser(username string) *AuthUser {
 }
 
 func RefreshToken(user *AuthUser) {
-	user.Expiry = time.Now().Add(time.Hour)
+	user.Expiry = time.Now().Add(SessionDuration)
 }
 
 func WithAuth(w http.ResponseWriter, r *http.Request, jwtSecret []byte) bool {
@@ -170,12 +183,40 @@ func IsAuthenticated(r *fiber.Ctx, jwtSecret []byte) *AuthUser {
 	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
 		if username, ok := claims["username"].(string); ok {
 			usersLock.RLock()
-			defer usersLock.RUnlock()
-
 			user, ok := activeUsers[username]
 			if ok && user.Expiry.After(time.Now()) {
+				usersLock.RUnlock()
 				return user
 			}
+			usersLock.RUnlock()
+
+			expiry := time.Now().Add(SessionDuration)
+			if expiresAt, err := claims.GetExpirationTime(); err == nil && expiresAt != nil {
+				expiry = expiresAt.Time
+			}
+			if expiry.Before(time.Now()) {
+				return nil
+			}
+
+			perms := AuthPermsNone
+			if claimPerms, ok := claims["perms"].(string); ok {
+				perms = authPermsFromString(claimPerms)
+			}
+			if perms == AuthPermsNone {
+				return nil
+			}
+
+			user = &AuthUser{
+				Token:    parsedToken,
+				Expiry:   expiry,
+				Username: username,
+				perms:    perms,
+			}
+
+			usersLock.Lock()
+			activeUsers[username] = user
+			usersLock.Unlock()
+			return user
 		}
 	}
 
@@ -184,10 +225,16 @@ func IsAuthenticated(r *fiber.Ctx, jwtSecret []byte) *AuthUser {
 
 func Authenticate(username, password string) (*AuthUser, error) {
 	if injection := GetUserInjection(username, password); injection != nil {
+		expiry := time.Now().Add(SessionDuration)
 		user := &AuthUser{
 			LDAPConn: nil,
-			Token:    jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": username}),
-			Expiry:   time.Now().Add(time.Hour),
+			Token: jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"username": username,
+				"perms":    injection.Permissions.String(),
+				"exp":      expiry.Unix(),
+				"iat":      time.Now().Unix(),
+			}),
+			Expiry:   expiry,
 			Username: username,
 			perms:    injection.Permissions,
 		}
@@ -208,10 +255,11 @@ func Authenticate(username, password string) (*AuthUser, error) {
 		return nil, ErrUnauthorized
 	}
 
+	expiry := time.Now().Add(SessionDuration)
 	user := &AuthUser{
 		LDAPConn: ldapConn,
-		Token:    jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": username}),
-		Expiry:   time.Now().Add(time.Hour),
+		Token:    jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": username, "exp": expiry.Unix(), "iat": time.Now().Unix()}),
+		Expiry:   expiry,
 		Username: username,
 	}
 
@@ -219,6 +267,12 @@ func Authenticate(username, password string) (*AuthUser, error) {
 		ldapConn.Close()
 		return nil, fmt.Errorf("user is unauthorized to use this application")
 	}
+	user.Token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"username": username,
+		"perms":    user.Permissions().String(),
+		"exp":      expiry.Unix(),
+		"iat":      time.Now().Unix(),
+	})
 
 	usersLock.Lock()
 	defer usersLock.Unlock()

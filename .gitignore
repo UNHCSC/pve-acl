@@ -2,6 +2,7 @@
 *.toml
 *.db
 *.log
+.pve-acl-session-key
 log/
 
 # Go ignores
@@ -20,7 +21,6 @@ obj/
 # Bun/Node ignores
 node_modules/
 build/
-bun.lock
 package-lock.json
 
 # IDE/editor specific ignores

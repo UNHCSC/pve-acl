@@ -1,6 +1,9 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/UNHCSC/proxman/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
@@ -12,16 +15,21 @@ var appLog *golog.Logger = golog.New().Prefix("[Please call app.InitAndListen() 
 func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	appLog = parentLog.SpawnChild().Prefix("[APP]", golog.BoldPurple)
 
-	var templateEngine *html.Engine = html.New("./client/views", ".html")
+	var templateEngine *html.Engine = html.New(clientPath("views"), ".html")
 	templateEngine.Reload(config.Config.WebServer.ReloadTemplatesOnEachRender)
+
+	if err = initPersistentJWTSigningKey(); err != nil {
+		return
+	}
 
 	app = fiber.New(fiber.Config{
 		Views:   templateEngine,
 		Network: "tcp",
 	})
+	app.Use(securityHeaders)
 
 	// Statics
-	app.Static("/static", "./client/static")
+	app.Static("/static", clientPath("static"))
 
 	// Pages
 	app.Get("/", getHome)
@@ -41,6 +49,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 		apiV1System   fiber.Router = apiV1.Group("/system")
 		apiV1Users    fiber.Router = apiV1.Group("/users")
 		apiV1Groups   fiber.Router = apiV1.Group("/groups")
+		apiV1Orgs     fiber.Router = apiV1.Group("/organizations")
 		apiV1Roles    fiber.Router = apiV1.Group("/roles")
 		apiV1Projects fiber.Router = apiV1.Group("/projects")
 		apiV1Assets   fiber.Router = apiV1.Group("/assets")
@@ -100,6 +109,13 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Groups.Post("/update/:groupnames", _noop)
 	apiV1Groups.Get("/:id", getCloudGroupByID)
 
+	// API v1 organizations
+	apiV1.Get("/organizations", getProjectTree)
+	apiV1.Post("/organizations", postCreateOrganization)
+	apiV1Orgs.Post("/", postCreateOrganization)
+	apiV1Orgs.Patch("/:id", patchOrganization)
+	apiV1Orgs.Delete("/:id", deleteOrganization)
+
 	// API v1 roles
 	apiV1.Get("/roles", getRoles)
 	apiV1.Post("/roles", postCreateRole)
@@ -112,12 +128,14 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	// API v1 projects
 	apiV1.Get("/projects", getProjects)
 	apiV1.Post("/projects", postCreateProject)
+	apiV1Projects.Get("/tree", getProjectTree)
 	apiV1Projects.Get("/", getProjects)
 	apiV1Projects.Post("/", postCreateProject)
 	apiV1Projects.Get("/:id/memberships", getProjectMemberships)
 	apiV1Projects.Post("/:id/memberships", postCreateProjectMembership)
 	apiV1Projects.Patch("/:id/memberships/:membershipID", patchProjectMembership)
 	apiV1Projects.Delete("/:id/memberships/:membershipID", deleteProjectMembership)
+	apiV1Projects.Patch("/:id", patchProject)
 	apiV1Projects.Get("/:slug", getProjectBySlug)
 	apiV1Projects.Delete("/:slug", deleteProjectBySlug)
 
@@ -137,6 +155,14 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1ACL.Post("/updateGroupManagement", _noop)
 
 	return
+}
+
+func clientPath(part string) string {
+	path := filepath.Join("client", part)
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	return filepath.Join("..", "client", part)
 }
 
 func _noop(*fiber.Ctx) (err error) {

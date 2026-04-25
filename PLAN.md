@@ -9,7 +9,7 @@ The system exists to support:
 - Lab-wide infrastructure administration
 - Cybersecurity club infrastructure
 - Competition team environments
-- Course-based lab environments
+- Teaching and training lab environments represented as org subtrees
 - Per-student and per-group VM/CT ownership
 - Bulk provisioning of repeatable lab topologies
 - Terraform/OpenTofu and Ansible-backed deployments
@@ -21,7 +21,6 @@ Proxmox remains the hypervisor and infrastructure backend.
 Lab Cloud Manager owns the higher-level cloud concepts:
 
 - Organizations
-- Courses
 - Projects
 - Groups
 - Memberships
@@ -38,13 +37,13 @@ The application should not attempt to replace Proxmox for low-level administrati
 
 ### 3.1 Multi-Tenant Organization
 
-The system must support multiple isolated organizational areas. The following list is illustrative, not exhaustive or prescriptive:
+The system must support a deep organization tree. Organizations are the only tenant hierarchy primitive: each organization may contain projects and any number of child organizations. Use child organizations to model clubs, teams, classes, semesters, sections, student cohorts, or any other nested administrative boundary.
 
 - Lab administration
 - Cybersecurity club
 - Competition team
-- Courses
-- Semester-specific course instances
+- Teaching programs
+- Semester or cohort instances
 - Student groups
 - Project groups
 
@@ -59,13 +58,15 @@ Lab
 ├── Competition
 │   ├── Coaches
 │   └── Members
-└── Courses
+└── Teaching
     └── IT666-Fall2026
         ├── Instructors
         ├── TAs
         ├── Students
         └── Groups
 ```
+
+Access control must follow this tree. A role binding on an organization applies to that organization, all descendant organizations, and projects attached anywhere below it. A project-scoped binding applies only to that project unless a higher org binding grants the same permission through inheritance.
 
 ### 3.2 Ownership
 
@@ -75,9 +76,8 @@ Owners may be:
 
 * A user
 * A group
-* A course
 * A project
-* A lab deployment
+* An organization
 
 Examples only:
 
@@ -104,8 +104,8 @@ Example roles only:
 
 * LabAdmin
 * OrgAdmin
-* CourseInstructor
-* CourseTA
+* Instructor
+* TeachingAssistant
 * ClubOfficer
 * CompetitionCoach
 * Student
@@ -119,9 +119,9 @@ Example only:
 ```text
 A user may be both:
 - LabAdmin
-- IT666-Fall2026 TA
+- IT666-Fall2026 TeachingAssistant
 
-The LabAdmin role should grant full system-level authority regardless of course role.
+The LabAdmin role should grant full system-level authority regardless of lower org role.
 ```
 
 ### 3.4 Resource Quotas
@@ -131,7 +131,6 @@ The system must support resource limits at multiple levels:
 * User quota
 * Group quota
 * Project quota
-* Course quota
 * Organization quota
 
 Quota-controlled resources should include:
@@ -154,7 +153,7 @@ Examples only:
 * Create one VM per student
 * Create one isolated lab network per student
 * Create a multi-VM topology per group
-* Deploy an entire course lab from a template
+* Deploy an entire org/project lab from a template
 * Destroy or archive all resources for a completed lab
 
 ### 3.6 VM/CT Management
@@ -180,7 +179,7 @@ The system should support virtual network creation and assignment.
 
 Network models may include:
 
-* Shared course network
+* Shared org/project network
 * Per-student isolated network
 * Per-group isolated network
 * Competition team network
@@ -309,7 +308,7 @@ updated_at          DATETIME NOT NULL
 
 ### 7.2 groups
 
-Represents local groups, LDAP-synced groups, course groups, teams, officer groups, TA groups, project cohorts, and other collections that can be used as ACL subjects. A group is a collection of people today and should be able to grow into a collection of people, assets, projects, and other application-managed subjects as the platform matures.
+Represents local groups, LDAP-synced groups, staff groups, teams, officer groups, project cohorts, and other collections that can be used as ACL subjects. A group is a collection of people today and should be able to grow into a collection of people, assets, projects, and other application-managed subjects as the platform matures.
 
 ```sql
 groups
@@ -319,7 +318,7 @@ uuid                CHAR(36) UNIQUE NOT NULL
 name                VARCHAR(255) NOT NULL
 slug                VARCHAR(255) UNIQUE NOT NULL
 description         TEXT
-group_type          ENUM('admin', 'club', 'competition', 'course', 'course_role', 'student_group', 'project', 'custom') NOT NULL
+group_type          ENUM('admin', 'club', 'competition', 'student_group', 'project', 'custom') NOT NULL
 parent_group_id     BIGINT NULL
 sync_source         ENUM('local', 'ldap') NOT NULL DEFAULT 'local'
 external_id         VARCHAR(255)
@@ -336,10 +335,8 @@ club
 club-officers
 competition
 competition-coaches
-courses
-it666-fall2026
-it666-fall2026-instructors
-it666-fall2026-tas
+teaching
+it666-fall2026-staff
 it666-fall2026-students
 it666-fall2026-group-03
 ```
@@ -387,8 +384,8 @@ Example roles:
 ```text
 LabAdmin
 OrgAdmin
-CourseInstructor
-CourseTA
+Instructor
+TeachingAssistant
 Student
 GroupMember
 VMViewer
@@ -487,7 +484,7 @@ role_id             BIGINT NOT NULL
 subject_type        ENUM('user', 'group') NOT NULL
 subject_id          BIGINT NOT NULL
 
-scope_type          ENUM('global', 'org', 'course', 'project', 'group', 'resource') NOT NULL
+scope_type          ENUM('global', 'org', 'project', 'group', 'resource') NOT NULL
 scope_id            BIGINT NULL
 
 created_by_user_id  BIGINT
@@ -498,17 +495,17 @@ Example:
 
 ```text
 Group admins has LabAdmin on global
-Group it666-fall2026-tas has CourseTA on course IT666-Fall2026
+Group it666-fall2026-staff has TeachingAssistant on org /Teaching/IT666-Fall2026
 Group it666-fall2026-group-03 has GroupMember on project it666-lab1-group-03
 ```
 
 ## 8. Tenant and Project Tables
 
-Aside from the initial system setup step that creates the primary lab organization and its initial administrator group, organizations, sub-organizations, courses, projects, and their related groups should be normal application-managed entities. Users with the appropriate OrgAdmin or delegated admin permissions must be able to create, modify, archive, and reorganize them at any time without requiring a database migration or manual operator intervention.
+Aside from the initial system setup step that creates the primary lab organization and its initial administrator group, organizations, sub-organizations, projects, and their related groups should be normal application-managed entities. Users with the appropriate OrgAdmin or delegated admin permissions must be able to create, modify, archive, and reorganize them at any time without requiring a database migration or manual operator intervention.
 
 ### 8.1 organizations
 
-Top-level logical areas.
+Logical tenant tree nodes. Organizations may be roots or children of another organization. Projects attach directly to an organization; teaching programs, semesters, clubs, teams, and cohorts are all modeled as organization nodes rather than separate structural tables.
 
 ```sql
 organizations
@@ -518,6 +515,7 @@ uuid                CHAR(36) UNIQUE NOT NULL
 name                VARCHAR(255) NOT NULL
 slug                VARCHAR(255) UNIQUE NOT NULL
 description         TEXT
+parent_org_id       BIGINT NULL
 created_at          DATETIME NOT NULL
 updated_at          DATETIME NOT NULL
 ```
@@ -528,38 +526,11 @@ Example organizations only:
 lab-admin
 club
 competition
-courses
+teaching
+teaching/it666-fall2026
 ```
 
-### 8.2 courses
-
-Represents a semester-specific course instance.
-
-```sql
-courses
--------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-organization_id     BIGINT NOT NULL
-code                VARCHAR(64) NOT NULL
-name                VARCHAR(255) NOT NULL
-semester            VARCHAR(64) NOT NULL
-slug                VARCHAR(255) UNIQUE NOT NULL
-start_date          DATE
-end_date            DATE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-Example only:
-
-```text
-code: IT666
-semester: Fall2026
-slug: it666-fall2026
-```
-
-### 8.3 projects
+### 8.2 projects
 
 A project is the primary ownership and isolation boundary.
 
@@ -569,10 +540,9 @@ projects
 id                  BIGINT PRIMARY KEY
 uuid                CHAR(36) UNIQUE NOT NULL
 organization_id     BIGINT NOT NULL
-course_id           BIGINT NULL
 name                VARCHAR(255) NOT NULL
 slug                VARCHAR(255) UNIQUE NOT NULL
-project_type        ENUM('admin', 'club', 'competition', 'course', 'student', 'group', 'lab', 'custom') NOT NULL
+project_type        ENUM('admin', 'club', 'competition', 'student', 'group', 'lab', 'custom') NOT NULL
 description         TEXT
 is_active           BOOLEAN NOT NULL DEFAULT TRUE
 created_at          DATETIME NOT NULL
@@ -618,7 +588,7 @@ resources
 id                  BIGINT PRIMARY KEY
 uuid                CHAR(36) UNIQUE NOT NULL
 project_id          BIGINT NOT NULL
-owner_type          ENUM('user', 'group', 'project', 'course', 'organization') NOT NULL
+owner_type          ENUM('user', 'group', 'project', 'organization') NOT NULL
 owner_id            BIGINT NOT NULL
 resource_type       ENUM('vm', 'ct', 'network', 'template', 'volume', 'secret', 'terraform_workspace', 'ansible_inventory') NOT NULL
 name                VARCHAR(255) NOT NULL
@@ -802,14 +772,14 @@ updated_at          DATETIME NOT NULL
 
 ### 10.2 quota_bindings
 
-Applies quota policies to users, groups, organizations, courses, or projects.
+Applies quota policies to users, groups, organizations, or projects.
 
 ```sql
 quota_bindings
 --------------
 id                  BIGINT PRIMARY KEY
 quota_policy_id     BIGINT NOT NULL
-subject_type        ENUM('user', 'group', 'organization', 'course', 'project') NOT NULL
+subject_type        ENUM('user', 'group', 'organization', 'project') NOT NULL
 subject_id          BIGINT NOT NULL
 created_at          DATETIME NOT NULL
 
@@ -824,7 +794,7 @@ Optional table for cached usage calculations.
 resource_usage_snapshots
 ------------------------
 id                  BIGINT PRIMARY KEY
-subject_type        ENUM('user', 'group', 'organization', 'course', 'project') NOT NULL
+subject_type        ENUM('user', 'group', 'organization', 'project') NOT NULL
 subject_id          BIGINT NOT NULL
 vm_count            INT NOT NULL DEFAULT 0
 container_count     INT NOT NULL DEFAULT 0
@@ -971,7 +941,6 @@ id                  BIGINT PRIMARY KEY
 uuid                CHAR(36) UNIQUE NOT NULL
 blueprint_id        BIGINT NOT NULL
 project_id          BIGINT NOT NULL
-course_id           BIGINT NULL
 name                VARCHAR(255) NOT NULL
 status              ENUM('creating', 'ready', 'updating', 'destroying', 'destroyed', 'error') NOT NULL
 created_by_user_id  BIGINT
@@ -1069,7 +1038,6 @@ role_permissions
 role_bindings
 
 organizations
-courses
 projects
 project_memberships
 
@@ -1105,8 +1073,8 @@ Example objects:
 
 ```text
 /global
-/org/courses
-/course/it666-fall2026
+/org/teaching
+/org/teaching/it666-fall2026
 /project/it666-fall2026-group-03
 /resource/vm/1201
 /resource/network/it666-lab1-g03
@@ -1118,7 +1086,7 @@ Example checks:
 Can Evan create VMs in IT666-Fall2026?
 subject = user:evan
 action = vm.create
-object = /course/it666-fall2026
+object = /org/teaching/it666-fall2026
 
 Can Alice open console for VM 1201?
 subject = user:alice
@@ -1170,9 +1138,9 @@ Recommended tags:
 ```text
 managed-by:lab-cloud
 project:<project-slug>
+org:<org-path-or-slug>
 owner-type:<user|group|project>
 owner:<owner-slug>
-course:<course-slug>
 ```
 
 Example:
@@ -1180,9 +1148,9 @@ Example:
 ```text
 managed-by:lab-cloud
 project:it666-fall2026-group-03
+org:teaching/it666-fall2026
 owner-type:group
 owner:it666-fall2026-group-03
-course:it666-fall2026
 ```
 
 The app should periodically sync with Proxmox to detect drift.
@@ -1233,10 +1201,10 @@ VM power state changed
 * Quota enforcement
 * Per-project resource views
 
-### Milestone 5: Course Support
+### Milestone 5: Organization Tree Support
 
-* Course creation
-* Instructor/TA/student groups
+* Organization and sub-organization creation
+* Instructor/teaching-assistant/student groups as normal groups
 * Bulk student import
 * Per-student VM creation
 * Per-group VM creation
@@ -1275,8 +1243,8 @@ config/                 TOML config loading
 auth/                   LDAP authentication, JWT sessions, test user injection
 db/                     gomysql models, registration, migrations, helper queries
 app/                    Fiber routes, page handlers, API handlers
-client/views/           server-rendered HTML templates
-client/src/             CSS/JS entry points built by webpack
+client/views/           small Fiber templates that mount React roots
+client/src/             React/TypeScript components and shared client helpers built by Vite
 ```
 
 ### 20.1 Current Progress
@@ -1286,7 +1254,7 @@ Completed or substantially implemented:
 * Temporary-test-database setup for Go tests.
 * Auth route tests, middleware tests, enum tests, config tests, and focused `db` helper tests.
 * Authenticated API middleware that resolves the current auth user and local database user.
-* MVP gomysql models for users, groups, memberships, organizations, courses, projects, project memberships, roles, permissions, role permissions, role bindings, quotas, resources, Proxmox inventory, jobs, audit events, and secrets.
+* MVP gomysql models for users, groups, memberships, organizations, projects, project memberships, roles, permissions, role permissions, role bindings, quotas, resources, Proxmox inventory, jobs, audit events, and secrets.
 * Idempotent initial setup for the root lab organization, configured administrator groups, `LabAdmin`, core permissions, and admin role bindings.
 * LDAP login sync limited to bootstrap admin groups and explicitly configured LDAP-synced cloud groups. Arbitrary LDAP groups are no longer imported by default.
 * Central RBAC evaluation through roles, permissions, role bindings, scopes, and site-admin override behavior.
@@ -1294,13 +1262,13 @@ Completed or substantially implemented:
 * Project create/list/detail/delete, project membership management, project member role editing, direct user lookup/sync, and group assignment to projects.
 * Custom role creation and role permission grant editing.
 * Access UI organized around the simplified model: groups are membership sets, roles are permission bundles, and access grants are role bindings over scopes.
-* Dashboard tabs for overview, projects, people, identity, and access, with account menu, toasts, URL routing, and user-scoped recents.
-* Frontend production build through webpack/Tailwind.
+* Dashboard tabs for overview, directory, people, identity, and access, with account menu, toasts, URL routing, and user-scoped recents.
+* React/TypeScript client split into reusable components, views, API helpers, and tree utilities, built with Bun, Vite, and Tailwind.
 
 Known deliberate leftovers:
 
 * Some legacy local ACL tables and routes still exist for compatibility while the MVP cloud model takes over. Remove them only after replacement routes and tests cover the same use cases.
-* Organization and course management are still mostly schema-level concepts.
+* Organization management is now the tenant hierarchy foundation; dedicated org CRUD/archive screens still need polish.
 * Resources, quotas, Proxmox integration, and job execution are scaffolded in the schema but not yet functional product workflows.
 * Audit events exist and setup writes some audit rows, but audit logging is not yet consistently applied to all management actions.
 
@@ -1308,7 +1276,7 @@ Current baseline checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.2 Working Rules Going Forward
@@ -1336,26 +1304,26 @@ Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
-### 20.4 Next Slice: Organizations and Courses
+### 20.4 Next Slice: Organization Tree
 
-Goal: make the tenant hierarchy real enough to attach projects, groups, and scopes to it.
+Goal: make the tenant hierarchy real enough to attach projects, groups, quotas, and scopes to it.
 
 Implementation scope:
 
 * Add organization CRUD and archive behavior.
-* Add course CRUD and archive behavior.
-* Add UI screens or focused panels for organizations and courses only after API tests exist.
-* Allow group and project creation to select an organization, and course where applicable.
-* Update access grants so org/course scopes can be selected by readable name rather than raw ID.
+* Add sub-organization create/move/archive behavior.
+* Add UI screens or focused panels for organizations only after API tests exist.
+* Allow group and project creation to select an organization.
+* Update access grants so org/project scopes can be selected by readable name rather than raw ID.
 
 Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.5 Next Slice: Project Cleanup and Quota Policies
@@ -1374,7 +1342,7 @@ Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.6 Next Slice: Resource Registry Without Proxmox Mutations
@@ -1393,7 +1361,7 @@ Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.7 Next Slice: Proxmox Service Boundary
@@ -1429,7 +1397,7 @@ Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.9 Next Slice: VM/CT Lifecycle
@@ -1448,7 +1416,7 @@ Acceptance checks:
 
 ```text
 go test ./...
-cd client && npm run build
+cd client && bun run check && bun run build
 ```
 
 ### 20.10 Later Slices: Automation and Lab Blueprints
@@ -1487,7 +1455,7 @@ Potential future features:
 * VM expiration dates
 * Snapshot policies
 * Backup policies
-* Per-course templates
+* Per-org/project templates
 * Cloud-init customization
 * DNS integration
 * IPAM integration

@@ -86,8 +86,8 @@ func TestRoleBoundAdminCanCreateCloudGroups(t *testing.T) {
 	fiberApp.Post("/api/v1/groups", postCreateCloudGroup)
 
 	createReq := httptest.NewRequest("POST", "/api/v1/groups", bytes.NewBufferString(`{
-		"name": "Course Staff",
-		"slug": "course-staff"
+		"name": "Teaching Staff",
+		"slug": "teaching-staff"
 	}`))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")

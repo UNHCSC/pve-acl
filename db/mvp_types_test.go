@@ -13,7 +13,6 @@ func TestMVPTableRegistration(t *testing.T) {
 		"CloudGroups":           CloudGroups,
 		"CloudGroupMemberships": CloudGroupMemberships,
 		"Organizations":         Organizations,
-		"Courses":               Courses,
 		"Projects":              Projects,
 		"ProjectMemberships":    ProjectMemberships,
 		"Roles":                 Roles,

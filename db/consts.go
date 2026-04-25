@@ -21,14 +21,12 @@ const (
 )
 
 const (
-	GroupTypeAdmin GroupType = iota
-	GroupTypeClub
-	GroupTypeCompetition
-	GroupTypeCourse
-	GroupTypeCourseRole
-	GroupTypeStudentGroup
-	GroupTypeProject
-	GroupTypeCustom
+	GroupTypeAdmin        GroupType = 0
+	GroupTypeClub         GroupType = 1
+	GroupTypeCompetition  GroupType = 2
+	GroupTypeStudentGroup GroupType = 5
+	GroupTypeProject      GroupType = 6
+	GroupTypeCustom       GroupType = 7
 )
 
 const (
@@ -42,23 +40,21 @@ const (
 )
 
 const (
-	RoleBindingScopeGlobal RoleBindingScope = iota
-	RoleBindingScopeOrg
-	RoleBindingScopeCourse
-	RoleBindingScopeProject
-	RoleBindingScopeGroup
-	RoleBindingScopeResource
+	RoleBindingScopeGlobal   RoleBindingScope = 0
+	RoleBindingScopeOrg      RoleBindingScope = 1
+	RoleBindingScopeProject  RoleBindingScope = 3
+	RoleBindingScopeGroup    RoleBindingScope = 4
+	RoleBindingScopeResource RoleBindingScope = 5
 )
 
 const (
-	ProjectTypeAdmin ProjectType = iota
-	ProjectTypeClub
-	ProjectTypeCompetition
-	ProjectTypeCourse
-	ProjectTypeStudent
-	ProjectTypeGroup
-	ProjectTypeLab
-	ProjectTypeCustom
+	ProjectTypeAdmin       ProjectType = 0
+	ProjectTypeClub        ProjectType = 1
+	ProjectTypeCompetition ProjectType = 2
+	ProjectTypeStudent     ProjectType = 4
+	ProjectTypeGroup       ProjectType = 5
+	ProjectTypeLab         ProjectType = 6
+	ProjectTypeCustom      ProjectType = 7
 )
 
 const (
@@ -75,11 +71,10 @@ const (
 )
 
 const (
-	OwnerTypeUser OwnerType = iota
-	OwnerTypeGroup
-	OwnerTypeProject
-	OwnerTypeCourse
-	OwnerTypeOrganization
+	OwnerTypeUser         OwnerType = 0
+	OwnerTypeGroup        OwnerType = 1
+	OwnerTypeProject      OwnerType = 2
+	OwnerTypeOrganization OwnerType = 4
 )
 
 const (

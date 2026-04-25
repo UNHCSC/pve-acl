@@ -617,9 +617,12 @@ func deleteProjectBySlug(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
 
-	allowed, err := requirePermission(c, "project.manage", db.RoleBindingScopeGlobal, nil)
-	if err != nil || !allowed {
-		return err
+	allowed, err := currentUserCanManageProject(c, project)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
 	if err := db.DeleteProject(project.ID); err != nil {
@@ -1084,10 +1087,6 @@ func parseGroupType(value string) db.GroupType {
 		return db.GroupTypeClub
 	case "competition":
 		return db.GroupTypeCompetition
-	case "course":
-		return db.GroupTypeCourse
-	case "course_role":
-		return db.GroupTypeCourseRole
 	case "student_group":
 		return db.GroupTypeStudentGroup
 	case "project":
@@ -1105,10 +1104,6 @@ func groupTypeLabel(value db.GroupType) string {
 		return "club"
 	case db.GroupTypeCompetition:
 		return "competition"
-	case db.GroupTypeCourse:
-		return "course"
-	case db.GroupTypeCourseRole:
-		return "course_role"
 	case db.GroupTypeStudentGroup:
 		return "student_group"
 	case db.GroupTypeProject:
@@ -1173,8 +1168,6 @@ func parseRoleBindingScope(value string) db.RoleBindingScope {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "org":
 		return db.RoleBindingScopeOrg
-	case "course":
-		return db.RoleBindingScopeCourse
 	case "project":
 		return db.RoleBindingScopeProject
 	case "group":
@@ -1190,8 +1183,6 @@ func roleBindingScopeLabel(value db.RoleBindingScope) string {
 	switch value {
 	case db.RoleBindingScopeOrg:
 		return "org"
-	case db.RoleBindingScopeCourse:
-		return "course"
 	case db.RoleBindingScopeProject:
 		return "project"
 	case db.RoleBindingScopeGroup:
@@ -1286,6 +1277,10 @@ func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (bool, error) 
 	if err != nil || allowed {
 		return allowed, err
 	}
+	allowed, err = currentUserCan(c, "project.manage", db.RoleBindingScopeProject, &project.ID)
+	if err != nil || allowed {
+		return allowed, err
+	}
 
 	dbUser := currentDBUser(c)
 	if dbUser == nil {
@@ -1320,6 +1315,10 @@ func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (bool, error) 
 
 func currentUserCanManageProject(c *fiber.Ctx, project *db.Project) (bool, error) {
 	allowed, err := currentUserCan(c, "project.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || allowed {
+		return allowed, err
+	}
+	allowed, err = currentUserCan(c, "project.manage", db.RoleBindingScopeProject, &project.ID)
 	if err != nil || allowed {
 		return allowed, err
 	}

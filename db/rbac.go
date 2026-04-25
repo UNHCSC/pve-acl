@@ -154,15 +154,45 @@ func roleBindingMatchesScope(binding *RoleBinding, scopeType RoleBindingScope, s
 		return true
 	}
 
+	if binding.ScopeType == RoleBindingScopeOrg {
+		return orgBindingMatchesScope(binding.ScopeID, scopeType, scopeID)
+	}
+
 	if binding.ScopeType != scopeType {
 		return false
 	}
-
 	if binding.ScopeID == nil || scopeID == nil {
 		return binding.ScopeID == nil && scopeID == nil
 	}
 
 	return *binding.ScopeID == *scopeID
+}
+
+func orgBindingMatchesScope(bindingScopeID *int, requestedScopeType RoleBindingScope, requestedScopeID *int) bool {
+	if bindingScopeID == nil || requestedScopeID == nil {
+		return bindingScopeID == nil && requestedScopeID == nil && requestedScopeType == RoleBindingScopeOrg
+	}
+
+	var orgIDs []int
+	var err error
+	switch requestedScopeType {
+	case RoleBindingScopeOrg:
+		orgIDs, err = OrganizationAncestorIDs(*requestedScopeID)
+	case RoleBindingScopeProject:
+		orgIDs, err = ProjectOrganizationAncestorIDs(*requestedScopeID)
+	default:
+		return false
+	}
+	if err != nil {
+		return false
+	}
+
+	for _, orgID := range orgIDs {
+		if orgID == *bindingScopeID {
+			return true
+		}
+	}
+	return false
 }
 
 func roleHasPermission(roleID, permissionID int) (bool, error) {

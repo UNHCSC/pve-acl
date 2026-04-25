@@ -2,10 +2,14 @@ package app
 
 import (
 	"crypto/rand"
+	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/UNHCSC/proxman/auth"
+	"github.com/UNHCSC/proxman/config"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -16,6 +20,34 @@ func init() {
 		appLog.Errorf("failed to generate JWT signing key: %v\n", err)
 		panic(err)
 	}
+}
+
+func initPersistentJWTSigningKey() error {
+	dbPath := config.Config.Database.File
+	if dbPath == "" {
+		return nil
+	}
+
+	keyDir := filepath.Dir(dbPath)
+	if keyDir == "" || keyDir == "." {
+		keyDir = "."
+	}
+	keyPath := filepath.Join(keyDir, ".pve-acl-session-key")
+
+	if key, err := os.ReadFile(keyPath); err == nil && len(key) >= 32 {
+		jwtSigningKey = key
+		return nil
+	}
+
+	key := make([]byte, 64)
+	if _, err := rand.Read(key); err != nil {
+		return fmt.Errorf("generate session key: %w", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		return fmt.Errorf("write session key: %w", err)
+	}
+	jwtSigningKey = key
+	return nil
 }
 
 func postLogin(c *fiber.Ctx) (err error) {
@@ -39,6 +71,8 @@ func postLogin(c *fiber.Ctx) (err error) {
 				Path:     "/",
 				HTTPOnly: true,
 				SameSite: "Lax",
+				Expires:  user.Expiry,
+				MaxAge:   int(time.Until(user.Expiry).Seconds()),
 			})
 
 			err = c.Redirect(redirect)

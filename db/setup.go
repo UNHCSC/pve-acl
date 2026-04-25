@@ -57,7 +57,6 @@ var CorePermissionNames = []string{
 	"role.manage",
 	"audit.read",
 	"org.manage",
-	"course.manage",
 	"project.manage",
 }
 

@@ -447,3 +447,65 @@ func TestProjectAPIDeleteRemovesProject(t *testing.T) {
 		t.Fatalf("expected project to be deleted, found=%v err=%v", found, err)
 	}
 }
+
+func TestProjectAPIDeleteAllowsOrgScopedProjectManager(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	root, found, err := db.GetOrganizationBySlug(db.DefaultRootOrganizationSlug)
+	if err != nil || !found {
+		t.Fatalf("expected default root organization, found=%v err=%v", found, err)
+	}
+	child, err := db.CreateOrganization(db.OrganizationCreateInput{
+		Name:        "Scoped Delete",
+		Slug:        "scoped-delete",
+		ParentOrgID: &root.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateOrganization returned error: %v", err)
+	}
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:           "Org Scoped Delete",
+		ProjectType:    db.ProjectTypeCustom,
+		OrganizationID: child.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	user, _, err := db.EnsureUser("org-project-manager", "Org Project Manager", "org-project-manager@example.test", "local", "org-project-manager")
+	if err != nil {
+		t.Fatalf("EnsureUser returned error: %v", err)
+	}
+	role, _, err := db.EnsureRole("Scoped Project Manager", "Can manage projects below an org", false)
+	if err != nil {
+		t.Fatalf("EnsureRole returned error: %v", err)
+	}
+	permission, found, err := db.GetPermissionByName("project.manage")
+	if err != nil || !found {
+		t.Fatalf("expected project.manage permission, found=%v err=%v", found, err)
+	}
+	if _, err := db.EnsureRolePermission(role.ID, permission.ID); err != nil {
+		t.Fatalf("EnsureRolePermission returned error: %v", err)
+	}
+	if _, err := db.EnsureRoleBinding(role.ID, db.RoleBindingSubjectUser, user.ID, db.RoleBindingScopeOrg, &root.ID); err != nil {
+		t.Fatalf("EnsureRoleBinding returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, user.Username, false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Delete("/api/v1/projects/:slug", deleteProjectBySlug)
+
+	req := httptest.NewRequest("DELETE", "/api/v1/projects/"+project.Slug, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("delete route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+}

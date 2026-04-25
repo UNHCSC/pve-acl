@@ -41,7 +41,7 @@ func TestCloudGroupIDsForUser(t *testing.T) {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
 
-	group := insertTestCloudGroup(t, "Course TAs", "course-tas", now)
+	group := insertTestCloudGroup(t, "Teaching Staff", "teaching-staff", now)
 	if err := CloudGroupMemberships.Insert(&CloudGroupMembership{
 		UserID:         user.ID,
 		GroupID:        group.ID,

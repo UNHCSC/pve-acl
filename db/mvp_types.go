@@ -69,25 +69,10 @@ type (
 		UpdatedAt   time.Time `gomysql:"updated_at,notnull" json:"updated_at"`
 	}
 
-	Course struct {
-		ID             int        `gomysql:"id,primary,increment" json:"id"`
-		UUID           string     `gomysql:"uuid,unique,notnull" json:"uuid"`
-		OrganizationID int        `gomysql:"organization_id,fkey:Organization.id,notnull" json:"organization_id"`
-		Code           string     `gomysql:"code,notnull" json:"code"`
-		Name           string     `gomysql:"name,notnull" json:"name"`
-		Semester       string     `gomysql:"semester,notnull" json:"semester"`
-		Slug           string     `gomysql:"slug,unique,notnull" json:"slug"`
-		StartDate      *time.Time `gomysql:"start_date" json:"start_date,omitempty"`
-		EndDate        *time.Time `gomysql:"end_date" json:"end_date,omitempty"`
-		CreatedAt      time.Time  `gomysql:"created_at,notnull" json:"created_at"`
-		UpdatedAt      time.Time  `gomysql:"updated_at,notnull" json:"updated_at"`
-	}
-
 	Project struct {
 		ID             int         `gomysql:"id,primary,increment" json:"id"`
 		UUID           string      `gomysql:"uuid,unique,notnull" json:"uuid"`
 		OrganizationID int         `gomysql:"organization_id,fkey:Organization.id,notnull" json:"organization_id"`
-		CourseID       *int        `gomysql:"course_id,fkey:Course.id" json:"course_id,omitempty"`
 		Name           string      `gomysql:"name,notnull" json:"name"`
 		Slug           string      `gomysql:"slug,unique,notnull" json:"slug"`
 		ProjectType    ProjectType `gomysql:"project_type,notnull" json:"project_type"`

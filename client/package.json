@@ -1,10 +1,12 @@
 {
     "name": "client",
     "private": true,
+    "type": "module",
     "scripts": {
-        "dev": "webpack --config webpack.config.mjs --mode development --watch",
-        "devel": "webpack --config webpack.config.mjs --mode development --watch",
-        "build": "webpack --config webpack.config.mjs --mode production"
+        "dev": "vite --host 127.0.0.1 --port 5173",
+        "devel": "vite build --mode development --watch --clearScreen false",
+        "build": "vite build",
+        "check": "tsc --noEmit"
     },
     "devDependencies": {
         "@types/bun": "latest"
@@ -14,14 +16,15 @@
         "@fontsource/ibm-plex-mono": "^5.2.6",
         "@fontsource/source-serif-4": "^5.2.6",
         "@tailwindcss/postcss": "^4.1.18",
-        "css-loader": "^7.1.2",
-        "css-minimizer-webpack-plugin": "^7.0.2",
-        "mini-css-extract-plugin": "^2.9.2",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
         "postcss": "^8.4.49",
-        "postcss-loader": "^8.1.1",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "react-router-dom": "^7.14.2",
         "tailwindcss": "^4.1.18",
-        "terser-webpack-plugin": "^5.3.16",
-        "webpack": "^5.104.1",
-        "webpack-cli": "^6.0.1"
+        "typescript": "^6.0.3",
+        "vite": "^8.0.10"
     }
 }

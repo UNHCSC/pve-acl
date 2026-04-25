@@ -1,9 +1,8 @@
-@import "@fontsource-variable/public-sans/index.css";
-@import "@fontsource/ibm-plex-mono/400.css";
 @import "tailwindcss";
 
 @source "../../views/**/*.html";
 @source "../**/*.js";
+@source "../**/*.tsx";
 
 @theme {
     --color-paper: #f7f8fb;
@@ -367,20 +366,186 @@
 }
 
 .project-detail-page {
-    background: rgba(247, 248, 251, 0.98);
-    inset: 0;
-    overflow: auto;
-    position: fixed;
-    z-index: 45;
+    display: grid;
 }
 
-.project-detail-shell {
+.project-browser {
+    background: #eef2f7;
     display: grid;
-    gap: 22px;
-    margin: 0 auto;
-    min-height: 100vh;
-    padding: 28px;
-    width: min(1440px, 100%);
+    gap: 0;
+    grid-template-columns: 340px minmax(0, 1fr);
+    min-height: calc(100vh - 97px);
+}
+
+.project-tree-sidebar {
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-line);
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    min-height: calc(100vh - 97px);
+    position: sticky;
+    top: 0;
+}
+
+.project-tree-heading {
+    align-items: center;
+    border-bottom: 1px solid var(--color-line);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 18px 20px;
+}
+
+.project-tree-heading h2 {
+    color: var(--color-ink);
+    font-size: 20px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.tree-count-pill,
+.detail-status-pill {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    color: var(--color-ink-muted);
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 9px;
+}
+
+.project-tree {
+    overflow: auto;
+    padding: 10px 12px 18px;
+}
+
+.tree-row {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 24px minmax(0, 1fr) 32px;
+    margin: 2px 0 2px calc(var(--tree-depth, 0) * 16px);
+    min-height: 38px;
+    padding: 1px 4px 1px 2px;
+}
+
+.tree-row:hover,
+.tree-row.is-selected {
+    background: #f5f8fc;
+    border-color: #e4e9f2;
+}
+
+.tree-row.is-selected {
+    background: #edf4ff;
+    border-color: #bfd7ff;
+}
+
+.tree-row.is-selected .tree-label,
+.tree-row.is-selected .tree-toggle {
+    color: var(--color-accent-strong);
+}
+
+.tree-toggle,
+.tree-label {
+    min-height: 34px;
+}
+
+.tree-toggle {
+    align-items: center;
+    color: var(--color-ink-muted);
+    display: flex;
+    font-size: 16px;
+    font-weight: 800;
+    justify-content: center;
+    width: 24px;
+}
+
+.tree-toggle:disabled {
+    opacity: 0.35;
+}
+
+.tree-label {
+    align-items: center;
+    color: var(--color-ink);
+    display: flex;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    overflow: hidden;
+    padding: 7px 6px;
+    text-align: left;
+}
+
+.tree-label span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-kind-badge {
+    align-items: center;
+    background: #e9f1ef;
+    border: 1px solid #cadbd5;
+    border-radius: 5px;
+    color: #255447;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 800;
+    height: 20px;
+    justify-content: center;
+    width: 20px;
+}
+
+.project-kind-badge {
+    background: #eef3ff;
+    border-color: #cad7f7;
+    color: #2c4a91;
+}
+
+.tree-project-row .tree-label {
+    color: var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.tree-actions {
+    opacity: 0;
+    position: relative;
+}
+
+.tree-row:hover .tree-actions,
+.tree-row:focus-within .tree-actions {
+    opacity: 1;
+}
+
+.tree-menu-button {
+    height: 28px;
+    width: 28px;
+}
+
+.tree-inline-menu {
+    position: absolute;
+    right: 0;
+    top: 32px;
+}
+
+.dashboard-main.is-directory-view .dashboard-content {
+    padding: 0;
+}
+
+.dashboard-main.is-directory-view .dashboard-view {
+    margin: 0;
+}
+
+.project-render-pane {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+    padding: 22px 24px;
 }
 
 .project-detail-header {
@@ -388,11 +553,12 @@
     background: var(--color-surface);
     border: 1px solid var(--color-line);
     border-radius: 8px;
-    box-shadow: var(--shadow-card);
     display: flex;
     gap: 20px;
     justify-content: space-between;
+    margin: 0;
     padding: 22px 24px;
+    box-shadow: 0 12px 30px -28px rgba(16, 24, 40, 0.45);
 }
 
 .project-detail-header h2 {
@@ -412,7 +578,7 @@
 .project-detail-content {
     align-items: start;
     display: grid;
-    gap: 22px;
+    gap: 18px;
     grid-template-columns: minmax(0, 1fr);
 }
 
@@ -436,6 +602,80 @@
     margin-top: 4px;
 }
 
+.empty-state {
+    color: var(--color-ink-muted);
+    font-size: 14px;
+    padding: 18px 20px;
+}
+
+.empty-detail {
+    margin: 0;
+    padding-bottom: 20px;
+}
+
+.empty-detail p {
+    color: var(--color-ink-muted);
+    padding: 0 20px;
+}
+
+.danger-button {
+    color: #b42318;
+}
+
+.compact-select {
+    min-height: 38px;
+    padding-bottom: 8px;
+    padding-top: 8px;
+}
+
+.org-picker-list {
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    display: grid;
+    max-height: 360px;
+    overflow: auto;
+}
+
+.org-picker-list button {
+    align-items: center;
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink);
+    display: flex;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.org-picker-list button:last-child {
+    border-bottom: 0;
+}
+
+.org-picker-list button:hover,
+.org-picker-list button.is-selected {
+    background: #edf4ff;
+}
+
+.org-picker-list button.is-selected {
+    box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.org-picker-list strong,
+.org-picker-list small {
+    display: block;
+}
+
+.org-picker-list small {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.org-picker-indent {
+    display: block;
+    flex: 0 0 auto;
+}
+
 @media (max-width: 1000px) {
     .project-detail-content,
     .expanded-detail-list {
@@ -445,8 +685,12 @@
 }
 
 @media (max-width: 720px) {
-    .project-detail-shell {
-        padding: 16px;
+    .project-browser {
+        grid-template-columns: 1fr;
+    }
+
+    .project-tree-sidebar {
+        min-height: auto;
     }
 
     .project-detail-header {

@@ -12,6 +12,13 @@ import (
 const currentUserLocalKey = "current_user"
 const currentDBUserLocalKey = "current_db_user"
 
+func securityHeaders(c *fiber.Ctx) error {
+	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Referrer-Policy", "same-origin")
+	return c.Next()
+}
+
 func requireAPIAuth(c *fiber.Ctx) error {
 	user := auth.IsAuthenticated(c, jwtSigningKey)
 	if user == nil {

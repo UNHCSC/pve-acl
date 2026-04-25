@@ -24,7 +24,6 @@ var (
 	CloudGroups                    *gomysql.RegisteredStruct[CloudGroup]
 	CloudGroupMemberships          *gomysql.RegisteredStruct[CloudGroupMembership]
 	Organizations                  *gomysql.RegisteredStruct[Organization]
-	Courses                        *gomysql.RegisteredStruct[Course]
 	Projects                       *gomysql.RegisteredStruct[Project]
 	ProjectMemberships             *gomysql.RegisteredStruct[ProjectMembership]
 	Roles                          *gomysql.RegisteredStruct[Role]
@@ -94,9 +93,6 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 	if err = registerAndMigrate("Organizations", &Organizations, Organization{}, migrationOpts); err != nil {
-		return
-	}
-	if err = registerAndMigrate("Courses", &Courses, Course{}, migrationOpts); err != nil {
 		return
 	}
 	if err = registerAndMigrate("Projects", &Projects, Project{}, migrationOpts); err != nil {

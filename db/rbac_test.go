@@ -37,7 +37,7 @@ func TestHasPermissionAllowsGroupRoleBinding(t *testing.T) {
 	now := time.Now().UTC()
 
 	permission, role := insertTestRoleWithPermission(t, "NetworkManager", "network.update", now)
-	group := insertTestCloudGroup(t, "Course TAs", "course-tas", now)
+	group := insertTestCloudGroup(t, "Teaching Staff", "teaching-staff", now)
 	groupScopeID := 77
 
 	if created, err := ensureRoleBinding(role.ID, RoleBindingSubjectGroup, group.ID, RoleBindingScopeGroup, &groupScopeID, now); err != nil {
@@ -87,6 +87,33 @@ func TestHasPermissionAllowsGlobalAdminAcrossScopes(t *testing.T) {
 	}
 	if !allowed {
 		t.Fatal("expected global admin binding to allow resource-scoped permission")
+	}
+}
+
+func TestHasPermissionAllowsOrgBindingOnDescendantProject(t *testing.T) {
+	initTestDB(t)
+	now := time.Now().UTC()
+
+	permission, role := insertTestRoleWithPermission(t, "OrgProjectManager", "project.manage", now)
+	root := insertTestOrganization(t, "Lab", "lab", nil, now)
+	child := insertTestOrganization(t, "Teaching", "teaching", &root.ID, now)
+	project := insertTestProject(t, "Training Lab", "training-lab", child.ID, now)
+
+	if _, err := ensureRoleBinding(role.ID, RoleBindingSubjectUser, 1001, RoleBindingScopeOrg, &root.ID, now); err != nil {
+		t.Fatalf("ensure role binding: %v", err)
+	}
+
+	allowed, err := HasPermission(PermissionCheck{
+		UserID:         1001,
+		PermissionName: permission.Name,
+		ScopeType:      RoleBindingScopeProject,
+		ScopeID:        &project.ID,
+	})
+	if err != nil {
+		t.Fatalf("HasPermission returned error: %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected parent org binding to allow descendant project permission")
 	}
 }
 
@@ -158,4 +185,40 @@ func insertTestCloudGroup(t *testing.T, name, slug string, now time.Time) *Cloud
 	}
 
 	return group
+}
+
+func insertTestOrganization(t *testing.T, name, slug string, parentID *int, now time.Time) *Organization {
+	t.Helper()
+
+	org := &Organization{
+		UUID:        slug + "-uuid",
+		Name:        name,
+		Slug:        slug,
+		ParentOrgID: parentID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := Organizations.Insert(org); err != nil {
+		t.Fatalf("insert organization: %v", err)
+	}
+	return org
+}
+
+func insertTestProject(t *testing.T, name, slug string, orgID int, now time.Time) *Project {
+	t.Helper()
+
+	project := &Project{
+		UUID:           slug + "-uuid",
+		OrganizationID: orgID,
+		Name:           name,
+		Slug:           slug,
+		ProjectType:    ProjectTypeLab,
+		IsActive:       true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := Projects.Insert(project); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	return project
 }

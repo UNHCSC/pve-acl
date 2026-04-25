@@ -38,18 +38,18 @@ func TestLDAPSyncOnlyImportsConfiguredAndOptInGroups(t *testing.T) {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
 
-	syncedGroup, _, err := db.EnsureCloudGroup("Course Staff", "course-staff", db.GroupTypeCourseRole)
+	syncedGroup, _, err := db.EnsureCloudGroup("Teaching Staff", "teaching-staff", db.GroupTypeCustom)
 	if err != nil {
 		t.Fatalf("EnsureCloudGroup returned error: %v", err)
 	}
 	syncedGroup.SyncSource = db.CloudGroupSyncSourceLDAP
-	syncedGroup.ExternalID = "Course Staff"
+	syncedGroup.ExternalID = "Teaching Staff"
 	syncedGroup.SyncMembership = true
 	if err := db.UpdateCloudGroup(syncedGroup); err != nil {
 		t.Fatalf("UpdateCloudGroup returned error: %v", err)
 	}
 
-	if err := syncLDAPCloudGroupMemberships(dbUser, []string{"Domain Admins", "Course Staff", "ipausers"}); err != nil {
+	if err := syncLDAPCloudGroupMemberships(dbUser, []string{"Domain Admins", "Teaching Staff", "ipausers"}); err != nil {
 		t.Fatalf("syncLDAPCloudGroupMemberships returned error: %v", err)
 	}
 

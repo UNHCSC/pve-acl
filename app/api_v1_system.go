@@ -27,7 +27,7 @@ func getSystemSummary(c *fiber.Ctx) error {
 		})
 	}
 
-	canCreateProjects, err := currentUserCan(c, "project.manage", db.RoleBindingScopeGlobal, nil)
+	canCreateProjects, err := currentUserCanCreateProjects(c)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check project permissions",
@@ -51,6 +51,12 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"error": "failed to check role permissions",
 		})
 	}
+	canManageOrgs, err := currentUserCan(c, "org.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check organization permissions",
+		})
+	}
 
 	return c.JSON(fiber.Map{
 		"counts": counts,
@@ -68,6 +74,7 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"canManageUsers":    canManageUsers,
 			"canManageGroups":   canManageGroups,
 			"canManageRoles":    canManageRoles,
+			"canManageOrgs":     canManageOrgs,
 		},
 	})
 }
@@ -93,4 +100,23 @@ func systemCounts() (fiber.Map, error) {
 	}
 
 	return counts, nil
+}
+
+func currentUserCanCreateProjects(c *fiber.Ctx) (bool, error) {
+	allowed, err := currentUserCan(c, "project.manage", db.RoleBindingScopeGlobal, nil)
+	if err != nil || allowed {
+		return allowed, err
+	}
+
+	orgs, err := db.ListOrganizations()
+	if err != nil {
+		return false, err
+	}
+	for _, org := range orgs {
+		allowed, err = currentUserCan(c, "project.manage", db.RoleBindingScopeOrg, &org.ID)
+		if err != nil || allowed {
+			return allowed, err
+		}
+	}
+	return false, nil
 }
