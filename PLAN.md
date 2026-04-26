@@ -1260,17 +1260,24 @@ Completed or substantially implemented:
 * Central RBAC evaluation through roles, permissions, role bindings, scopes, and site-admin override behavior.
 * User, group, role, permission, role-binding/access-grant, and project helper APIs.
 * Project create/list/detail/delete, project membership management, project member role editing, direct user lookup/sync, and group assignment to projects.
+* Organization create, move, guarded delete, and project move APIs with permission checks.
 * Custom role creation and role permission grant editing.
 * Access UI organized around the simplified model: groups are membership sets, roles are permission bundles, and access grants are role bindings over scopes.
-* Dashboard tabs for overview, directory, people, identity, and access, with account menu, toasts, URL routing, and user-scoped recents.
-* React/TypeScript client split into reusable components, views, API helpers, and tree utilities, built with Bun, Vite, and Tailwind.
+* Access UI role-permission editor for selecting a role, reviewing system/custom status, toggling permissions on custom roles, and saving through the role permission APIs.
+* Dashboard tabs for overview, directory, people, identity, and access, with account menu, toasts, URL routing, responsive navigation, and user-scoped recents.
+* Directory UI with draggable organizations/projects, nested tree context lines, project member management, separate add-user/add-group member flows, and tighter two-column chrome.
+* People UI import flow for bringing in multiple FreeIPA users at once, including partial success and per-entry failure display.
+* React/TypeScript client split into reusable components, views, API helpers, hooks, tree utilities, and layered CSS partials, built with Bun, Vite, and Tailwind.
+* TanStack Query wired into the dashboard data and project membership loaders so API consumption can move away from manual fetch state.
 
 Known deliberate leftovers:
 
 * Some legacy local ACL tables and routes still exist for compatibility while the MVP cloud model takes over. Remove them only after replacement routes and tests cover the same use cases.
-* Organization management is now the tenant hierarchy foundation; dedicated org CRUD/archive screens still need polish.
+* Organization management is now usable from the directory tree, but full edit/archive screens still need polish.
 * Resources, quotas, Proxmox integration, and job execution are scaffolded in the schema but not yet functional product workflows.
 * Audit events exist and setup writes some audit rows, but audit logging is not yet consistently applied to all management actions.
+* Several destructive operations still hard-delete rows. MVP should prefer archive/deactivate behavior for organizations, projects, groups, resources, and assignments where historical context matters.
+* TanStack Query is installed and used for core reads, but mutations still mostly use manual invalidation/refresh helpers.
 
 Current baseline checks:
 
@@ -1278,6 +1285,16 @@ Current baseline checks:
 go test ./...
 cd client && bun run check && bun run build
 ```
+
+MVP gap summary, in recommended order:
+
+* Finish identity/access durability: role edit/delete protections, group update/archive, delegated grant rules, and consistent audit events.
+* Finish tenant/project lifecycle: archive/deactivate instead of hard delete, richer organization/project edit screens, readable grant scope selectors, and project-level access shortcuts backed by normal role bindings.
+* Implement quota policies and local usage calculation before touching Proxmox mutations.
+* Implement resource registry APIs and UI sections against local database rows only, with RBAC, ownership, quota checks, and audit writes.
+* Add a Proxmox service boundary with fake tests, then read-only cluster/node/VM/CT discovery and drift-safe inventory sync.
+* Add jobs, job logs, cancellation/status transitions, and an audit helper before any long-running infrastructure action.
+* Ship the smallest useful VM lifecycle: create from template, start, stop, reboot, delete/archive, and console ticket, all queued as jobs and permission/quota checked.
 
 ### 20.2 Working Rules Going Forward
 
@@ -1297,6 +1314,7 @@ Implementation scope:
 * Add edit/delete endpoints for roles where safe. System roles should not be deletable from the UI.
 * Add group update/archive endpoints and a cleaner group detail payload.
 * Add optional delegated grant management: group owners may manage access grants only within their own group scope, while global grants remain site-admin only.
+* Convert access mutations to TanStack Query mutations with targeted invalidation.
 * Add audit events for user, group, role, permission grant, and access grant changes.
 * Add tests for system role protection, group update/archive behavior, and delegated scoped grant management.
 
@@ -1313,11 +1331,11 @@ Goal: make the tenant hierarchy real enough to attach projects, groups, quotas, 
 
 Implementation scope:
 
-* Add organization CRUD and archive behavior.
-* Add sub-organization create/move/archive behavior.
-* Add UI screens or focused panels for organizations only after API tests exist.
-* Allow group and project creation to select an organization.
+* Replace organization hard delete with archive/deactivate behavior after API tests cover the expected constraints.
+* Add organization edit UI for name, slug, description, and parent movement rather than only drag-and-drop movement.
+* Add focused organization detail panels for child orgs, projects, grants, and quota bindings.
 * Update access grants so org/project scopes can be selected by readable name rather than raw ID.
+* Add tests for organization archive, move cycle prevention, visible-tree filtering, and readable scope labels.
 
 Acceptance checks:
 
@@ -1332,7 +1350,8 @@ Goal: make projects the useful operational boundary before introducing real reso
 
 Implementation scope:
 
-* Add project update/archive instead of hard delete as the default UI behavior.
+* Add full project update for name, slug, description, organization, and active/archive state.
+* Replace project hard delete as the default UI behavior with archive/deactivate.
 * Add project-level access grant shortcuts that create normal role bindings rather than separate permission logic.
 * Add quota policy CRUD and quota bindings for projects and groups.
 * Add usage-calculation helpers that can run before Proxmox integration.
@@ -1356,6 +1375,7 @@ Implementation scope:
 * Enforce access grants and quota checks before resource creation/update.
 * Add dashboard project detail sections for resources.
 * Add audit events for create, update, archive, and assignment changes.
+* Keep these APIs Proxmox-free so quota/RBAC/resource ownership can be tested without infrastructure access.
 
 Acceptance checks:
 
@@ -1391,6 +1411,7 @@ Implementation scope:
 * Implement job creation, status transitions, logs, cancellation semantics, and in-process development workers.
 * Write audit events through a helper so handlers and workers do not duplicate audit formatting.
 * Add job detail APIs and UI surfaces for queued/running/completed work.
+* Backfill management handlers to use the audit helper before adding Proxmox mutations.
 * Add tests for job state transitions, job logs, cancellation, and audit writes.
 
 Acceptance checks:

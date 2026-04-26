@@ -1,0 +1,192 @@
+/* Row actions, menus, compact buttons, and small popovers. */
+.data-table-head,
+.data-table-row {
+    grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.8fr) 120px 48px;
+}
+
+.people-table-head,
+.people-table-row {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) 120px;
+}
+
+.row-actions {
+    align-items: center;
+    display: flex;
+    justify-content: flex-end;
+    justify-self: end;
+    width: 100%;
+}
+
+.row-menu-button {
+    align-items: center;
+    display: inline-flex;
+    font-size: 20px;
+    font-weight: 700;
+    justify-content: center;
+    letter-spacing: 0;
+    line-height: 1;
+    padding: 0;
+}
+
+.row-menu[hidden] {
+    display: none !important;
+}
+
+.row-menu {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-popover);
+    min-width: 150px;
+    overflow: hidden;
+    position: fixed;
+    z-index: 90;
+    animation: menu-pop 140ms ease both;
+}
+
+.row-menu button {
+    color: var(--color-ink);
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 12px;
+    text-align: left;
+    width: 100%;
+}
+
+.row-menu button:hover {
+    background: var(--color-paper);
+}
+
+.row-menu button:disabled {
+    color: var(--color-ink-muted);
+    cursor: default;
+    opacity: 0.55;
+}
+
+.row-menu button:disabled:hover {
+    background: transparent;
+}
+
+.row-menu .danger-action {
+    color: var(--color-danger);
+}
+
+.action-list-row {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.project-detail-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    position: relative;
+}
+
+.project-access-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.compact-button {
+    min-height: 38px;
+    padding: 8px 12px;
+}
+
+.floating-popover[hidden] {
+    display: none !important;
+}
+
+.floating-popover {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-popover);
+    position: fixed;
+    width: min(340px, calc(100vw - 24px));
+    z-index: 95;
+}
+
+.compact-popover-form {
+    gap: 14px;
+    padding: 16px;
+}
+
+.compact-form-message {
+    min-height: 20px;
+    padding: 0;
+}
+
+.popover-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.popover-heading h3 {
+    color: var(--color-ink);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.popover-heading p {
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.segmented-control {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    display: inline-flex;
+    padding: 3px;
+}
+
+.segmented-control button {
+    border-radius: 6px;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 12px;
+}
+
+.segmented-control button.is-active {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
+}
+
+.menu-dots {
+    align-items: center;
+    display: inline-flex;
+    gap: 2px;
+    height: 100%;
+    justify-content: center;
+    width: 14px;
+}
+
+.menu-dots span {
+    background: currentColor;
+    border-radius: 999px;
+    display: block;
+    height: 3px;
+    width: 3px;
+}
+
+@keyframes menu-pop {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}

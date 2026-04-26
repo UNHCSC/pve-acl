@@ -1,5 +1,5 @@
-import { FormEvent, ReactNode, useState } from "react";
-import type { ToastKind } from "../types";
+import { FormEvent, ReactNode, useState, type CSSProperties } from "react";
+import type { ToastItem } from "../hooks/useToasts";
 import { classNames } from "../ui-helpers";
 
 export function PanelHeading({ label, title, action }: { label: string; title: ReactNode; action?: ReactNode }) {
@@ -60,11 +60,15 @@ export function CompactList<T extends { id: number }>({ items, render }: { items
     );
 }
 
-export function ToastStack({ toasts }: { toasts: Array<{ id: number; text: string; kind: ToastKind }> }) {
+export function ToastStack({ toasts }: { toasts: ToastItem[] }) {
     return (
         <div className="toast-stack">
             {toasts.map((toast) => (
-                <div key={toast.id} className={classNames("toast-message", toast.kind === "warning" && "is-warning", toast.kind === "success" && "is-success")}>
+                <div
+                    key={toast.id}
+                    className={classNames("toast-message", toast.leaving && "is-leaving", toast.kind === "warning" && "is-warning", toast.kind === "success" && "is-success")}
+                    style={{ "--toast-duration": `${toast.duration}ms` } as CSSProperties & Record<string, string>}
+                >
                     {toast.text}
                 </div>
             ))}

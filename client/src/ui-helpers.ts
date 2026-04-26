@@ -51,32 +51,24 @@ export function numberValue(value: unknown): number {
     return 0;
 }
 
-export function roleLabel(value: number | string | undefined): string {
-    const normalized = String(value ?? "").toLowerCase();
-    const labels: Record<string, string> = {
-        "1": "viewer",
-        "2": "operator",
-        "3": "developer",
-        "4": "manager",
-        "5": "owner"
-    };
-    return labels[normalized] || normalized || "viewer";
-}
-
 export function subjectTypeLabel(value: number | string | undefined): "user" | "group" {
     const normalized = String(value ?? "").toLowerCase();
-    return normalized === "2" || normalized === "group" ? "group" : "user";
+    return normalized === "1" || normalized === "group" ? "group" : "user";
 }
 
 export function scopeTypeLabel(value: number | string | undefined): string {
     const normalized = String(value ?? "").toLowerCase();
     const labels: Record<string, string> = {
-        "1": "global",
-        "2": "organization",
+        "0": "global",
+        "1": "organization",
         "3": "project",
+        "4": "group",
+        "5": "resource",
         global: "global",
         org: "organization",
-        project: "project"
+        project: "project",
+        group: "group",
+        resource: "resource"
     };
     return labels[normalized] || normalized || "global";
 }

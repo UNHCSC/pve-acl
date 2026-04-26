@@ -11,53 +11,104 @@ import (
 )
 
 const (
-	DefaultRootOrganizationName = "Lab"
-	DefaultRootOrganizationSlug = "lab"
-	DefaultAdminGroupName       = "Admins"
-	DefaultAdminGroupSlug       = "admins"
-	DefaultLabAdminRoleName     = "LabAdmin"
+	DefaultRootOrganizationName     = "Lab"
+	DefaultRootOrganizationSlug     = "lab"
+	DefaultAdminGroupName           = "Admins"
+	DefaultAdminGroupSlug           = "admins"
+	DefaultLabAdminRoleName         = "LabAdmin"
+	DefaultProjectViewerRoleName    = "ProjectViewer"
+	DefaultProjectOperatorRoleName  = "ProjectOperator"
+	DefaultProjectDeveloperRoleName = "ProjectDeveloper"
+	DefaultProjectManagerRoleName   = "ProjectManager"
+	DefaultProjectOwnerRoleName     = "ProjectOwner"
+	DefaultResourceUserRoleName     = "ResourceUser"
 )
 
-var CorePermissionNames = []string{
-	"vm.read",
-	"vm.create",
-	"vm.start",
-	"vm.stop",
-	"vm.reboot",
-	"vm.console",
-	"vm.snapshot",
-	"vm.clone",
-	"vm.resize",
-	"vm.reconfigure",
-	"vm.delete",
-	"ct.read",
-	"ct.create",
-	"ct.start",
-	"ct.stop",
-	"ct.console",
-	"ct.delete",
-	"network.read",
-	"network.create",
-	"network.update",
-	"network.delete",
-	"network.attach",
-	"template.read",
-	"template.create",
-	"template.update",
-	"template.delete",
-	"template.clone",
-	"terraform.plan",
-	"terraform.apply",
-	"terraform.destroy",
-	"ansible.run",
-	"quota.read",
-	"quota.update",
-	"user.manage",
-	"group.manage",
-	"role.manage",
-	"audit.read",
-	"org.manage",
-	"project.manage",
+var SystemRolePermissions = map[string][]PermissionKey{
+	DefaultLabAdminRoleName: CorePermissions,
+	DefaultProjectViewerRoleName: {
+		PermissionVMRead,
+		PermissionCTRead,
+		PermissionNetworkRead,
+		PermissionTemplateRead,
+		PermissionQuotaRead,
+	},
+	DefaultProjectOperatorRoleName: {
+		PermissionVMRead,
+		PermissionVMStart,
+		PermissionVMStop,
+		PermissionVMReboot,
+		PermissionVMConsole,
+		PermissionCTRead,
+		PermissionCTStart,
+		PermissionCTStop,
+		PermissionCTConsole,
+		PermissionNetworkRead,
+		PermissionTemplateRead,
+		PermissionQuotaRead,
+	},
+	DefaultProjectDeveloperRoleName: {
+		PermissionVMRead,
+		PermissionVMCreate,
+		PermissionVMStart,
+		PermissionVMStop,
+		PermissionVMReboot,
+		PermissionVMConsole,
+		PermissionVMSnapshot,
+		PermissionVMClone,
+		PermissionCTRead,
+		PermissionCTCreate,
+		PermissionCTStart,
+		PermissionCTStop,
+		PermissionCTConsole,
+		PermissionNetworkRead,
+		PermissionNetworkAttach,
+		PermissionTemplateRead,
+		PermissionTemplateClone,
+		PermissionQuotaRead,
+	},
+	DefaultProjectManagerRoleName: {
+		PermissionVMRead,
+		PermissionVMCreate,
+		PermissionVMStart,
+		PermissionVMStop,
+		PermissionVMReboot,
+		PermissionVMConsole,
+		PermissionVMSnapshot,
+		PermissionVMClone,
+		PermissionVMResize,
+		PermissionVMReconfigure,
+		PermissionVMDelete,
+		PermissionCTRead,
+		PermissionCTCreate,
+		PermissionCTStart,
+		PermissionCTStop,
+		PermissionCTConsole,
+		PermissionCTDelete,
+		PermissionNetworkRead,
+		PermissionNetworkCreate,
+		PermissionNetworkUpdate,
+		PermissionNetworkDelete,
+		PermissionNetworkAttach,
+		PermissionTemplateRead,
+		PermissionTemplateClone,
+		PermissionQuotaRead,
+		PermissionQuotaUpdate,
+		PermissionGroupManage,
+		PermissionProjectManage,
+	},
+	DefaultProjectOwnerRoleName: CorePermissions,
+	DefaultResourceUserRoleName: {
+		PermissionVMRead,
+		PermissionVMStart,
+		PermissionVMStop,
+		PermissionVMReboot,
+		PermissionVMConsole,
+		PermissionCTRead,
+		PermissionCTStart,
+		PermissionCTStop,
+		PermissionCTConsole,
+	},
 }
 
 func EnsureInitialSetup() (err error) {
@@ -73,18 +124,8 @@ func EnsureInitialSetup() (err error) {
 		}
 	}
 
-	role, createdRole, err := ensureRole(DefaultLabAdminRoleName, "Full system-level authority across Organesson Cloud.", true, now)
-	if err != nil {
-		return
-	}
-	if createdRole {
-		if err = writeSetupAudit("setup.role.create", "role", role.ID, now); err != nil {
-			return
-		}
-	}
-
-	for _, permissionName := range CorePermissionNames {
-		permission, createdPermission, setupErr := ensurePermission(permissionName)
+	for _, permissionKey := range CorePermissions {
+		permission, createdPermission, setupErr := ensurePermission(permissionKey.String())
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -95,14 +136,41 @@ func EnsureInitialSetup() (err error) {
 			}
 		}
 
-		createdBinding, setupErr := ensureRolePermission(role.ID, permission.ID)
+	}
+
+	rolesByName := map[string]*Role{}
+	for roleName, permissionKeys := range SystemRolePermissions {
+		role, createdRole, setupErr := ensureRole(roleName, systemRoleDescription(roleName), true, now)
 		if setupErr != nil {
 			err = setupErr
 			return
 		}
-		if createdBinding {
-			if err = writeSetupAudit("setup.role_permission.create", "role_permission", role.ID, now); err != nil {
+		rolesByName[roleName] = role
+		if createdRole {
+			if err = writeSetupAudit("setup.role.create", "role", role.ID, now); err != nil {
 				return
+			}
+		}
+		for _, permissionKey := range permissionKeys {
+			permissionName := permissionKey.String()
+			permission, found, findErr := findPermissionByName(permissionName)
+			if findErr != nil {
+				err = findErr
+				return
+			}
+			if !found {
+				err = fmt.Errorf("permission %q was not found", permissionName)
+				return
+			}
+			createdBinding, setupErr := ensureRolePermission(role.ID, permission.ID)
+			if setupErr != nil {
+				err = setupErr
+				return
+			}
+			if createdBinding {
+				if err = writeSetupAudit("setup.role_permission.create", "role_permission", role.ID, now); err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -129,7 +197,7 @@ func EnsureInitialSetup() (err error) {
 			}
 		}
 
-		createdRoleBinding, setupErr := ensureRoleBinding(role.ID, RoleBindingSubjectGroup, group.ID, RoleBindingScopeGlobal, nil, now)
+		createdRoleBinding, setupErr := ensureRoleBinding(rolesByName[DefaultLabAdminRoleName].ID, RoleBindingSubjectGroup, group.ID, RoleBindingScopeGlobal, nil, now)
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -143,6 +211,27 @@ func EnsureInitialSetup() (err error) {
 
 	_ = org
 	return
+}
+
+func systemRoleDescription(name string) string {
+	switch name {
+	case DefaultLabAdminRoleName:
+		return "Full system-level authority across Organesson Cloud."
+	case DefaultProjectViewerRoleName:
+		return "Read-only project access."
+	case DefaultProjectOperatorRoleName:
+		return "Read and lifecycle operation access for project resources."
+	case DefaultProjectDeveloperRoleName:
+		return "Create and operate normal project resources."
+	case DefaultProjectManagerRoleName:
+		return "Manage project resources, membership shortcuts, and quota."
+	case DefaultProjectOwnerRoleName:
+		return "Full project-level authority."
+	case DefaultResourceUserRoleName:
+		return "Semi-private VM/container console and power access on individual resources."
+	default:
+		return "System role."
+	}
 }
 
 func ensureOrganization(name, slug string, now time.Time) (*Organization, bool, error) {
@@ -181,13 +270,14 @@ func ensureCloudGroup(name, slug string, groupType GroupType, now time.Time) (*C
 	}
 
 	group := &CloudGroup{
-		UUID:       uuid,
-		Name:       name,
-		Slug:       slug,
-		GroupType:  groupType,
-		SyncSource: CloudGroupSyncSourceLocal,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		UUID:           uuid,
+		Name:           name,
+		Slug:           slug,
+		GroupType:      groupType,
+		OwnerScopeType: RoleBindingScopeGlobal,
+		SyncSource:     CloudGroupSyncSourceLocal,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
 	if err := CloudGroups.Insert(group); err != nil {

@@ -26,25 +26,25 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"error": "failed to check project permissions",
 		})
 	}
-	canManageUsers, err := currentUserCan(c, "user.manage", db.RoleBindingScopeGlobal, nil)
+	canManageUsers, err := currentUserCan(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check user permissions",
 		})
 	}
-	canManageGroups, err := currentUserCan(c, "group.manage", db.RoleBindingScopeGlobal, nil)
+	canManageGroups, err := currentUserCan(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check group permissions",
 		})
 	}
-	canManageRoles, err := currentUserCan(c, "role.manage", db.RoleBindingScopeGlobal, nil)
+	canManageRoles, err := currentUserCan(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check role permissions",
 		})
 	}
-	canManageOrgs, err := currentUserCan(c, "org.manage", db.RoleBindingScopeGlobal, nil)
+	canManageOrgs, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check organization permissions",
@@ -166,7 +166,7 @@ func visibleDirectoryCounts(c *fiber.Ctx) (int64, int64, error) {
 }
 
 func currentUserCanCreateProjects(c *fiber.Ctx) (bool, error) {
-	allowed, err := currentUserCan(c, "project.manage", db.RoleBindingScopeGlobal, nil)
+	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
 		return allowed, err
 	}
@@ -176,7 +176,7 @@ func currentUserCanCreateProjects(c *fiber.Ctx) (bool, error) {
 		return false, err
 	}
 	for _, org := range orgs {
-		allowed, err = currentUserCan(c, "project.manage", db.RoleBindingScopeOrg, &org.ID)
+		allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeOrg, &org.ID)
 		if err != nil || allowed {
 			return allowed, err
 		}

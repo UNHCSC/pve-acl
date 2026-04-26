@@ -6,7 +6,7 @@ import (
 )
 
 func getAccessData(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, "role.manage", db.RoleBindingScopeGlobal, nil)
+	allowed, err := requirePermission(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || !allowed {
 		return err
 	}

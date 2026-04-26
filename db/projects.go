@@ -98,7 +98,7 @@ func ProjectMembershipsForProject(projectID int) ([]*ProjectMembership, error) {
 	)
 }
 
-func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, subjectID int, role ProjectRole) (bool, error) {
+func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
 	filter := gomysql.NewFilter().
 		KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID).
 		And().
@@ -111,11 +111,6 @@ func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, su
 		return false, err
 	}
 	if len(existing) > 0 {
-		membership := existing[0]
-		if membership.ProjectRole != role {
-			membership.ProjectRole = role
-			return false, ProjectMemberships.Update(membership)
-		}
 		return false, nil
 	}
 
@@ -123,28 +118,12 @@ func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, su
 		ProjectID:   projectID,
 		SubjectType: subjectType,
 		SubjectID:   subjectID,
-		ProjectRole: role,
 		CreatedAt:   time.Now().UTC(),
 	})
 }
 
 func RemoveProjectMembership(membershipID int) error {
 	return ProjectMemberships.Delete(membershipID)
-}
-
-func UpdateProjectMembershipRole(membershipID int, role ProjectRole) (*ProjectMembership, error) {
-	membership, err := ProjectMemberships.Select(membershipID)
-	if err != nil {
-		return nil, err
-	}
-	if membership == nil {
-		return nil, nil
-	}
-	membership.ProjectRole = role
-	if err := ProjectMemberships.Update(membership); err != nil {
-		return nil, err
-	}
-	return membership, nil
 }
 
 func UpdateProject(project *Project) error {
@@ -176,4 +155,115 @@ func DeleteProject(projectID int) error {
 
 func findProjectBySlug(slug string) (*Project, bool, error) {
 	return findOneByStringField(Projects, Projects.FieldBySQLName("slug"), slug)
+}
+
+func ProjectRoleName(role ProjectRole) string {
+	switch role {
+	case ProjectRoleOperator:
+		return DefaultProjectOperatorRoleName
+	case ProjectRoleDeveloper:
+		return DefaultProjectDeveloperRoleName
+	case ProjectRoleManager:
+		return DefaultProjectManagerRoleName
+	case ProjectRoleOwner:
+		return DefaultProjectOwnerRoleName
+	default:
+		return DefaultProjectViewerRoleName
+	}
+}
+
+func ProjectRoleForRoleName(name string) (ProjectRole, bool) {
+	switch name {
+	case DefaultProjectViewerRoleName:
+		return ProjectRoleViewer, true
+	case DefaultProjectOperatorRoleName:
+		return ProjectRoleOperator, true
+	case DefaultProjectDeveloperRoleName:
+		return ProjectRoleDeveloper, true
+	case DefaultProjectManagerRoleName:
+		return ProjectRoleManager, true
+	case DefaultProjectOwnerRoleName:
+		return ProjectRoleOwner, true
+	default:
+		return ProjectRoleViewer, false
+	}
+}
+
+func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int, projectRole ProjectRole) error {
+	if err := RemoveProjectMemberAccessRoles(projectID, subjectType, subjectID); err != nil {
+		return err
+	}
+
+	role, found, err := GetRoleByName(ProjectRoleName(projectRole))
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("project access role %q was not found", ProjectRoleName(projectRole))
+	}
+
+	scopeID := projectID
+	_, err = ensureRoleBinding(role.ID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeProject, &scopeID, time.Now().UTC())
+	return err
+}
+
+func RemoveProjectMemberAccessRoles(projectID int, subjectType ProjectMemberSubject, subjectID int) error {
+	roles, err := Roles.SelectAll()
+	if err != nil {
+		return err
+	}
+	roleIDs := map[int]bool{}
+	for _, role := range roles {
+		if _, ok := ProjectRoleForRoleName(role.Name); ok {
+			roleIDs[role.ID] = true
+		}
+	}
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
+	if err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID || !roleIDs[binding.RoleID] {
+			continue
+		}
+		if err := RoleBindings.Delete(binding.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int) (ProjectRole, bool, error) {
+	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
+	if err != nil {
+		return ProjectRoleViewer, false, err
+	}
+
+	best := ProjectRoleViewer
+	found := false
+	for _, binding := range bindings {
+		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID {
+			continue
+		}
+		role, err := Roles.Select(binding.RoleID)
+		if err != nil {
+			return ProjectRoleViewer, false, err
+		}
+		if role == nil {
+			continue
+		}
+		projectRole, ok := ProjectRoleForRoleName(role.Name)
+		if !ok {
+			continue
+		}
+		if !found || projectRole > best {
+			best = projectRole
+			found = true
+		}
+	}
+	return best, found, nil
 }

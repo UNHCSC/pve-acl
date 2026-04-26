@@ -81,7 +81,7 @@ func getResolveUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
 	}
 	if !strings.EqualFold(query, dbUser.Username) && !strings.EqualFold(query, dbUser.Email) && !strings.EqualFold(query, dbUser.DisplayName) {
-		allowed, err := requirePermission(c, "user.manage", db.RoleBindingScopeGlobal, nil)
+		allowed, err := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
 		if err != nil || !allowed {
 			return err
 		}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/z46-dev/gomysql"
 )
 
 type OrganizationCreateInput struct {
@@ -97,6 +99,78 @@ func DeleteOrganization(orgID int) error {
 	return Organizations.Delete(orgID)
 }
 
+func OrganizationMembershipsForOrganization(orgID int) ([]*OrganizationMembership, error) {
+	return OrganizationMemberships.SelectAllWithFilter(
+		gomysql.NewFilter().KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID),
+	)
+}
+
+func EnsureOrganizationMembership(orgID int, subjectType ProjectMemberSubject, subjectID int, role MembershipRole) (bool, error) {
+	filter := gomysql.NewFilter().
+		KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID).
+		And().
+		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
+		And().
+		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+
+	existing, err := OrganizationMemberships.SelectAllWithFilter(filter.Limit(1))
+	if err != nil {
+		return false, err
+	}
+	if len(existing) > 0 {
+		membership := existing[0]
+		if membership.MembershipRole != role {
+			membership.MembershipRole = role
+			return false, OrganizationMemberships.Update(membership)
+		}
+		return false, nil
+	}
+
+	return true, OrganizationMemberships.Insert(&OrganizationMembership{
+		OrganizationID: orgID,
+		SubjectType:    subjectType,
+		SubjectID:      subjectID,
+		MembershipRole: role,
+		CreatedAt:      time.Now().UTC(),
+	})
+}
+
+func SubjectInOrganizationOrAncestor(orgID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
+	ancestorIDs, err := OrganizationAncestorIDs(orgID)
+	if err != nil {
+		return false, err
+	}
+	for _, ancestorID := range ancestorIDs {
+		memberships, err := OrganizationMembershipsForOrganization(ancestorID)
+		if err != nil {
+			return false, err
+		}
+		for _, membership := range memberships {
+			if membership.SubjectType == subjectType && membership.SubjectID == subjectID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func SubjectInProjectOrAncestor(projectID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
+	project, found, err := GetProjectByID(projectID)
+	if err != nil || !found {
+		return false, err
+	}
+	memberships, err := ProjectMembershipsForProject(projectID)
+	if err != nil {
+		return false, err
+	}
+	for _, membership := range memberships {
+		if membership.SubjectType == subjectType && membership.SubjectID == subjectID {
+			return true, nil
+		}
+	}
+	return SubjectInOrganizationOrAncestor(project.OrganizationID, subjectType, subjectID)
+}
+
 func OrganizationAncestorIDs(orgID int) ([]int, error) {
 	ancestors := []int{}
 	seen := map[int]bool{}
@@ -128,4 +202,12 @@ func ProjectOrganizationAncestorIDs(projectID int) ([]int, error) {
 		return nil, err
 	}
 	return OrganizationAncestorIDs(project.OrganizationID)
+}
+
+func ResourceOrganizationAncestorIDs(resourceID int) ([]int, error) {
+	resource, err := Resources.Select(resourceID)
+	if err != nil || resource == nil {
+		return nil, err
+	}
+	return ProjectOrganizationAncestorIDs(resource.ProjectID)
 }

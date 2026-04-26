@@ -83,11 +83,13 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	// API v1 users
 	apiV1.Get("/users", getUsers)
 	apiV1.Post("/users", postCreateUser)
+	apiV1.Post("/users/import", postImportUsers)
 	apiV1Users.Get("/me", getCurrentUser)
 	apiV1Users.Get("/me/access", getCurrentUserAccess)
 	apiV1Users.Get("/resolve", getResolveUser)
 	apiV1Users.Get("/", getUsers)
 	apiV1Users.Post("/", postCreateUser)
+	apiV1Users.Post("/import", postImportUsers)
 	apiV1Users.Get("/search", _noop)
 	apiV1Users.Get("/some/:usernames", _noop)
 	apiV1Users.Post("/update/:usernames", _noop)

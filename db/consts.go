@@ -63,6 +63,11 @@ const (
 )
 
 const (
+	OwnerSubjectUser OwnerSubjectType = iota
+	OwnerSubjectGroup
+)
+
+const (
 	ProjectRoleViewer ProjectRole = iota
 	ProjectRoleOperator
 	ProjectRoleDeveloper

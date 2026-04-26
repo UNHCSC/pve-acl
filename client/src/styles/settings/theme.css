@@ -1,0 +1,126 @@
+@theme {
+    --color-paper: #f7f8fb;
+    --color-surface: #ffffff;
+    --color-ink: #101828;
+    --color-ink-muted: #667085;
+    --color-line: #d0d5dd;
+    --color-accent: #155eef;
+    --color-accent-strong: #004eeb;
+
+    --font-sans: "Public Sans Variable", "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+
+    --shadow-card: 0 12px 30px -24px rgba(16, 24, 40, 0.35);
+}
+
+:root {
+    color-scheme: light;
+    --color-paper: #f7f8fb;
+    --color-surface: #ffffff;
+    --color-ink: #101828;
+    --color-ink-muted: #667085;
+    --color-line: #d0d5dd;
+    --color-accent: #155eef;
+    --color-accent-strong: #004eeb;
+    --color-app-bg: #eef2f7;
+    --color-selected-bg: #edf4ff;
+    --color-selected-soft: #f2f7ff;
+    --color-selected-line: #bfd7ff;
+    --color-hover-bg: #f5f8fc;
+    --color-hover-line: #e4e9f2;
+    --color-drop-bg: #e9f8ef;
+    --color-drop-line: #6cbb84;
+    --color-drop-ink: #166534;
+    --color-danger: #b42318;
+    --color-warning: #dc6803;
+    --color-success: #039855;
+    --color-avatar: #113b2f;
+    --color-scrollbar-track: color-mix(in srgb, var(--color-paper) 78%, var(--color-surface));
+    --color-scrollbar-thumb: color-mix(in srgb, var(--color-ink-muted) 42%, transparent);
+    --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent) 62%, var(--color-ink-muted));
+    --shadow-card: 0 12px 30px -24px rgba(16, 24, 40, 0.35);
+    --shadow-popover: 0 18px 50px -28px rgba(16, 24, 40, 0.65);
+    --shadow-modal: 0 24px 80px -32px rgba(16, 24, 40, 0.65);
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-paper: #0f172a;
+    --color-surface: #172033;
+    --color-ink: #f8fafc;
+    --color-ink-muted: #a7b1c2;
+    --color-line: #334155;
+    --color-accent: #60a5fa;
+    --color-accent-strong: #93c5fd;
+    --color-app-bg: #0b1120;
+    --color-selected-bg: #172f52;
+    --color-selected-soft: #10243f;
+    --color-selected-line: #3b82f6;
+    --color-hover-bg: #1f2937;
+    --color-hover-line: #40506a;
+    --color-drop-bg: #113829;
+    --color-drop-line: #22c55e;
+    --color-drop-ink: #bbf7d0;
+    --color-danger: #f87171;
+    --color-warning: #fbbf24;
+    --color-success: #34d399;
+    --color-avatar: #2563eb;
+    --shadow-card: 0 18px 46px -30px rgba(0, 0, 0, 0.72);
+    --shadow-popover: 0 22px 60px -28px rgba(0, 0, 0, 0.85);
+    --shadow-modal: 0 30px 90px -36px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-theme="proxmox"],
+:root[data-theme="proxmox-light"] {
+    color-scheme: light;
+    --color-paper: #f5f6f7;
+    --color-surface: #ffffff;
+    --color-ink: #1f2933;
+    --color-ink-muted: #68727d;
+    --color-line: #d7dde3;
+    --color-accent: #e57000;
+    --color-accent-strong: #c45f00;
+    --color-app-bg: #eceff3;
+    --color-selected-bg: #fff3e5;
+    --color-selected-soft: #fff7ed;
+    --color-selected-line: #f0a653;
+    --color-hover-bg: #f8fafc;
+    --color-hover-line: #d9e1e8;
+    --color-drop-bg: #edf8ef;
+    --color-drop-line: #47a35d;
+    --color-drop-ink: #216336;
+    --color-danger: #b42318;
+    --color-warning: #c45f00;
+    --color-success: #15803d;
+    --color-avatar: #263746;
+    --shadow-card: 0 12px 30px -24px rgba(38, 55, 70, 0.38);
+    --shadow-popover: 0 18px 50px -28px rgba(38, 55, 70, 0.62);
+    --shadow-modal: 0 24px 80px -32px rgba(38, 55, 70, 0.68);
+}
+
+:root[data-theme="proxmox-dark"] {
+    color-scheme: dark;
+    --color-paper: #1f252b;
+    --color-surface: #252d35;
+    --color-ink: #f5f7fa;
+    --color-ink-muted: #b5bec8;
+    --color-line: #46515c;
+    --color-accent: #ff8a00;
+    --color-accent-strong: #ffab45;
+    --color-app-bg: #171c22;
+    --color-selected-bg: #3a2a18;
+    --color-selected-soft: #302516;
+    --color-selected-line: #d97800;
+    --color-hover-bg: #303942;
+    --color-hover-line: #52606d;
+    --color-drop-bg: #163321;
+    --color-drop-line: #48a868;
+    --color-drop-ink: #c4f4d0;
+    --color-danger: #ff8b7d;
+    --color-warning: #ffab45;
+    --color-success: #6ee79a;
+    --color-avatar: #e57000;
+    --shadow-card: 0 18px 46px -30px rgba(0, 0, 0, 0.78);
+    --shadow-popover: 0 22px 60px -28px rgba(0, 0, 0, 0.88);
+    --shadow-modal: 0 30px 90px -36px rgba(0, 0, 0, 0.92);
+}

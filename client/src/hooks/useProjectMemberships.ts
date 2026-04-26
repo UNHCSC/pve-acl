@@ -1,48 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import type { Project, ProjectMembership } from "../types";
 
 export function useProjectMemberships(selectedProject: Project | null, showError: (message: string) => void) {
-    const [activeProject, setActiveProject] = useState<Project | null>(null);
-    const [memberships, setMemberships] = useState<ProjectMembership[]>([]);
-    const [loadingProject, setLoadingProject] = useState(false);
-
-    const loadProject = async (project: Project) => {
-        setLoadingProject(true);
-        try {
-            const [detail, projectMemberships] = await Promise.all([
-                apiFetch<Project>(`/api/v1/projects/${encodeURIComponent(project.slug)}`),
-                apiFetch<ProjectMembership[]>(`/api/v1/projects/${project.id}/memberships`)
-            ]);
-            setActiveProject({ ...project, ...detail });
-            setMemberships(projectMemberships);
-        } catch (error) {
-            showError(error instanceof Error ? error.message : "Failed to load project");
-        } finally {
-            setLoadingProject(false);
-        }
-    };
+    const queryClient = useQueryClient();
+    const projectDetailQuery = useQuery({
+        queryKey: ["projects", selectedProject?.slug],
+        queryFn: () => apiFetch<Project>(`/api/v1/projects/${encodeURIComponent(selectedProject?.slug || "")}`),
+        enabled: Boolean(selectedProject?.slug)
+    });
+    const membershipsQuery = useQuery({
+        queryKey: ["projects", selectedProject?.id, "memberships"],
+        queryFn: () => apiFetch<ProjectMembership[]>(`/api/v1/projects/${selectedProject?.id}/memberships`),
+        enabled: Boolean(selectedProject?.id)
+    });
 
     const reloadMemberships = async () => {
-        if (!activeProject) {
+        if (!selectedProject) {
             return;
         }
-        setMemberships(await apiFetch<ProjectMembership[]>(`/api/v1/projects/${activeProject.id}/memberships`));
+        await queryClient.fetchQuery({
+            queryKey: ["projects", selectedProject.id, "memberships"],
+            queryFn: () => apiFetch<ProjectMembership[]>(`/api/v1/projects/${selectedProject.id}/memberships`)
+        });
     };
 
     useEffect(() => {
-        if (selectedProject) {
-            loadProject(selectedProject);
-        } else {
-            setActiveProject(null);
-            setMemberships([]);
+        const error = projectDetailQuery.error || membershipsQuery.error;
+        if (error) {
+            showError(error instanceof Error ? error.message : "Failed to load project");
         }
-    }, [selectedProject?.id]);
+    }, [projectDetailQuery.error, membershipsQuery.error]);
+
+    const activeProject = selectedProject && projectDetailQuery.data ? { ...selectedProject, ...projectDetailQuery.data } : selectedProject;
 
     return {
         activeProject,
-        loadingProject,
-        memberships,
+        loadingProject: projectDetailQuery.isLoading || membershipsQuery.isLoading,
+        memberships: membershipsQuery.data ?? [],
         reloadMemberships
     };
 }

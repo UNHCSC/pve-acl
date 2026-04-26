@@ -9,15 +9,15 @@ import (
 )
 
 type PermissionCheck struct {
-	UserID         int
-	GroupIDs       []int
-	PermissionName string
-	ScopeType      RoleBindingScope
-	ScopeID        *int
+	UserID     int
+	GroupIDs   []int
+	Permission PermissionKey
+	ScopeType  RoleBindingScope
+	ScopeID    *int
 }
 
 func HasPermission(check PermissionCheck) (bool, error) {
-	permission, found, err := findPermissionByName(check.PermissionName)
+	permission, found, err := findPermissionByName(check.Permission.String())
 	if err != nil || !found {
 		return false, err
 	}
@@ -158,6 +158,10 @@ func roleBindingMatchesScope(binding *RoleBinding, scopeType RoleBindingScope, s
 		return orgBindingMatchesScope(binding.ScopeID, scopeType, scopeID)
 	}
 
+	if binding.ScopeType == RoleBindingScopeProject && scopeType == RoleBindingScopeResource {
+		return projectBindingMatchesResource(binding.ScopeID, scopeID)
+	}
+
 	if binding.ScopeType != scopeType {
 		return false
 	}
@@ -180,6 +184,8 @@ func orgBindingMatchesScope(bindingScopeID *int, requestedScopeType RoleBindingS
 		orgIDs, err = OrganizationAncestorIDs(*requestedScopeID)
 	case RoleBindingScopeProject:
 		orgIDs, err = ProjectOrganizationAncestorIDs(*requestedScopeID)
+	case RoleBindingScopeResource:
+		orgIDs, err = ResourceOrganizationAncestorIDs(*requestedScopeID)
 	default:
 		return false
 	}
@@ -193,6 +199,17 @@ func orgBindingMatchesScope(bindingScopeID *int, requestedScopeType RoleBindingS
 		}
 	}
 	return false
+}
+
+func projectBindingMatchesResource(bindingScopeID *int, requestedScopeID *int) bool {
+	if bindingScopeID == nil || requestedScopeID == nil {
+		return false
+	}
+	resource, err := Resources.Select(*requestedScopeID)
+	if err != nil || resource == nil {
+		return false
+	}
+	return resource.ProjectID == *bindingScopeID
 }
 
 func roleHasPermission(roleID, permissionID int) (bool, error) {

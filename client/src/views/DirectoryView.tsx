@@ -3,10 +3,10 @@ import { createPortal } from "react-dom";
 import { Detail, EmptyDetail, EmptyState, PanelHeading } from "../components/common";
 import type { ModalKey, OrgNode, Organization, Project, ProjectMembership, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
-import { classNames, roleLabel, subjectTypeLabel } from "../ui-helpers";
+import { classNames, subjectTypeLabel } from "../ui-helpers";
 
-const MIN_SIDEBAR_WIDTH = 260;
-const MAX_SIDEBAR_WIDTH = 560;
+const MIN_SIDEBAR_WIDTH = 232;
+const MAX_SIDEBAR_WIDTH = 520;
 
 type DraggedItem =
     | { type: "org"; org: Organization }
@@ -34,7 +34,6 @@ type DirectoryViewProps = {
     deleteOrg: (org: Organization) => void;
     deleteProject: (project: Project) => void;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
-    updateProjectMember: (membership: ProjectMembership, role: string) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 };
 
@@ -58,7 +57,7 @@ export function DirectoryView(props: DirectoryViewProps) {
     const [dragState, setDragState] = useState<DraggedItem>(null);
     const [dropTarget, setDropTarget] = useState<string | null>(null);
     const [resizing, setResizing] = useState(false);
-    const [sidebarWidth, setSidebarWidth] = useState(340);
+    const [sidebarWidth, setSidebarWidth] = useState(292);
 
     useEffect(() => {
         if (!resizing) {
@@ -229,7 +228,6 @@ export function DirectoryView(props: DirectoryViewProps) {
                             memberships={props.memberships}
                             loading={props.loadingProject}
                             addProjectMember={props.addProjectMember}
-                            updateProjectMember={props.updateProjectMember}
                             deleteProjectMember={props.deleteProjectMember}
                         />
                     )}
@@ -252,7 +250,7 @@ function TreeNode(props: DirectoryViewProps & { node: OrgNode; depth: number; ru
     return (
         <>
             <div
-                className={classNames("tree-row", expanded && "is-expanded", selected && "is-selected", isDragged && "is-dragging", canDrop && "can-drop", runtime.dropTarget === menuKey && "is-drop-target")}
+                className={classNames("tree-row", depth > 0 && "has-parent", expanded && "is-expanded", selected && "is-selected", isDragged && "is-dragging", canDrop && "can-drop", runtime.dropTarget === menuKey && "is-drop-target")}
                 draggable
                 onDragEnd={runtime.clearDrag}
                 onDragLeave={runtime.clearDropTarget}
@@ -273,7 +271,7 @@ function TreeNode(props: DirectoryViewProps & { node: OrgNode; depth: number; ru
                     {node.parent_org_id !== null && <button type="button" className="danger-action" onClick={() => props.deleteOrg(node)}>Delete</button>}
                 </TreeActions>
             </div>
-            <div className={classNames("tree-children", expanded && "is-expanded")} aria-hidden={!expanded}>
+            <div className={classNames("tree-children", expanded && "is-expanded")} aria-hidden={!expanded} style={{ "--tree-depth": depth + 1 } as CSSProperties}>
                 <div className="tree-children-inner">
                     {node.children.map((child) => (
                         <TreeNode key={child.id} {...directoryProps} runtime={runtime} node={child} depth={depth + 1} />
@@ -295,7 +293,7 @@ function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: n
 
     return (
         <div
-            className={classNames("tree-row tree-project-row", selected && "is-selected", isDragged && "is-dragging")}
+            className={classNames("tree-row tree-project-row", depth > 0 && "has-parent", selected && "is-selected", isDragged && "is-dragging")}
             draggable
             onDragEnd={runtime.clearDrag}
             onDragStart={(event) => runtime.startProjectDrag(event, project)}
@@ -335,7 +333,11 @@ function TreeActions({ children, open, setOpen }: { children: ReactNode; open: b
                     setOpen(!open);
                 }}
             >
-                ...
+                <span className="menu-dots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                </span>
             </button>
             {open && createPortal(
                 <div className="row-menu tree-inline-menu" style={position} onClick={(event) => event.stopPropagation()}>
@@ -377,110 +379,82 @@ function ProjectDetail(props: {
     memberships: ProjectMembership[];
     loading: boolean;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
-    updateProjectMember: (membership: ProjectMembership, role: string) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 }) {
-    const [membershipView, setMembershipView] = useState<ProjectMemberSubject | "roles">("user");
+    const [membershipView, setMembershipView] = useState<ProjectMemberSubject>("user");
     const userMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "user");
     const groupMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "group");
     const visibleMemberships = membershipView === "group" ? groupMemberships : userMemberships;
-    const roleCounts = props.memberships.reduce<Record<string, number>>((counts, membership) => {
-        const role = roleLabel(membership.project_role);
-        counts[role] = (counts[role] || 0) + 1;
-        return counts;
-    }, {});
-    const canAddMember = membershipView === "user" || membershipView === "group";
 
     return (
-        <article className="project-detail-page">
-            <header className="project-detail-header">
-                <div>
-                    <span className="panel-label">Project</span>
-                    <h2>{props.project.name}</h2>
-                    <p>{props.project.description || "No project description set."}</p>
-                </div>
-                <div className="project-detail-actions">
-                    <span className="detail-status-pill">{props.project.is_active === false ? "inactive" : "active"}</span>
-                </div>
-            </header>
-            <div className="project-detail-content">
-                <section className="dashboard-panel">
-                    <PanelHeading label="Project data" title="Details" />
-                    <dl className="detail-list expanded-detail-list">
-                        <Detail label="Slug">{props.project.slug}</Detail>
-                        <Detail label="Organization ID">{props.project.organization_id}</Detail>
-                        <Detail label="Direct members">{props.memberships.length}</Detail>
-                        <Detail label="Users">{userMemberships.length}</Detail>
-                        <Detail label="Groups">{groupMemberships.length}</Detail>
-                    </dl>
-                </section>
-                <section className="dashboard-panel project-members-panel">
-                    <PanelHeading
-                        label="Access"
-                        title="Project members"
-                        action={
-                            canAddMember ? (
-                                <button className="button-primary compact-button" type="button" onClick={() => props.addProjectMember(membershipView)}>
-                                    Add {membershipView}
-                                </button>
-                            ) : null
-                        }
-                    />
-                    <div className="segmented-control project-member-tabs" role="tablist" aria-label="Project membership views">
-                        {[
-                            ["user", "Users", userMemberships.length],
-                            ["group", "Groups", groupMemberships.length],
-                            ["roles", "Roles", Object.keys(roleCounts).length]
-                        ].map(([key, label, count]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                className={membershipView === key ? "is-active" : ""}
-                                onClick={() => setMembershipView(key as ProjectMemberSubject | "roles")}
-                            >
-                                <span>{label}</span>
-                                <strong>{count}</strong>
+        <article className="project-detail-page project-detail-card-page">
+            <section className="dashboard-panel project-summary-panel">
+                <header className="project-detail-header">
+                    <div>
+                        <span className="panel-label">Project</span>
+                        <h2>{props.project.name}</h2>
+                        <p>{props.project.description || "No project description set."}</p>
+                    </div>
+                    <div className="project-detail-actions">
+                        <span className="detail-status-pill">{props.project.is_active === false ? "inactive" : "active"}</span>
+                    </div>
+                </header>
+                <dl className="detail-list expanded-detail-list">
+                    <Detail label="Slug">{props.project.slug}</Detail>
+                    <Detail label="Organization ID">{props.project.organization_id}</Detail>
+                    <Detail label="Direct members">{props.memberships.length}</Detail>
+                    <Detail label="Users">{userMemberships.length}</Detail>
+                    <Detail label="Groups">{groupMemberships.length}</Detail>
+                </dl>
+            </section>
+            <section className="dashboard-panel project-members-panel">
+                <PanelHeading
+                    label="Access"
+                    title="Project members"
+                    action={
+                        <div className="project-members-heading-actions">
+                            <div className="segmented-control project-member-tabs" role="tablist" aria-label="Project membership views">
+                                {[
+                                    ["user", "Users", userMemberships.length],
+                                    ["group", "Groups", groupMemberships.length]
+                                ].map(([key, label, count]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        className={membershipView === key ? "is-active" : ""}
+                                        onClick={() => setMembershipView(key as ProjectMemberSubject)}
+                                    >
+                                        <span>{label}</span>
+                                        <strong>{count}</strong>
+                                    </button>
+                                ))}
+                            </div>
+                            <button className="button-primary compact-button" type="button" onClick={() => props.addProjectMember(membershipView)}>
+                                Add {membershipView}
                             </button>
+                        </div>
+                    }
+                />
+                {props.loading && <EmptyState>Loading project members...</EmptyState>}
+                {!props.loading && visibleMemberships.length === 0 && <EmptyState>No direct {membershipView} memberships.</EmptyState>}
+                {!props.loading && visibleMemberships.length > 0 && (
+                    <div className="compact-list">
+                        {visibleMemberships.map((membership) => (
+                            <div className="compact-list-row action-list-row" key={membership.id}>
+                                <div>
+                                    <strong>{membership.subject?.label || membership.subject?.name || membership.subject?.username || `Subject ${membership.subject_id}`}</strong>
+                                    <span>{subjectTypeLabel(membership.subject_type)} / {membership.subject?.meta || "direct project member"}</span>
+                                </div>
+                                <div className="project-access-actions">
+                                    <button type="button" className="button-secondary compact-button danger-button" onClick={() => props.deleteProjectMember(membership)}>
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
                         ))}
                     </div>
-                    {props.loading && <EmptyState>Loading project members...</EmptyState>}
-                    {!props.loading && membershipView !== "roles" && visibleMemberships.length === 0 && <EmptyState>No direct {membershipView} memberships.</EmptyState>}
-                    {!props.loading && membershipView !== "roles" && visibleMemberships.length > 0 && (
-                        <div className="compact-list">
-                            {visibleMemberships.map((membership) => (
-                                <div className="compact-list-row action-list-row" key={membership.id}>
-                                    <div>
-                                        <strong>{membership.subject?.label || membership.subject?.name || membership.subject?.username || `Subject ${membership.subject_id}`}</strong>
-                                        <span>{subjectTypeLabel(membership.subject_type)} / {membership.subject?.meta || roleLabel(membership.project_role)}</span>
-                                    </div>
-                                    <div className="project-access-actions">
-                                        <select className="field-input compact-select" value={roleLabel(membership.project_role)} onChange={(event) => props.updateProjectMember(membership, event.target.value)}>
-                                            {["viewer", "operator", "developer", "manager", "owner"].map((role) => (
-                                                <option key={role} value={role}>
-                                                    {role}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <button type="button" className="button-secondary compact-button danger-button" onClick={() => props.deleteProjectMember(membership)}>
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {!props.loading && membershipView === "roles" && (
-                        <div className="table-count-grid project-role-grid">
-                            {["viewer", "operator", "developer", "manager", "owner"].map((role) => (
-                                <div key={role}>
-                                    <span>{role}</span>
-                                    <strong>{roleCounts[role] || 0}</strong>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
-            </div>
+                )}
+            </section>
         </article>
     );
 }

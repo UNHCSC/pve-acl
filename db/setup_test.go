@@ -56,8 +56,12 @@ func TestEnsureInitialSetupSeedsCoreRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count role permissions: %v", err)
 	}
-	if rolePermissionCount != int64(len(CorePermissionNames)) {
-		t.Fatalf("expected %d role permissions, got %d", len(CorePermissionNames), rolePermissionCount)
+	expectedRolePermissions := 0
+	for _, permissionNames := range SystemRolePermissions {
+		expectedRolePermissions += len(permissionNames)
+	}
+	if rolePermissionCount != int64(expectedRolePermissions) {
+		t.Fatalf("expected %d role permissions, got %d", expectedRolePermissions, rolePermissionCount)
 	}
 
 	roleBindingCount, err := RoleBindings.Count()

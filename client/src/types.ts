@@ -1,7 +1,7 @@
 export type ToastKind = "info" | "success" | "warning";
 export type ViewKey = "overview" | "directory" | "people" | "identity" | "access";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
-export type ModalKey = "org" | "project" | "user" | "group" | "role" | "grant" | "project-member" | null;
+export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "grant" | "project-member" | null;
 export type Selection =
     | { type: "org"; id: number }
     | { type: "project"; id: number; slug: string }
@@ -69,6 +69,22 @@ export type User = {
     auth_source?: string;
 };
 
+export type UserImportResult = {
+    query: string;
+    status: "imported" | "already-imported" | "failed" | string;
+    error?: string;
+    user?: User;
+    displayName?: string;
+    email?: string;
+};
+
+export type UserImportResponse = {
+    total: number;
+    imported: number;
+    failed: number;
+    results: UserImportResult[];
+};
+
 export type Group = {
     id: number;
     name: string;
@@ -76,6 +92,9 @@ export type Group = {
     description?: string;
     group_type?: number | string;
     group_type_label?: string;
+    owner_scope_type?: number | string;
+    owner_scope_label?: string;
+    owner_scope_id?: number | null;
     member_count?: number;
     role_binding_count?: number;
 };
@@ -92,6 +111,13 @@ export type Permission = {
     id: number;
     name: string;
     description?: string;
+};
+
+export type RolePermissionGrant = {
+    id: number;
+    role_id: number;
+    permission_id: number;
+    permission: Permission;
 };
 
 export type RoleBinding = {
@@ -127,8 +153,6 @@ export type ProjectMembership = {
     subject_type: number | string;
     subject_id: number;
     subject?: { label?: string; meta?: string; username?: string; slug?: string; name?: string };
-    project_role: number | string;
-    project_role_label?: string;
 };
 
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };

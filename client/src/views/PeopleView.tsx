@@ -2,14 +2,14 @@ import { EmptyState, PanelHeading } from "../components/common";
 import type { User } from "../types";
 import { displayUser, userMeta } from "../ui-helpers";
 
-export function PeopleView({ users, canCreate, openCreate }: { users: User[]; canCreate: boolean; openCreate: () => void }) {
+export function PeopleView({ users, canImport, openImport }: { users: User[]; canImport: boolean; openImport: () => void }) {
     return (
         <section className="dashboard-view is-active">
             <article className="dashboard-panel">
                 <PanelHeading
                     label="Identity"
                     title="Users"
-                    action={canCreate ? <button className="button-primary compact-button" type="button" onClick={openCreate}>New user</button> : null}
+                    action={canImport ? <button className="button-primary compact-button" type="button" onClick={openImport}>Import users</button> : null}
                 />
                 <div className="data-table-head people-table-head">
                     <span>User</span>

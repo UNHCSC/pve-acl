@@ -1,0 +1,74 @@
+/* Membership transfer and role editing controls. */
+.membership-modal-panel {
+    max-width: 880px;
+    width: min(100%, 880px);
+}
+
+[data-group-members-modal] .membership-modal-panel {
+    max-height: calc(100vh - 48px);
+    max-width: 1180px;
+    overflow: auto;
+    width: min(calc(100vw - 48px), 1180px);
+}
+
+.membership-transfer {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding: 20px;
+}
+
+[data-group-members-modal] .transfer-list {
+    min-height: 360px;
+}
+
+.membership-role-control {
+    display: grid;
+    gap: 14px;
+    grid-column: 1 / -1;
+}
+
+.inline-role-editor {
+    align-items: end;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(180px, 1fr) auto;
+}
+
+.membership-transfer section {
+    display: grid;
+    gap: 8px;
+}
+
+.transfer-list {
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    color: var(--color-ink);
+    min-height: 280px;
+    padding: 8px;
+}
+
+.transfer-list option {
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.transfer-actions {
+    align-self: center;
+    display: grid;
+    gap: 8px;
+}
+
+@media (max-width: 760px) {
+    .access-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .membership-transfer {
+        grid-template-columns: 1fr;
+    }
+
+    .transfer-actions {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}

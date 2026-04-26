@@ -1,0 +1,191 @@
+/* Modal surfaces, checkboxes, icon buttons, and toast stack. */
+.modal-backdrop[hidden],
+.account-menu[hidden],
+.account-dropdown[hidden],
+.settings-dropdown[hidden],
+[data-sign-in-action][hidden] {
+    display: none !important;
+}
+
+.modal-backdrop {
+    align-items: center;
+    background: rgba(16, 24, 40, 0.42);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 50;
+}
+
+.modal-panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-modal);
+    max-width: 520px;
+    overflow: hidden;
+    width: min(100%, 520px);
+}
+
+.modal-form {
+    display: grid;
+    gap: 18px;
+    padding: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 4px;
+}
+
+.form-message.is-warning {
+    background: var(--color-paper);
+    border: 1px solid var(--color-warning);
+    border-radius: 8px;
+    color: var(--color-warning);
+    padding: 11px 13px;
+}
+
+.checkbox-field {
+    align-items: center;
+    color: var(--color-ink);
+    display: flex;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    padding-top: 12px;
+}
+
+.checkbox-field input {
+    accent-color: var(--color-accent);
+    height: 16px;
+    width: 16px;
+}
+
+.icon-button {
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    color: var(--color-ink-muted);
+    display: flex;
+    font-weight: 700;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    width: 32px;
+}
+
+.icon-button:hover {
+    background: var(--color-paper);
+    color: var(--color-ink);
+}
+
+.toast-stack {
+    bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: fixed;
+    right: 20px;
+    width: min(380px, calc(100vw - 40px));
+    z-index: 80;
+}
+
+.toast-message {
+    --toast-color: var(--color-accent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-left: 4px solid var(--toast-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-popover);
+    color: var(--color-ink);
+    font-size: 14px;
+    font-weight: 600;
+    max-height: 140px;
+    overflow: hidden;
+    padding: 13px 15px;
+    position: relative;
+    transform-origin: bottom right;
+    transition:
+        max-height 220ms ease,
+        opacity 180ms ease,
+        padding 220ms ease,
+        transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: toast-enter 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-message::after {
+    animation: toast-progress var(--toast-duration, 4200ms) linear forwards;
+    background: var(--toast-color);
+    bottom: 0;
+    content: "";
+    height: 3px;
+    left: 0;
+    position: absolute;
+    transform-origin: left center;
+    width: 100%;
+}
+
+.toast-message.is-warning {
+    --toast-color: var(--color-warning);
+}
+
+.toast-message.is-success {
+    --toast-color: var(--color-success);
+}
+
+.toast-message.is-leaving {
+    max-height: 0;
+    opacity: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+    transform: translateX(18px) scale(0.98);
+}
+
+.toast-message.is-leaving::after {
+    animation-play-state: paused;
+}
+
+@keyframes toast-enter {
+    from {
+        max-height: 0;
+        opacity: 0;
+        padding-bottom: 0;
+        padding-top: 0;
+        transform: translateX(22px) scale(0.98);
+    }
+
+    to {
+        max-height: 140px;
+        opacity: 1;
+        padding-bottom: 13px;
+        padding-top: 13px;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes toast-progress {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast-message,
+    .toast-message::after {
+        animation: none;
+        transition: none;
+    }
+
+    .toast-message::after {
+        transform: scaleX(0);
+    }
+}

@@ -1,0 +1,347 @@
+/* Dashboard panels, tables, lists, detail blocks, and inline forms. */
+.dashboard-panel {
+    overflow: hidden;
+}
+
+.panel-heading {
+    padding: 18px 20px;
+}
+
+.identity-panel,
+.compact-list-row,
+.empty-state {
+    padding: 18px 20px;
+}
+
+.identity-panel {
+    align-items: center;
+    display: flex;
+    gap: 14px;
+}
+
+.identity-panel strong,
+.compact-list-row strong,
+.data-table-row strong {
+    color: var(--color-ink);
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.identity-panel span,
+.compact-list-row span,
+.data-table-row span {
+    color: var(--color-ink-muted);
+    display: block;
+    font-size: 13px;
+    margin-top: 3px;
+}
+
+.table-count-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.table-count-grid > div {
+    border-bottom: 1px solid var(--color-line);
+    border-right: 1px solid var(--color-line);
+    min-height: 92px;
+    padding: 18px 20px;
+}
+
+.table-count-grid > div:nth-child(2n) {
+    border-right: 0;
+}
+
+.table-count-grid > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+}
+
+.table-count-grid span {
+    color: var(--color-ink-muted);
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.table-count-grid strong {
+    color: var(--color-ink);
+    display: block;
+    font-size: 26px;
+    font-weight: 700;
+    margin-top: 8px;
+}
+
+.data-table {
+    overflow-x: auto;
+}
+
+.data-table-head,
+.data-table-row {
+    align-items: center;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.8fr) 120px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.data-table-head {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    padding-bottom: 11px;
+    padding-top: 11px;
+    text-transform: uppercase;
+}
+
+.data-table-row {
+    border-bottom: 1px solid var(--color-line);
+    min-height: 68px;
+    padding-bottom: 14px;
+    padding-top: 14px;
+}
+
+.data-table-row:last-child {
+    border-bottom: 0;
+}
+
+.compact-list {
+    display: grid;
+}
+
+.compact-list-row {
+    border-bottom: 1px solid var(--color-line);
+}
+
+.compact-list-row:last-child {
+    border-bottom: 0;
+}
+
+.permission-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 18px 20px;
+}
+
+.permission-pill {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 9px;
+}
+
+.recent-list {
+    display: grid;
+}
+
+.recent-row {
+    align-items: center;
+    border-bottom: 1px solid var(--color-line);
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    min-height: 64px;
+    padding: 14px 20px;
+}
+
+.recent-row:last-child {
+    border-bottom: 0;
+}
+
+.recent-row strong {
+    color: var(--color-ink);
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.recent-row span {
+    color: var(--color-ink-muted);
+    display: block;
+    font-size: 13px;
+    margin-top: 3px;
+}
+
+.recent-row time {
+    color: var(--color-ink-muted);
+    flex: 0 0 auto;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+    .data-table-head,
+    .data-table-row {
+        grid-template-columns: minmax(180px, 1fr) 120px 96px;
+    }
+
+    .table-count-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .table-count-grid > div,
+    .table-count-grid > div:nth-child(2n) {
+        border-right: 0;
+    }
+}
+
+.people-table-head,
+.people-table-row {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) 120px;
+}
+
+.data-table-row,
+.recent-row {
+    cursor: pointer;
+}
+
+.data-table-row:hover,
+.recent-row:hover {
+    background: var(--color-paper);
+}
+
+.data-table-row.is-selected {
+    background: var(--color-selected-soft);
+}
+
+.detail-body {
+    display: grid;
+    gap: 18px;
+    padding: 18px 20px;
+}
+
+.detail-list {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 14px 16px;
+}
+
+.detail-list div {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.detail-list dt {
+    color: var(--color-ink-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.detail-list dd {
+    color: var(--color-ink);
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.inline-form {
+    align-items: end;
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 160px 120px 160px auto;
+}
+
+.project-members-heading-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.import-users-input {
+    min-height: 160px;
+    resize: vertical;
+}
+
+.import-results {
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.import-summary {
+    align-items: center;
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-line);
+    display: grid;
+    gap: 6px 10px;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+    padding: 12px 14px;
+}
+
+.import-summary strong {
+    color: var(--color-ink);
+    font-size: 18px;
+}
+
+.import-summary span {
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.import-result-list {
+    display: grid;
+    max-height: 240px;
+    overflow: auto;
+}
+
+.import-result-row {
+    align-items: center;
+    border-bottom: 1px solid var(--color-line);
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+    padding: 11px 14px;
+}
+
+.import-result-row:last-child {
+    border-bottom: 0;
+}
+
+.import-result-row strong,
+.import-result-row span {
+    display: block;
+}
+
+.import-result-row strong {
+    color: var(--color-ink);
+    font-size: 14px;
+}
+
+.import-result-row span {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.import-result-row.is-failed > span {
+    color: var(--color-danger);
+}
+
+.import-result-row.is-imported > span {
+    color: var(--color-success);
+}
+
+@media (max-width: 900px) {
+    .inline-form,
+    .detail-list {
+        grid-template-columns: 1fr;
+    }
+}

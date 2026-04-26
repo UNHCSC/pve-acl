@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func currentUserCan(c *fiber.Ctx, permission string, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
+func currentUserCan(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
 	authUser := currentUser(c)
 	dbUser := currentDBUser(c)
 	if authUser == nil || dbUser == nil {
@@ -23,11 +23,11 @@ func currentUserCan(c *fiber.Ctx, permission string, scopeType db.RoleBindingSco
 	}
 
 	return db.HasPermission(db.PermissionCheck{
-		UserID:         dbUser.ID,
-		GroupIDs:       groupIDs,
-		PermissionName: permission,
-		ScopeType:      scopeType,
-		ScopeID:        scopeID,
+		UserID:     dbUser.ID,
+		GroupIDs:   groupIDs,
+		Permission: permission,
+		ScopeType:  scopeType,
+		ScopeID:    scopeID,
 	})
 }
 
@@ -68,7 +68,7 @@ func currentUserIsSiteAdmin(c *fiber.Ctx) bool {
 	return false
 }
 
-func requirePermission(c *fiber.Ctx, permission string, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
+func requirePermission(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
 	allowed, err := currentUserCan(c, permission, scopeType, scopeID)
 	if err != nil {
 		return false, c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

@@ -144,7 +144,7 @@ func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjec
 	}
 
 	for _, org := range orgs {
-		allowed, err := currentUserCan(c, "org.manage", db.RoleBindingScopeOrg, &org.ID)
+		allowed, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeOrg, &org.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -184,14 +184,14 @@ func postCreateProject(c *fiber.Ctx) error {
 		})
 	}
 
-	allowed, err := currentUserCan(c, "project.manage", db.RoleBindingScopeGlobal, nil)
+	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "permission check failed",
 		})
 	}
 	if !allowed {
-		allowed, err = currentUserCan(c, "project.manage", db.RoleBindingScopeOrg, &organizationID)
+		allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeOrg, &organizationID)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "permission check failed",
@@ -219,7 +219,12 @@ func postCreateProject(c *fiber.Ctx) error {
 
 	dbUser := currentDBUser(c)
 	if dbUser != nil {
-		if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+		if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to assign project owner",
+			})
+		}
+		if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "failed to assign project owner",
 			})
@@ -461,15 +466,15 @@ func organizationParamError(c *fiber.Ctx, err error) error {
 
 func currentUserCanCreateOrganization(c *fiber.Ctx, parentOrgID *int) (bool, error) {
 	if parentOrgID == nil {
-		return currentUserCan(c, "org.manage", db.RoleBindingScopeGlobal, nil)
+		return currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
 	}
 	return currentUserCanManageOrganization(c, *parentOrgID)
 }
 
 func currentUserCanManageOrganization(c *fiber.Ctx, orgID int) (bool, error) {
-	allowed, err := currentUserCan(c, "org.manage", db.RoleBindingScopeGlobal, nil)
+	allowed, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
 		return allowed, err
 	}
-	return currentUserCan(c, "org.manage", db.RoleBindingScopeOrg, &orgID)
+	return currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeOrg, &orgID)
 }

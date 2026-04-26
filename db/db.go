@@ -24,6 +24,7 @@ var (
 	CloudGroups                    *gomysql.RegisteredStruct[CloudGroup]
 	CloudGroupMemberships          *gomysql.RegisteredStruct[CloudGroupMembership]
 	Organizations                  *gomysql.RegisteredStruct[Organization]
+	OrganizationMemberships        *gomysql.RegisteredStruct[OrganizationMembership]
 	Projects                       *gomysql.RegisteredStruct[Project]
 	ProjectMemberships             *gomysql.RegisteredStruct[ProjectMembership]
 	Roles                          *gomysql.RegisteredStruct[Role]
@@ -33,6 +34,7 @@ var (
 	QuotaPolicies                  *gomysql.RegisteredStruct[QuotaPolicy]
 	QuotaBindings                  *gomysql.RegisteredStruct[QuotaBinding]
 	Resources                      *gomysql.RegisteredStruct[Resource]
+	ResourceOwners                 *gomysql.RegisteredStruct[ResourceOwner]
 	ProxmoxClusters                *gomysql.RegisteredStruct[ProxmoxCluster]
 	ProxmoxNodes                   *gomysql.RegisteredStruct[ProxmoxNode]
 	VirtualMachines                *gomysql.RegisteredStruct[VirtualMachine]
@@ -107,6 +109,10 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 
+	if err = registerAndMigrate("OrganizationMemberships", &OrganizationMemberships, OrganizationMembership{}, migrationOpts); err != nil {
+		return
+	}
+
 	if err = registerAndMigrate("Projects", &Projects, Project{}, migrationOpts); err != nil {
 		return
 	}
@@ -140,6 +146,10 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("Resources", &Resources, Resource{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("ResourceOwners", &ResourceOwners, ResourceOwner{}, migrationOpts); err != nil {
 		return
 	}
 

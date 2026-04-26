@@ -23,7 +23,7 @@ func getGroupsForUser(c *fiber.Ctx) (err error) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
 	}
 	if !strings.EqualFold(username, dbUser.Username) {
-		allowed, allowErr := requirePermission(c, "user.manage", db.RoleBindingScopeGlobal, nil)
+		allowed, allowErr := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
 		if allowErr != nil || !allowed {
 			return allowErr
 		}
@@ -48,7 +48,7 @@ func getUsersForGroup(c *fiber.Ctx) (err error) {
 		return
 	}
 
-	allowed, allowErr := requirePermission(c, "group.manage", db.RoleBindingScopeGlobal, nil)
+	allowed, allowErr := requirePermission(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
 	if allowErr != nil || !allowed {
 		return allowErr
 	}

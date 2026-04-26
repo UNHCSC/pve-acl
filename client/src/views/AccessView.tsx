@@ -1,6 +1,10 @@
-import { CompactList, EmptyState, PanelHeading } from "../components/common";
-import type { AccessData, RoleBinding, Summary } from "../types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { CompactList, EmptyState, ModalFrame, PanelHeading } from "../components/common";
+import { apiFetch } from "../api";
+import type { AccessData, Permission, Role, RoleBinding, RolePermissionGrant, Summary } from "../types";
 import { scopeTypeLabel } from "../ui-helpers";
+import { useFormState } from "react-dom";
 
 export function AccessView({
     access,
@@ -8,7 +12,8 @@ export function AccessView({
     openGroup,
     openRole,
     openGrant,
-    deleteGrant
+    deleteGrant,
+    saveRolePermissions
 }: {
     access: AccessData;
     capabilities: Summary["capabilities"];
@@ -16,9 +21,11 @@ export function AccessView({
     openRole: () => void;
     openGrant: () => void;
     deleteGrant: (grant: RoleBinding) => void;
+    saveRolePermissions: (role: Role, permissionIDs: number[]) => Promise<void>;
 }) {
     const canManageGroups = Boolean(capabilities.canManageGroups);
     const canManageRoles = Boolean(capabilities.canManageRoles);
+    const [editingRole, setEditingRole] = useState<Role | null>(null);
 
     return (
         <section className="dashboard-view is-active">
@@ -37,7 +44,23 @@ export function AccessView({
                         title="Permission sets"
                         action={canManageRoles ? <button className="button-primary compact-button" type="button" onClick={openRole}>New role</button> : null}
                     />
-                    <CompactList items={access.roles} render={(role) => <><strong>{role.name}</strong><span>{role.description || `${role.permission_count || 0} permissions`}</span></>} />
+                    {access.roles.length === 0 && <EmptyState>No roles found.</EmptyState>}
+                    {access.roles.length > 0 && (
+                        <div className="compact-list">
+                            {access.roles.map((role) => (
+                                <button
+                                    className="compact-list-row access-select-row"
+                                    key={role.id}
+                                    type="button"
+                                    onClick={() => setEditingRole(role)}
+                                >
+                                    <strong>{roleDisplayName(role)}</strong>
+                                    <span>{roleDisplayDescription(role)}</span>
+                                    <small>{role.is_system_role ? "system" : "custom"}</small>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </article>
                 <article className="dashboard-panel access-grants-panel">
                     <PanelHeading
@@ -50,7 +73,7 @@ export function AccessView({
                         {access.roleBindings.map((grant) => (
                             <div className="compact-list-row action-list-row" key={grant.id}>
                                 <div>
-                                    <strong>{grant.role?.name || `Role ${grant.role_id}`}</strong>
+                                    <strong>{grant.role ? roleDisplayName(grant.role) : `Role ${grant.role_id}`}</strong>
                                     <span>
                                         {grant.subject?.label || grant.subject?.name || `Subject ${grant.subject_id}`} / {scopeTypeLabel(grant.scope_type)} {grant.scope_id || ""}
                                     </span>
@@ -64,17 +87,356 @@ export function AccessView({
                         ))}
                     </div>
                 </article>
-                <article className="dashboard-panel permissions-panel">
-                    <PanelHeading label="Permissions" title="Registered actions" />
-                    <div className="permission-cloud">
-                        {access.permissions.map((permission) => (
-                            <span className="permission-pill" key={permission.id}>
-                                {permission.name}
-                            </span>
-                        ))}
-                    </div>
-                </article>
             </div>
+            {editingRole && (
+                <RolePermissionModal
+                    role={editingRole}
+                    permissions={access.permissions}
+                    canManageRoles={canManageRoles}
+                    saveRolePermissions={saveRolePermissions}
+                    onClose={() => setEditingRole(null)}
+                />
+            )}
         </section>
     );
+}
+
+function roleDisplayName(role: Role): string {
+    const labels: Record<string, string> = {
+        ProjectViewer: "Project read access",
+        ProjectOperator: "Project power access",
+        ProjectDeveloper: "Project build access",
+        ProjectManager: "Project administration",
+        ProjectOwner: "Project full control",
+        ResourceUser: "Resource console access"
+    };
+    return labels[role.name] || role.name;
+}
+
+function roleDisplayDescription(role: Role): string {
+    const descriptions: Record<string, string> = {
+        ProjectViewer: "Can inspect project resources.",
+        ProjectOperator: "Can inspect resources and use power or console actions.",
+        ProjectDeveloper: "Can create and operate normal project resources.",
+        ProjectManager: "Can administer project resources, groups, and quota.",
+        ProjectOwner: "Full control inside the project scope.",
+        ResourceUser: "Semi-private resource console and power access."
+    };
+    return descriptions[role.name] || role.description || `${role.permission_count || 0} permissions`;
+}
+
+function RolePermissionModal({
+    role,
+    permissions,
+    canManageRoles,
+    saveRolePermissions,
+    onClose
+}: {
+    role: Role;
+    permissions: Permission[];
+    canManageRoles: boolean;
+    saveRolePermissions: (role: Role, permissionIDs: number[]) => Promise<void>;
+    onClose: () => void;
+}) {
+    const editable = canManageRoles && !role.is_system_role;
+    const [selectedPermissionIDs, setSelectedPermissionIDs] = useState<Set<number>>(new Set());
+    const [savingPermissions, setSavingPermissions] = useState(false);
+    const [permissionError, setPermissionError] = useState("");
+    const permissionTree = useMemo(() => buildPermissionTree(permissions), [permissions]);
+    const rolePermissionsQuery = useQuery({
+        queryKey: ["roles", role.id, "permissions"],
+        queryFn: () => apiFetch<RolePermissionGrant[]>(`/api/v1/roles/${role.id}/permissions`)
+    });
+    const persistedPermissionIDs = useMemo(
+        () => new Set((rolePermissionsQuery.data || []).map((grant) => grant.permission_id)),
+        [rolePermissionsQuery.data]
+    );
+    const permissionsDirty = !setsEqual(persistedPermissionIDs, selectedPermissionIDs);
+
+    useEffect(() => {
+        setSelectedPermissionIDs(new Set((rolePermissionsQuery.data || []).map((grant) => grant.permission_id)));
+        setPermissionError("");
+    }, [rolePermissionsQuery.data, role.id]);
+
+    const togglePermissions = (permissionIDs: number[], checked: boolean) => {
+        setSelectedPermissionIDs((current) => {
+            const next = new Set(current);
+            for (const permissionID of permissionIDs) {
+                if (checked) {
+                    next.add(permissionID);
+                } else {
+                    next.delete(permissionID);
+                }
+            }
+            return next;
+        });
+    };
+
+    const savePermissions = async () => {
+        setSavingPermissions(true);
+        setPermissionError("");
+        try {
+            await saveRolePermissions(role, Array.from(selectedPermissionIDs));
+            await rolePermissionsQuery.refetch();
+        } catch (error) {
+            setPermissionError(error instanceof Error ? error.message : "Failed to update role permissions");
+        } finally {
+            setSavingPermissions(false);
+        }
+    };
+
+    return (
+        <ModalFrame title={roleDisplayName(role)} label="Role permissions" onClose={onClose}>
+            <div className="role-permission-modal">
+                <div className="role-editor-summary">
+                    <div>
+                        <strong>{roleDisplayName(role)}</strong>
+                        <span>{roleDisplayDescription(role)}</span>
+                    </div>
+                    <span>{role.is_system_role ? "system role" : "custom role"}</span>
+                </div>
+                {role.is_system_role && <p className="form-message">System role permissions are managed by setup.</p>}
+                {permissionError && <p className="form-message is-warning">{permissionError}</p>}
+                {rolePermissionsQuery.isLoading && <EmptyState>Loading permissions...</EmptyState>}
+                {rolePermissionsQuery.error && <p className="form-message is-warning">Failed to load role permissions.</p>}
+                {!rolePermissionsQuery.isLoading && !rolePermissionsQuery.error && (
+                    <PermissionTree
+                        editable={editable}
+                        nodes={permissionTree}
+                        saving={savingPermissions}
+                        selectedPermissionIDs={selectedPermissionIDs}
+                        togglePermissions={togglePermissions}
+                    />
+                )}
+                <div className="modal-actions">
+                    <button type="button" className="button-secondary" onClick={onClose} disabled={savingPermissions}>
+                        Close
+                    </button>
+                    {editable && (
+                        <button className="button-primary" type="button" disabled={!permissionsDirty || savingPermissions || rolePermissionsQuery.isFetching} onClick={savePermissions}>
+                            Save permissions
+                        </button>
+                    )}
+                </div>
+            </div>
+        </ModalFrame>
+    );
+}
+
+function PermissionTree({
+    nodes,
+    selectedPermissionIDs,
+    editable,
+    saving,
+    togglePermissions
+}: {
+    nodes: PermissionTreeNode[];
+    selectedPermissionIDs: Set<number>;
+    editable: boolean;
+    saving: boolean;
+    togglePermissions: (permissionIDs: number[], checked: boolean) => void;
+}) {
+    if (nodes.length === 0) {
+        return <EmptyState>No permissions registered.</EmptyState>;
+    }
+
+    return (
+        <ul className="permission-tree">
+            {nodes.map((node) => (
+                <PermissionTreeItem
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    editable={editable}
+                    saving={saving}
+                    selectedPermissionIDs={selectedPermissionIDs}
+                    togglePermissions={togglePermissions}
+                />
+            ))}
+        </ul>
+    );
+}
+
+function PermissionTreeItem({
+    node,
+    depth,
+    selectedPermissionIDs,
+    editable,
+    saving,
+    togglePermissions
+}: {
+    node: PermissionTreeNode;
+    depth: number;
+    selectedPermissionIDs: Set<number>;
+    editable: boolean;
+    saving: boolean;
+    togglePermissions: (permissionIDs: number[], checked: boolean) => void;
+}) {
+    const permissionIDs = collectPermissionIDs(node);
+    const selectedCount = permissionIDs.filter((permissionID) => selectedPermissionIDs.has(permissionID)).length;
+    const checked = permissionIDs.length > 0 && selectedCount === permissionIDs.length;
+    const indeterminate = selectedCount > 0 && selectedCount < permissionIDs.length;
+
+    if (node.permission && node.children.length === 0) {
+        return (
+            <li className={`permission-tree-item ${depth > 0 ? "has-parent" : ""}`} style={{ marginLeft: depth > 0 ? "24px" : 0 }}>
+                <label className="permission-tree-leaf">
+                    <input
+                        type="checkbox"
+                        checked={selectedPermissionIDs.has(node.permission.id)}
+                        disabled={!editable || saving}
+                        onChange={(event) => togglePermissions([node.permission!.id], event.currentTarget.checked)}
+                    />
+                    <span>{node.label}</span>
+                    <small>{node.path}</small>
+                </label>
+            </li>
+        );
+    }
+
+    return (
+        <li className={`permission-tree-branch permission-tree-item ${depth > 0 ? "has-parent" : ""}`} style={{ marginLeft: depth > 0 ? "24px" : 0 }}>
+            <details open>
+                <summary>
+                    <TreeCheckbox
+                        checked={checked}
+                        disabled={!editable || saving}
+                        indeterminate={indeterminate}
+                        onChange={(checkedValue) => togglePermissions(permissionIDs, checkedValue)}
+                    />
+                    <span>{node.label}</span>
+                    <small>{selectedCount}/{permissionIDs.length}</small>
+                </summary>
+                <ul className="permission-tree-children">
+                    {node.permission && (
+                        <PermissionTreeItem
+                            node={{ children: [], label: node.path, path: node.path, permission: node.permission }}
+                            depth={depth + 1}
+                            editable={editable}
+                            saving={saving}
+                            selectedPermissionIDs={selectedPermissionIDs}
+                            togglePermissions={togglePermissions}
+                        />
+                    )}
+                    {node.children.map((child) => (
+                        <PermissionTreeItem
+                            key={child.path}
+                            node={child}
+                            depth={depth + 1}
+                            editable={editable}
+                            saving={saving}
+                            selectedPermissionIDs={selectedPermissionIDs}
+                            togglePermissions={togglePermissions}
+                        />
+                    ))}
+                </ul>
+            </details>
+        </li>
+    );
+}
+
+function TreeCheckbox({
+    checked,
+    disabled,
+    indeterminate,
+    onChange
+}: {
+    checked: boolean;
+    disabled: boolean;
+    indeterminate: boolean;
+    onChange: (checked: boolean) => void;
+}) {
+    const ref = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (ref.current) {
+            ref.current.indeterminate = indeterminate;
+        }
+    }, [indeterminate]);
+
+    return (
+        <input
+            ref={ref}
+            type="checkbox"
+            checked={checked}
+            disabled={disabled}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+    );
+}
+
+type PermissionTreeNode = {
+    children: PermissionTreeNode[];
+    label: string;
+    path: string;
+    permission?: Permission;
+};
+
+type MutablePermissionTreeNode = {
+    children: Map<string, MutablePermissionTreeNode>;
+    label: string;
+    path: string;
+    permission?: Permission;
+};
+
+function buildPermissionTree(permissions: Permission[]): PermissionTreeNode[] {
+    const roots = new Map<string, MutablePermissionTreeNode>();
+    const sortedPermissions = [...permissions].sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const permission of sortedPermissions) {
+        const segments = permission.name.split(".").filter(Boolean);
+        if (segments.length === 0) {
+            continue;
+        }
+        let level = roots;
+        let node: MutablePermissionTreeNode | undefined;
+        const path: string[] = [];
+        for (const segment of segments) {
+            path.push(segment);
+            node = level.get(segment);
+            if (!node) {
+                node = {
+                    children: new Map(),
+                    label: segment,
+                    path: path.join(".")
+                };
+                level.set(segment, node);
+            }
+            level = node.children;
+        }
+        if (node) {
+            node.permission = permission;
+        }
+    }
+
+    return Array.from(roots.values()).map(finalizePermissionTreeNode);
+}
+
+function finalizePermissionTreeNode(node: MutablePermissionTreeNode): PermissionTreeNode {
+    return {
+        children: Array.from(node.children.values()).map(finalizePermissionTreeNode),
+        label: node.label,
+        path: node.path,
+        permission: node.permission
+    };
+}
+
+function collectPermissionIDs(node: PermissionTreeNode): number[] {
+    return [
+        ...(node.permission ? [node.permission.id] : []),
+        ...node.children.flatMap(collectPermissionIDs)
+    ];
+}
+
+function setsEqual(left: Set<number>, right: Set<number>) {
+    if (left.size !== right.size) {
+        return false;
+    }
+    for (const value of left) {
+        if (!right.has(value)) {
+            return false;
+        }
+    }
+    return true;
 }

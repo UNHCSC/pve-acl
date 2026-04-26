@@ -65,8 +65,12 @@ func TestProjectAPIListAndCreate(t *testing.T) {
 	if len(memberships) != 1 {
 		t.Fatalf("expected creator owner membership, got %d memberships", len(memberships))
 	}
-	if memberships[0].SubjectType != db.ProjectMemberSubjectUser || memberships[0].ProjectRole != db.ProjectRoleOwner {
+	if memberships[0].SubjectType != db.ProjectMemberSubjectUser {
 		t.Fatalf("expected creator owner membership, got %#v", memberships[0])
+	}
+	projectRole, found, err := db.ProjectMemberAccessRole(projects[0].ID, db.ProjectMemberSubjectUser, memberships[0].SubjectID)
+	if err != nil || !found || projectRole != db.ProjectRoleOwner {
+		t.Fatalf("expected creator owner role binding, role=%v found=%v err=%v", projectRole, found, err)
 	}
 }
 
@@ -209,7 +213,7 @@ func TestProjectAPIOwnerMembershipCanViewProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
-	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil {
 		t.Fatalf("EnsureProjectMembership returned error: %v", err)
 	}
 
@@ -248,7 +252,7 @@ func TestProjectMembershipsIncludeHumanReadableSubjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
-	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil {
 		t.Fatalf("EnsureProjectMembership returned error: %v", err)
 	}
 
@@ -305,8 +309,11 @@ func TestProjectManagerCanAddProjectMembershipByRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureUser target returned error: %v", err)
 	}
-	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID); err != nil {
 		t.Fatalf("EnsureProjectMembership manager returned error: %v", err)
+	}
+	if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+		t.Fatalf("EnsureProjectMemberAccessRole manager returned error: %v", err)
 	}
 
 	token := authenticateTestUser(t, "project-manager", false)
@@ -329,17 +336,84 @@ func TestProjectManagerCanAddProjectMembershipByRef(t *testing.T) {
 	if resp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
+	var created map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created membership: %v", err)
+	}
+	if created["subject_type"] == nil || created["project_role"] == nil {
+		t.Fatalf("expected created membership payload, got %#v", created)
+	}
 
-	memberships, err := db.ProjectMembershipsForProject(project.ID)
+	assertProjectMemberRole(t, project.ID, db.ProjectMemberSubjectUser, target.ID, db.ProjectRoleDeveloper)
+}
+
+func TestProjectManagerCanAddProjectGroupByExternalRef(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	project, err := db.CreateProject(db.ProjectCreateInput{
+		Name:        "Group Scoped Access",
+		ProjectType: db.ProjectTypeCustom,
+	})
 	if err != nil {
-		t.Fatalf("ProjectMembershipsForProject returned error: %v", err)
+		t.Fatalf("CreateProject returned error: %v", err)
 	}
-	for _, membership := range memberships {
-		if membership.SubjectType == db.ProjectMemberSubjectUser && membership.SubjectID == target.ID && membership.ProjectRole == db.ProjectRoleDeveloper {
-			return
-		}
+	manager, _, err := db.EnsureUser("project-group-manager", "Project Group Manager", "manager@example.test", "local", "project-group-manager")
+	if err != nil {
+		t.Fatalf("EnsureUser manager returned error: %v", err)
 	}
-	t.Fatalf("expected target developer membership, got %#v", memberships)
+	group, _, err := db.EnsureCloudGroup("Teaching Staff", "teaching-staff", db.GroupTypeProject)
+	if err != nil {
+		t.Fatalf("EnsureCloudGroup returned error: %v", err)
+	}
+	group.SyncSource = db.CloudGroupSyncSourceLDAP
+	group.ExternalID = "ipa-teaching-staff"
+	group.SyncMembership = true
+	if err := db.UpdateCloudGroup(group); err != nil {
+		t.Fatalf("UpdateCloudGroup returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID); err != nil {
+		t.Fatalf("EnsureProjectMembership manager returned error: %v", err)
+	}
+	if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+		t.Fatalf("EnsureProjectMemberAccessRole manager returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "project-group-manager", false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Post("/api/v1/projects/:id/memberships", postCreateProjectMembership)
+
+	req := httptest.NewRequest("POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships", bytes.NewBufferString(`{
+		"subjectType": "group",
+		"subjectRef": "ipa-teaching-staff",
+		"projectRole": "developer"
+	}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("membership route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+	var created map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created membership: %v", err)
+	}
+	subject, ok := created["subject"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected subject payload, got %#v", created)
+	}
+	if subject["slug"] != "teaching-staff" {
+		t.Fatalf("expected group subject payload, got %#v", subject)
+	}
+
+	assertProjectMemberRole(t, project.ID, db.ProjectMemberSubjectGroup, group.ID, db.ProjectRoleDeveloper)
 }
 
 func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
@@ -363,11 +437,17 @@ func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureUser target returned error: %v", err)
 	}
-	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, manager.ID); err != nil {
 		t.Fatalf("EnsureProjectMembership manager returned error: %v", err)
 	}
-	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, target.ID, db.ProjectRoleViewer); err != nil {
+	if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, manager.ID, db.ProjectRoleManager); err != nil {
+		t.Fatalf("EnsureProjectMemberAccessRole manager returned error: %v", err)
+	}
+	if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, target.ID); err != nil {
 		t.Fatalf("EnsureProjectMembership target returned error: %v", err)
+	}
+	if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, target.ID, db.ProjectRoleViewer); err != nil {
+		t.Fatalf("EnsureProjectMemberAccessRole target returned error: %v", err)
 	}
 
 	var targetMembership *db.ProjectMembership
@@ -404,13 +484,7 @@ func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	updated, err := db.ProjectMemberships.Select(targetMembership.ID)
-	if err != nil {
-		t.Fatalf("ProjectMemberships.Select returned error: %v", err)
-	}
-	if updated == nil || updated.ProjectRole != db.ProjectRoleOwner {
-		t.Fatalf("expected target owner membership, got %#v", updated)
-	}
+	assertProjectMemberRole(t, project.ID, db.ProjectMemberSubjectUser, target.ID, db.ProjectRoleOwner)
 }
 
 func TestProjectAPIDeleteRemovesProject(t *testing.T) {
@@ -482,7 +556,7 @@ func TestProjectAPIDeleteAllowsOrgScopedProjectManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureRole returned error: %v", err)
 	}
-	permission, found, err := db.GetPermissionByName("project.manage")
+	permission, found, err := db.GetPermissionByName(db.PermissionProjectManage.String())
 	if err != nil || !found {
 		t.Fatalf("expected project.manage permission, found=%v err=%v", found, err)
 	}
@@ -507,5 +581,13 @@ func TestProjectAPIDeleteAllowsOrgScopedProjectManager(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("expected 204, got %d", resp.StatusCode)
+	}
+}
+
+func assertProjectMemberRole(t *testing.T, projectID int, subjectType db.ProjectMemberSubject, subjectID int, expected db.ProjectRole) {
+	t.Helper()
+	role, found, err := db.ProjectMemberAccessRole(projectID, subjectType, subjectID)
+	if err != nil || !found || role != expected {
+		t.Fatalf("expected project member role %v, got role=%v found=%v err=%v", expected, role, found, err)
 	}
 }

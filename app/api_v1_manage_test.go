@@ -273,6 +273,13 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 	if grantResp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("expected 201, got %d", grantResp.StatusCode)
 	}
+	var grant map[string]any
+	if err := json.NewDecoder(grantResp.Body).Decode(&grant); err != nil {
+		t.Fatalf("decode grant response: %v", err)
+	}
+	if grant["permission_id"] == nil || grant["permission"] == nil {
+		t.Fatalf("expected role permission payload, got %#v", grant)
+	}
 
 	listReq := httptest.NewRequest("GET", "/api/v1/roles/"+strconv.Itoa(roleID)+"/permissions", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
@@ -292,7 +299,7 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 		t.Fatalf("expected one permission grant, got %#v", grants)
 	}
 	permission := grants[0]["permission"].(map[string]any)
-	if permission["name"] != "vm.read" {
+	if permission["name"] != db.PermissionVMRead.String() {
 		t.Fatalf("expected vm.read permission, got %#v", permission)
 	}
 }

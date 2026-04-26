@@ -9,7 +9,7 @@ func TestHasPermissionAllowsDirectUserRoleBinding(t *testing.T) {
 	initTestDB(t)
 	now := time.Now().UTC()
 
-	permission, role := insertTestRoleWithPermission(t, "VMOperator", "vm.start", now)
+	role := insertTestRoleWithPermission(t, "VMOperator", PermissionVMStart, now)
 	projectScopeID := 42
 
 	if created, err := ensureRoleBinding(role.ID, RoleBindingSubjectUser, 1001, RoleBindingScopeProject, &projectScopeID, now); err != nil {
@@ -19,10 +19,10 @@ func TestHasPermissionAllowsDirectUserRoleBinding(t *testing.T) {
 	}
 
 	allowed, err := HasPermission(PermissionCheck{
-		UserID:         1001,
-		PermissionName: permission.Name,
-		ScopeType:      RoleBindingScopeProject,
-		ScopeID:        &projectScopeID,
+		UserID:     1001,
+		Permission: PermissionVMStart,
+		ScopeType:  RoleBindingScopeProject,
+		ScopeID:    &projectScopeID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error: %v", err)
@@ -36,7 +36,7 @@ func TestHasPermissionAllowsGroupRoleBinding(t *testing.T) {
 	initTestDB(t)
 	now := time.Now().UTC()
 
-	permission, role := insertTestRoleWithPermission(t, "NetworkManager", "network.update", now)
+	role := insertTestRoleWithPermission(t, "NetworkManager", PermissionNetworkUpdate, now)
 	group := insertTestCloudGroup(t, "Teaching Staff", "teaching-staff", now)
 	groupScopeID := 77
 
@@ -47,11 +47,11 @@ func TestHasPermissionAllowsGroupRoleBinding(t *testing.T) {
 	}
 
 	allowed, err := HasPermission(PermissionCheck{
-		UserID:         1001,
-		GroupIDs:       []int{group.ID},
-		PermissionName: permission.Name,
-		ScopeType:      RoleBindingScopeGroup,
-		ScopeID:        &groupScopeID,
+		UserID:     1001,
+		GroupIDs:   []int{group.ID},
+		Permission: PermissionNetworkUpdate,
+		ScopeType:  RoleBindingScopeGroup,
+		ScopeID:    &groupScopeID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error: %v", err)
@@ -66,7 +66,7 @@ func TestHasPermissionAllowsGlobalAdminAcrossScopes(t *testing.T) {
 	now := time.Now().UTC()
 
 	configuredGroup := insertTestCloudGroup(t, "Admins", "admins", now)
-	permission, role := insertTestRoleWithPermission(t, DefaultLabAdminRoleName, "vm.delete", now)
+	role := insertTestRoleWithPermission(t, DefaultLabAdminRoleName, PermissionVMDelete, now)
 
 	if created, err := ensureRoleBinding(role.ID, RoleBindingSubjectGroup, configuredGroup.ID, RoleBindingScopeGlobal, nil, now); err != nil {
 		t.Fatalf("ensure role binding: %v", err)
@@ -76,11 +76,11 @@ func TestHasPermissionAllowsGlobalAdminAcrossScopes(t *testing.T) {
 
 	resourceScopeID := 1201
 	allowed, err := HasPermission(PermissionCheck{
-		UserID:         1001,
-		GroupIDs:       []int{configuredGroup.ID},
-		PermissionName: permission.Name,
-		ScopeType:      RoleBindingScopeResource,
-		ScopeID:        &resourceScopeID,
+		UserID:     1001,
+		GroupIDs:   []int{configuredGroup.ID},
+		Permission: PermissionVMDelete,
+		ScopeType:  RoleBindingScopeResource,
+		ScopeID:    &resourceScopeID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error: %v", err)
@@ -94,7 +94,7 @@ func TestHasPermissionAllowsOrgBindingOnDescendantProject(t *testing.T) {
 	initTestDB(t)
 	now := time.Now().UTC()
 
-	permission, role := insertTestRoleWithPermission(t, "OrgProjectManager", "project.manage", now)
+	role := insertTestRoleWithPermission(t, "OrgProjectManager", PermissionProjectManage, now)
 	root := insertTestOrganization(t, "Lab", "lab", nil, now)
 	child := insertTestOrganization(t, "Teaching", "teaching", &root.ID, now)
 	project := insertTestProject(t, "Training Lab", "training-lab", child.ID, now)
@@ -104,10 +104,10 @@ func TestHasPermissionAllowsOrgBindingOnDescendantProject(t *testing.T) {
 	}
 
 	allowed, err := HasPermission(PermissionCheck{
-		UserID:         1001,
-		PermissionName: permission.Name,
-		ScopeType:      RoleBindingScopeProject,
-		ScopeID:        &project.ID,
+		UserID:     1001,
+		Permission: PermissionProjectManage,
+		ScopeType:  RoleBindingScopeProject,
+		ScopeID:    &project.ID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error: %v", err)
@@ -117,11 +117,95 @@ func TestHasPermissionAllowsOrgBindingOnDescendantProject(t *testing.T) {
 	}
 }
 
+func TestOrganizationMembershipInheritsIntoDescendantProject(t *testing.T) {
+	initTestDB(t)
+	now := time.Now().UTC()
+
+	root := insertTestOrganization(t, "Lab", "lab", nil, now)
+	child := insertTestOrganization(t, "Courses", "courses", &root.ID, now)
+	project := insertTestProject(t, "IT666", "it666", child.ID, now)
+
+	if _, err := EnsureOrganizationMembership(root.ID, ProjectMemberSubjectUser, 1001, MembershipRoleMember); err != nil {
+		t.Fatalf("EnsureOrganizationMembership returned error: %v", err)
+	}
+	member, err := SubjectInProjectOrAncestor(project.ID, ProjectMemberSubjectUser, 1001)
+	if err != nil {
+		t.Fatalf("SubjectInProjectOrAncestor returned error: %v", err)
+	}
+	if !member {
+		t.Fatal("expected Lab membership to inherit into descendant project")
+	}
+}
+
+func TestResourceScopedAccessCombinesPrivateAndHigherPowerGrants(t *testing.T) {
+	initTestDB(t)
+	now := time.Now().UTC()
+
+	root := insertTestOrganization(t, "Lab", "lab", nil, now)
+	project := insertTestProject(t, "IT666", "it666", root.ID, now)
+	resource := insertTestResource(t, project.ID, "student-vm-1", now)
+	resourceRole := insertTestRoleWithPermission(t, DefaultResourceUserRoleName, PermissionVMConsole, now)
+	projectRole := insertTestRoleWithPermission(t, "ProjectConsoleAdmin", PermissionVMConsole, now)
+
+	if _, err := EnsureResourceOwner(resource.ID, OwnerSubjectUser, 1001); err != nil {
+		t.Fatalf("EnsureResourceOwner returned error: %v", err)
+	}
+	if err := EnsureResourceUserAccess(resource.ID, RoleBindingSubjectUser, 1001); err != nil {
+		t.Fatalf("EnsureResourceUserAccess returned error: %v", err)
+	}
+	if _, err := ensureRoleBinding(projectRole.ID, RoleBindingSubjectUser, 2002, RoleBindingScopeProject, &project.ID, now); err != nil {
+		t.Fatalf("ensure project role binding: %v", err)
+	}
+
+	studentAllowed, err := HasPermission(PermissionCheck{
+		UserID:     1001,
+		Permission: PermissionVMConsole,
+		ScopeType:  RoleBindingScopeResource,
+		ScopeID:    &resource.ID,
+	})
+	if err != nil {
+		t.Fatalf("HasPermission student returned error: %v", err)
+	}
+	if !studentAllowed {
+		t.Fatal("expected direct resource user grant to allow console")
+	}
+
+	projectAdminAllowed, err := HasPermission(PermissionCheck{
+		UserID:     2002,
+		Permission: PermissionVMConsole,
+		ScopeType:  RoleBindingScopeResource,
+		ScopeID:    &resource.ID,
+	})
+	if err != nil {
+		t.Fatalf("HasPermission project admin returned error: %v", err)
+	}
+	if !projectAdminAllowed {
+		t.Fatal("expected project-scoped grant to flow down to resource")
+	}
+
+	outsiderAllowed, err := HasPermission(PermissionCheck{
+		UserID:     3003,
+		Permission: PermissionVMConsole,
+		ScopeType:  RoleBindingScopeResource,
+		ScopeID:    &resource.ID,
+	})
+	if err != nil {
+		t.Fatalf("HasPermission outsider returned error: %v", err)
+	}
+	if outsiderAllowed {
+		t.Fatal("expected unrelated user to be denied")
+	}
+
+	if resourceRole.ID == 0 {
+		t.Fatal("expected resource role to be set")
+	}
+}
+
 func TestHasPermissionDeniesWrongScopeOrMissingPermission(t *testing.T) {
 	initTestDB(t)
 	now := time.Now().UTC()
 
-	permission, role := insertTestRoleWithPermission(t, "ProjectViewer", "vm.read", now)
+	role := insertTestRoleWithPermission(t, "ProjectViewer", PermissionVMRead, now)
 	allowedScopeID := 1
 	deniedScopeID := 2
 
@@ -130,10 +214,10 @@ func TestHasPermissionDeniesWrongScopeOrMissingPermission(t *testing.T) {
 	}
 
 	allowed, err := HasPermission(PermissionCheck{
-		UserID:         1001,
-		PermissionName: permission.Name,
-		ScopeType:      RoleBindingScopeProject,
-		ScopeID:        &deniedScopeID,
+		UserID:     1001,
+		Permission: PermissionVMRead,
+		ScopeType:  RoleBindingScopeProject,
+		ScopeID:    &deniedScopeID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error: %v", err)
@@ -143,10 +227,10 @@ func TestHasPermissionDeniesWrongScopeOrMissingPermission(t *testing.T) {
 	}
 
 	allowed, err = HasPermission(PermissionCheck{
-		UserID:         1001,
-		PermissionName: "vm.delete",
-		ScopeType:      RoleBindingScopeProject,
-		ScopeID:        &allowedScopeID,
+		UserID:     1001,
+		Permission: PermissionVMDelete,
+		ScopeType:  RoleBindingScopeProject,
+		ScopeID:    &allowedScopeID,
 	})
 	if err != nil {
 		t.Fatalf("HasPermission returned error for missing permission: %v", err)
@@ -156,7 +240,28 @@ func TestHasPermissionDeniesWrongScopeOrMissingPermission(t *testing.T) {
 	}
 }
 
-func insertTestRoleWithPermission(t *testing.T, roleName, permissionName string, now time.Time) (*Permission, *Role) {
+func insertTestResource(t *testing.T, projectID int, slug string, now time.Time) *Resource {
+	t.Helper()
+
+	resource := &Resource{
+		UUID:         slug + "-uuid",
+		ProjectID:    projectID,
+		OwnerType:    OwnerTypeProject,
+		OwnerID:      projectID,
+		ResourceType: ResourceTypeVM,
+		Name:         slug,
+		Slug:         slug,
+		Status:       ResourceStatusReady,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := Resources.Insert(resource); err != nil {
+		t.Fatalf("insert resource: %v", err)
+	}
+	return resource
+}
+
+func insertTestRoleWithPermission(t *testing.T, roleName string, permissionKey PermissionKey, now time.Time) *Role {
 	t.Helper()
 
 	role, _, err := ensureRole(roleName, roleName+" test role", false, now)
@@ -164,7 +269,7 @@ func insertTestRoleWithPermission(t *testing.T, roleName, permissionName string,
 		t.Fatalf("ensure role: %v", err)
 	}
 
-	permission, _, err := ensurePermission(permissionName)
+	permission, _, err := ensurePermission(permissionKey.String())
 	if err != nil {
 		t.Fatalf("ensure permission: %v", err)
 	}
@@ -173,7 +278,7 @@ func insertTestRoleWithPermission(t *testing.T, roleName, permissionName string,
 		t.Fatalf("ensure role permission: %v", err)
 	}
 
-	return permission, role
+	return role
 }
 
 func insertTestCloudGroup(t *testing.T, name, slug string, now time.Time) *CloudGroup {

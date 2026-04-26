@@ -63,6 +63,10 @@ type LDAPUser struct {
 	Email       string
 }
 
+type LDAPGroup struct {
+	Name string
+}
+
 func LookupUser(username string) (*LDAPUser, bool, error) {
 	var conn *ldap.Conn
 	var err error
@@ -104,6 +108,35 @@ func LookupUser(username string) (*LDAPUser, bool, error) {
 		user.Username = username
 	}
 	return user, true, nil
+}
+
+func LookupGroup(name string) (*LDAPGroup, bool, error) {
+	var conn *ldap.Conn
+	var err error
+	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+		return nil, false, err
+	}
+	defer conn.Close()
+
+	var result *ldap.SearchResult
+	if result, err = conn.Search(ldap.NewSearchRequest(
+		getGroupsFilter(), ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false,
+		fmt.Sprintf("(cn=%s)", ldap.EscapeFilter(name)),
+		[]string{"cn"},
+		nil,
+	)); err != nil {
+		return nil, false, err
+	}
+
+	if len(result.Entries) == 0 {
+		return nil, false, nil
+	}
+
+	group := &LDAPGroup{Name: result.Entries[0].GetAttributeValue("cn")}
+	if group.Name == "" {
+		group.Name = name
+	}
+	return group, true, nil
 }
 
 func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {

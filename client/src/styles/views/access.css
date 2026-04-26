@@ -1,0 +1,214 @@
+/* Access view layout. */
+.access-grid {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.access-grants-panel {
+    grid-column: 1 / -1;
+}
+
+.access-select-row {
+    align-items: start;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--color-line);
+    display: grid;
+    font: inherit;
+    gap: 4px;
+    justify-items: start;
+    text-align: left;
+    transition: background 140ms ease, box-shadow 140ms ease;
+    width: 100%;
+}
+
+.access-select-row:hover {
+    background: var(--color-paper);
+}
+
+.access-select-row small {
+    color: var(--color-ink-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.modal-panel:has(.role-permission-modal) {
+    max-width: 780px;
+}
+
+.role-permission-modal {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+}
+
+.role-editor-summary {
+    align-items: start;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.role-editor-summary strong {
+    color: var(--color-ink);
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.role-editor-summary span {
+    color: var(--color-ink-muted);
+    display: block;
+    font-size: 13px;
+    margin-top: 3px;
+}
+
+.role-editor-summary > span {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 0;
+    padding: 5px 9px;
+}
+
+.permission-tree {
+    --permission-tree-indent: 24px;
+    --permission-tree-line-width: 2px;
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    list-style: none;
+    margin: 0;
+    max-height: min(58vh, 560px);
+    overflow: auto;
+    padding: 0;
+}
+
+.permission-tree ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.permission-tree li,
+.permission-tree details {
+    display: grid;
+    justify-items: start;
+}
+
+.permission-tree details {
+    gap: 12px;
+}
+
+.permission-tree-item {
+    position: relative;
+}
+
+.permission-tree-item + .permission-tree-item {
+    margin-top: 8px;
+}
+
+.permission-tree-item.has-parent::before {
+    background: var(--color-line);
+    content: "";
+    height: var(--permission-tree-line-width);
+    left: calc(-1 * var(--permission-tree-indent) + 7px);
+    opacity: 0.72;
+    pointer-events: none;
+    position: absolute;
+    top: 19px;
+    width: 17px;
+}
+
+.permission-tree-branch::after {
+    background: var(--color-line);
+    bottom: 19px;
+    content: "";
+    left: 7px;
+    opacity: 0.72;
+    pointer-events: none;
+    position: absolute;
+    top: 38px;
+    width: var(--permission-tree-line-width);
+}
+
+.permission-tree-branch:not(:has(.permission-tree-item.has-parent))::after {
+    display: none;
+}
+
+.permission-tree-branch summary,
+.permission-tree-leaf {
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    color: var(--color-ink);
+    display: inline-flex;
+    gap: 9px;
+    min-height: 38px;
+    padding: 8px 10px;
+    transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.permission-tree-branch summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.permission-tree-branch summary::-webkit-details-marker {
+    display: none;
+}
+
+.permission-tree-branch summary:hover,
+.permission-tree-leaf:hover {
+    background: var(--color-paper);
+}
+
+.permission-tree-branch summary:has(input:checked),
+.permission-tree-leaf:has(input:checked) {
+    background: var(--color-selected-bg);
+    border-color: var(--color-selected-line);
+    color: var(--color-accent-strong);
+}
+
+.permission-tree input {
+    accent-color: var(--color-accent);
+    flex: 0 0 auto;
+    height: 15px;
+    width: 15px;
+}
+
+.permission-tree span {
+    color: inherit;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.permission-tree small {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.permission-tree-children {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+    margin-top: 0;
+    padding-top: 6px;
+}
+
+.permission-tree-leaf {
+    cursor: pointer;
+}

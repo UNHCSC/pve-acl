@@ -1,0 +1,43 @@
+@layer base {
+    :root {
+        color-scheme: light;
+    }
+
+    body {
+        @apply min-h-screen bg-paper font-sans text-ink antialiased;
+    }
+
+    a,
+    button,
+    input {
+        @apply transition;
+    }
+
+    ::selection {
+        @apply bg-accent/15 text-ink;
+    }
+
+    * {
+        scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
+        scrollbar-width: thin;
+    }
+
+    *::-webkit-scrollbar {
+        height: 10px;
+        width: 10px;
+    }
+
+    *::-webkit-scrollbar-track {
+        background: var(--color-scrollbar-track);
+    }
+
+    *::-webkit-scrollbar-thumb {
+        background: var(--color-scrollbar-thumb);
+        border: 2px solid var(--color-scrollbar-track);
+        border-radius: 999px;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+        background: var(--color-scrollbar-thumb-hover);
+    }
+}

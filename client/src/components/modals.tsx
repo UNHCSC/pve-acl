@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Field, Select, SimpleFormModal, Textarea } from "./common";
-import type { AccessData, Organization, Project } from "../types";
+import { useState, type FormEvent } from "react";
+import { Field, ModalFrame, Select, SimpleFormModal, Textarea } from "./common";
+import type { AccessData, Organization, Project, UserImportResponse } from "../types";
+import { classNames, displayUser } from "../ui-helpers";
 
 export function OrgModal({
     context,
@@ -81,30 +82,74 @@ export function ProjectModal({
     );
 }
 
-export function UserModal({
+export function ImportUsersModal({
     onSubmit,
     onClose
 }: {
-    onSubmit: (values: { username: string; displayName: string; email: string }) => Promise<void>;
+    onSubmit: (values: { entries: string }) => Promise<UserImportResponse>;
     onClose: () => void;
 }) {
+    const [submitting, setSubmitting] = useState(false);
+    const [result, setResult] = useState<UserImportResponse | null>(null);
+    const [error, setError] = useState("");
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setSubmitting(true);
+        setError("");
+        try {
+            const nextResult = await onSubmit({ entries: String(new FormData(event.currentTarget).get("entries") || "") });
+            setResult(nextResult);
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "User import failed");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     return (
-        <SimpleFormModal
-            title="New user"
+        <ModalFrame
+            title="Import users"
             label="Identity"
             onClose={onClose}
-            onSubmit={(data) =>
-                onSubmit({
-                    username: String(data.get("username") || ""),
-                    displayName: String(data.get("displayName") || ""),
-                    email: String(data.get("email") || "")
-                })
-            }
         >
-            <Field name="username" label="Username" required />
-            <Field name="displayName" label="Display name" />
-            <Field name="email" label="Email" type="email" />
-        </SimpleFormModal>
+            <form className="modal-form import-users-form" onSubmit={submit}>
+                <label className="field-group">
+                    <span className="field-label">FreeIPA users</span>
+                    <textarea className="field-input import-users-input" name="entries" rows={7} placeholder={"alice\nbob@example.edu\ncarol"} required />
+                </label>
+                {error && <p className="form-message is-warning">{error}</p>}
+                {result && (
+                    <div className="import-results" role="status">
+                        <div className="import-summary">
+                            <strong>{result.imported}</strong>
+                            <span>imported or already present</span>
+                            <strong>{result.failed}</strong>
+                            <span>failed</span>
+                        </div>
+                        <div className="import-result-list">
+                            {result.results.map((item) => (
+                                <div className={classNames("import-result-row", item.status === "failed" ? "is-failed" : "is-imported")} key={item.query}>
+                                    <div>
+                                        <strong>{item.user ? displayUser(item.user) : item.query}</strong>
+                                        <span>{item.email || item.error || item.status}</span>
+                                    </div>
+                                    <span>{item.status === "already-imported" ? "already imported" : item.status}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                <div className="modal-actions">
+                    <button type="button" className="button-secondary" onClick={onClose} disabled={submitting}>
+                        Close
+                    </button>
+                    <button type="submit" className="button-primary" disabled={submitting}>
+                        Import
+                    </button>
+                </div>
+            </form>
+        </ModalFrame>
     );
 }
 
@@ -238,39 +283,25 @@ export function ProjectMemberModal({
     onClose
 }: {
     defaultSubjectType?: "user" | "group";
-    onSubmit: (values: { subjectType: string; subjectRef: string; projectRole: string }) => Promise<void>;
+    onSubmit: (values: { subjectType: string; subjectRef: string }) => Promise<void>;
     onClose: () => void;
 }) {
-    const [subjectType, setSubjectType] = useState<"user" | "group">(defaultSubjectType);
+    const subjectType = defaultSubjectType;
+    const isGroup = subjectType === "group";
 
     return (
         <SimpleFormModal
-            title="Add project member"
-            label="Project access"
+            title={isGroup ? "Add project group" : "Add project user"}
+            label={isGroup ? "Group access" : "User access"}
             onClose={onClose}
             onSubmit={(data) =>
                 onSubmit({
                     subjectType,
-                    subjectRef: String(data.get("subjectRef") || ""),
-                    projectRole: String(data.get("projectRole") || "viewer")
+                    subjectRef: String(data.get("subjectRef") || "")
                 })
             }
         >
-            <label className="field-group">
-                <span className="field-label">Subject type</span>
-                <select className="field-input" value={subjectType} onChange={(event) => setSubjectType(event.target.value as "user" | "group")}>
-                    <option value="user">User</option>
-                    <option value="group">Group</option>
-                </select>
-            </label>
-            <Field name="subjectRef" label={subjectType === "user" ? "Username" : "Group slug"} required />
-            <Select name="projectRole" label="Role" defaultValue="viewer">
-                {["viewer", "operator", "developer", "manager", "owner"].map((role) => (
-                    <option key={role} value={role}>
-                        {role}
-                    </option>
-                ))}
-            </Select>
+            <Field name="subjectRef" label={isGroup ? "Group slug" : "Username or email"} required />
         </SimpleFormModal>
     );
 }

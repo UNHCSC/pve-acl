@@ -1,78 +1,71 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import type { AccessData, MyAccess, ProjectTree, Summary, User } from "../types";
 
 export function useDashboardData(showError: (message: string) => void) {
-    const [summary, setSummary] = useState<Summary | null>(null);
-    const [tree, setTree] = useState<ProjectTree | null>(null);
-    const [access, setAccess] = useState<AccessData>({ groups: [], roles: [], permissions: [], roleBindings: [] });
-    const [myAccess, setMyAccess] = useState<MyAccess | null>(null);
-    const [users, setUsers] = useState<User[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const summaryQuery = useQuery({
+        queryKey: ["system", "summary"],
+        queryFn: () => apiFetch<Summary>("/api/v1/system/summary")
+    });
+    const summary = summaryQuery.data ?? null;
+    const treeQuery = useQuery({
+        queryKey: ["projects", "tree"],
+        queryFn: () => apiFetch<ProjectTree>("/api/v1/projects/tree"),
+        enabled: Boolean(summary)
+    });
+    const myAccessQuery = useQuery({
+        queryKey: ["users", "me", "access"],
+        queryFn: () => apiFetch<MyAccess>("/api/v1/users/me/access"),
+        enabled: Boolean(summary)
+    });
+    const accessQuery = useQuery({
+        queryKey: ["system", "access"],
+        queryFn: () => apiFetch<AccessData>("/api/v1/system/access"),
+        enabled: Boolean(summary?.capabilities.canViewAccess)
+    });
+    const usersQuery = useQuery({
+        queryKey: ["users"],
+        queryFn: () => apiFetch<User[]>("/api/v1/users"),
+        enabled: Boolean(summary?.capabilities.canViewUsers)
+    });
 
-    const loadSummary = async () => {
-        setSummary(await apiFetch<Summary>("/api/v1/system/summary"));
-    };
-
-    const loadTree = async () => {
-        const nextTree = await apiFetch<ProjectTree>("/api/v1/projects/tree");
-        setTree(nextTree);
-        return nextTree;
-    };
-
-    const loadAccess = async () => {
-        setAccess(await apiFetch<AccessData>("/api/v1/system/access"));
-    };
-
-    const loadMyAccess = async () => {
-        setMyAccess(await apiFetch<MyAccess>("/api/v1/users/me/access"));
-    };
-
-    const loadUsers = async () => {
-        setUsers(await apiFetch<User[]>("/api/v1/users"));
-    };
-
-    const clearRestrictedData = () => {
-        setUsers([]);
-        setAccess({ groups: [], roles: [], permissions: [], roleBindings: [] });
-    };
+    const loadSummary = () => queryClient.fetchQuery({ queryKey: ["system", "summary"], queryFn: () => apiFetch<Summary>("/api/v1/system/summary") });
+    const loadTree = () => queryClient.fetchQuery({ queryKey: ["projects", "tree"], queryFn: () => apiFetch<ProjectTree>("/api/v1/projects/tree") });
+    const loadAccess = () => queryClient.fetchQuery({ queryKey: ["system", "access"], queryFn: () => apiFetch<AccessData>("/api/v1/system/access") });
+    const loadMyAccess = () => queryClient.fetchQuery({ queryKey: ["users", "me", "access"], queryFn: () => apiFetch<MyAccess>("/api/v1/users/me/access") });
+    const loadUsers = () => queryClient.fetchQuery({ queryKey: ["users"], queryFn: () => apiFetch<User[]>("/api/v1/users") });
 
     const refreshAll = async () => {
-        setLoading(true);
-        try {
-            const nextSummary = await apiFetch<Summary>("/api/v1/system/summary");
-            setSummary(nextSummary);
-            clearRestrictedData();
-
-            const loads: Array<Promise<unknown>> = [loadTree(), loadMyAccess()];
-            if (nextSummary.capabilities.canViewAccess) {
-                loads.push(loadAccess());
-            }
-            if (nextSummary.capabilities.canViewUsers) {
-                loads.push(loadUsers());
-            }
-            await Promise.all(loads);
-        } finally {
-            setLoading(false);
-        }
+        const nextSummary = await loadSummary();
+        await Promise.all([
+            loadTree(),
+            loadMyAccess(),
+            nextSummary.capabilities.canViewAccess ? loadAccess() : queryClient.removeQueries({ queryKey: ["system", "access"], exact: true }),
+            nextSummary.capabilities.canViewUsers ? loadUsers() : queryClient.removeQueries({ queryKey: ["users"], exact: true })
+        ]);
     };
 
     useEffect(() => {
-        refreshAll().catch((error) => showError(error instanceof Error ? error.message : "Failed to load dashboard"));
-    }, []);
+        const errors = [summaryQuery.error, treeQuery.error, myAccessQuery.error, accessQuery.error, usersQuery.error].filter(Boolean);
+        if (errors[0]) {
+            showError(errors[0] instanceof Error ? errors[0].message : "Failed to load dashboard");
+        }
+    }, [summaryQuery.error, treeQuery.error, myAccessQuery.error, accessQuery.error, usersQuery.error]);
 
     return {
-        access,
+        access: accessQuery.data ?? { groups: [], roles: [], permissions: [], roleBindings: [] },
         loadAccess,
         loadMyAccess,
         loadSummary,
         loadTree,
         loadUsers,
-        loading,
-        myAccess,
+        loading: summaryQuery.isLoading || treeQuery.isLoading || myAccessQuery.isLoading || accessQuery.isLoading || usersQuery.isLoading,
+        myAccess: myAccessQuery.data ?? null,
         refreshAll,
         summary,
-        tree,
-        users
+        tree: treeQuery.data ?? null,
+        users: usersQuery.data ?? []
     };
 }

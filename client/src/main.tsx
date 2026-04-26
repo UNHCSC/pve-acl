@@ -1,18 +1,19 @@
 import "@fontsource-variable/public-sans/index.css";
 import "@fontsource/ibm-plex-mono/400.css";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { apiFetch } from "./api";
 import { ThemeSettings } from "./components/ThemeSettings";
 import { ToastStack } from "./components/common";
-import { GrantModal, GroupModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal, UserModal } from "./components/modals";
+import { GrantModal, GroupModal, ImportUsersModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal } from "./components/modals";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDirectorySelection } from "./hooks/useDirectorySelection";
 import { useProjectMemberships } from "./hooks/useProjectMemberships";
 import { useToasts } from "./hooks/useToasts";
 import "./styles/site.css";
-import type { Group, ModalKey, Organization, Project, Role, RoleBinding, ThemeKey, User, ViewKey } from "./types";
+import type { Group, ModalKey, Organization, Project, Role, RoleBinding, RolePermissionGrant, ThemeKey, UserImportResponse, ViewKey } from "./types";
 import { applyTheme, readStoredTheme } from "./theme";
 import { viewTitles } from "./types";
 import { classNames, displayUser, initialView, initials } from "./ui-helpers";
@@ -25,6 +26,15 @@ import { OverviewView } from "./views/OverviewView";
 import { PeopleView } from "./views/PeopleView";
 
 applyTheme(readStoredTheme());
+
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            retry: 1
+        }
+    }
+});
 
 function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean; canViewAccess?: boolean } } | null) {
     if (view === "people") {
@@ -64,7 +74,7 @@ function DashboardApp() {
     }, []);
 
     useEffect(() => {
-        if (!viewIsAllowed(view, summary)) {
+        if (summary && !viewIsAllowed(view, summary)) {
             setView("overview");
         }
     }, [summary, view]);
@@ -86,6 +96,30 @@ function DashboardApp() {
             window.removeEventListener("keydown", closeOnEscape);
         };
     }, [openMenu]);
+
+    useEffect(() => {
+        if (!navOpen) {
+            return;
+        }
+        const closeNav = (event: MouseEvent) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest("[data-dashboard-nav]")) {
+                return;
+            }
+            setNavOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setNavOpen(false);
+            }
+        };
+        window.addEventListener("click", closeNav);
+        window.addEventListener("keydown", closeOnEscape);
+        return () => {
+            window.removeEventListener("click", closeNav);
+            window.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [navOpen]);
 
     useEffect(() => {
         applyTheme(theme);
@@ -145,10 +179,11 @@ function DashboardApp() {
         showToast("Project created", "success");
     };
 
-    const createUser = async (values: { username: string; displayName: string; email: string }) => {
-        await apiFetch<User>("/api/v1/users", { method: "POST", body: JSON.stringify(values) });
+    const importUsers = async (values: { entries: string }) => {
+        const result = await apiFetch<UserImportResponse>("/api/v1/users/import", { method: "POST", body: JSON.stringify(values) });
         await Promise.all([loadUsers(), loadSummary()]);
-        showToast("User created", "success");
+        showToast(`${result.imported} imported, ${result.failed} failed`, result.failed > 0 ? "warning" : "success");
+        return result;
     };
 
     const createGroup = async (values: { name: string; slug: string; description: string }) => {
@@ -166,13 +201,37 @@ function DashboardApp() {
         showToast("Role created", "success");
     };
 
+    const saveRolePermissions = async (role: Role, permissionIDs: number[]) => {
+        const currentGrants = await apiFetch<RolePermissionGrant[]>(`/api/v1/roles/${role.id}/permissions`);
+        const currentIDs = new Set(currentGrants.map((grant) => grant.permission_id));
+        const nextIDs = new Set(permissionIDs);
+        const additions = permissionIDs.filter((permissionID) => !currentIDs.has(permissionID));
+        const removals = currentGrants.filter((grant) => !nextIDs.has(grant.permission_id));
+
+        await Promise.all([
+            ...additions.map((permissionID) =>
+                apiFetch(`/api/v1/roles/${role.id}/permissions`, {
+                    method: "POST",
+                    body: JSON.stringify({ permissionID })
+                })
+            ),
+            ...removals.map((grant) =>
+                apiFetch(`/api/v1/roles/${role.id}/permissions/${grant.permission_id}`, {
+                    method: "DELETE"
+                })
+            )
+        ]);
+        await Promise.all([loadAccess(), loadMyAccess(), loadSummary()]);
+        showToast("Role permissions updated", "success");
+    };
+
     const createGrant = async (values: { roleID: number; subjectType: string; subjectRef: string; scopeType: string; scopeID: number | null }) => {
         await apiFetch<RoleBinding>("/api/v1/role-bindings", { method: "POST", body: JSON.stringify(values) });
         await Promise.all([loadAccess(), loadMyAccess(), loadSummary()]);
         showToast("Role binding created", "success");
     };
 
-    const addProjectMember = async (values: { subjectType: string; subjectRef: string; projectRole: string }) => {
+    const addProjectMember = async (values: { subjectType: string; subjectRef: string }) => {
         if (!activeProject) {
             return;
         }
@@ -230,19 +289,69 @@ function DashboardApp() {
         }
     };
 
+    const renderDashboardActions = () => (
+        <>
+            <ThemeSettings
+                open={settingsOpen}
+                setOpen={(open) => {
+                    setSettingsOpen(open);
+                    if (open) {
+                        setAccountOpen(false);
+                    }
+                }}
+                theme={theme}
+                setTheme={setTheme}
+            />
+            {summary ? (
+                <div className="account-menu" data-topbar-menu>
+                    <button
+                        className="account-button"
+                        type="button"
+                        aria-haspopup="menu"
+                        aria-expanded={accountOpen}
+                        onClick={() => {
+                            setAccountOpen((open) => !open);
+                            setSettingsOpen(false);
+                        }}
+                    >
+                        <span className="account-avatar">{initials(displayUser(summary.currentUser))}</span>
+                        <span>{displayUser(summary.currentUser)}</span>
+                    </button>
+                    <div className="account-dropdown" hidden={!accountOpen}>
+                        <div className="account-summary">
+                            <strong>{displayUser(summary.currentUser)}</strong>
+                            <span>{summary.currentUser.email}</span>
+                            <span>{summary.currentUser.isSiteAdmin ? "Site admin" : `${summary.currentUser.groupCount || 0} groups`}</span>
+                        </div>
+                        <button className="logout-button" type="button" onClick={logout}>
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <a href="/login" className="button-primary">
+                    Sign in
+                </a>
+            )}
+        </>
+    );
+
     return (
         <div className="dashboard-shell">
-            <aside className="dashboard-sidebar">
+            <aside className="dashboard-sidebar" data-dashboard-nav>
                 <div className="dashboard-sidebar-header">
                     <a href="/" className="brand-mark">
                         <img className="brand-logo" src="/static/logo.svg" alt="" aria-hidden="true" />
                         <span>Organesson Cloud</span>
                     </a>
-                    <button className="nav-menu-button" type="button" aria-label="Open dashboard navigation" aria-expanded={navOpen} onClick={() => setNavOpen((open) => !open)}>
-                        <span />
-                        <span />
-                        <span />
-                    </button>
+                    <div className="dashboard-sidebar-controls">
+                        <div className="dashboard-actions dashboard-sidebar-actions">{renderDashboardActions()}</div>
+                        <button className="nav-menu-button" type="button" aria-label="Open dashboard navigation" aria-expanded={navOpen} onClick={() => setNavOpen((open) => !open)}>
+                            <span />
+                            <span />
+                            <span />
+                        </button>
+                    </div>
                 </div>
                 <nav className={classNames("dashboard-nav", navOpen && "is-open")} aria-label="Dashboard navigation">
                     {allowedViews(summary).map((key) => (
@@ -267,50 +376,7 @@ function DashboardApp() {
                         <p className="eyebrow">Control plane</p>
                         <h1>{viewTitles[view]}</h1>
                     </div>
-                    <div className="dashboard-actions">
-                        <ThemeSettings
-                            open={settingsOpen}
-                            setOpen={(open) => {
-                                setSettingsOpen(open);
-                                if (open) {
-                                    setAccountOpen(false);
-                                }
-                            }}
-                            theme={theme}
-                            setTheme={setTheme}
-                        />
-                        {summary ? (
-                            <div className="account-menu" data-topbar-menu>
-                                <button
-                                    className="account-button"
-                                    type="button"
-                                    aria-haspopup="menu"
-                                    aria-expanded={accountOpen}
-                                    onClick={() => {
-                                        setAccountOpen((open) => !open);
-                                        setSettingsOpen(false);
-                                    }}
-                                >
-                                    <span className="account-avatar">{initials(displayUser(summary.currentUser))}</span>
-                                    <span>{displayUser(summary.currentUser)}</span>
-                                </button>
-                                <div className="account-dropdown" hidden={!accountOpen}>
-                                    <div className="account-summary">
-                                        <strong>{displayUser(summary.currentUser)}</strong>
-                                        <span>{summary.currentUser.email}</span>
-                                        <span>{summary.currentUser.isSiteAdmin ? "Site admin" : `${summary.currentUser.groupCount || 0} groups`}</span>
-                                    </div>
-                                    <button className="logout-button" type="button" onClick={logout}>
-                                        Logout
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <a href="/login" className="button-primary">
-                                Sign in
-                            </a>
-                        )}
-                    </div>
+                    <div className="dashboard-actions dashboard-topbar-actions">{renderDashboardActions()}</div>
                 </header>
 
                 <main className="dashboard-content">
@@ -338,19 +404,6 @@ function DashboardApp() {
                                 setProjectMemberSubjectType(subjectType);
                                 openContextModal("project-member", activeProject || selectedProject);
                             }}
-                            updateProjectMember={(membership, nextRole) =>
-                                mutateWithToast(async () => {
-                                    if (!activeProject) {
-                                        return;
-                                    }
-                                    await apiFetch(`/api/v1/projects/${activeProject.id}/memberships/${membership.id}`, {
-                                        method: "PATCH",
-                                        body: JSON.stringify({ projectRole: nextRole })
-                                    });
-                                    await reloadMemberships();
-                                    showToast("Project member updated", "success");
-                                })
-                            }
                             deleteProjectMember={(membership) =>
                                 mutateWithToast(async () => {
                                     if (!activeProject || !window.confirm("Remove this project member?")) {
@@ -363,7 +416,7 @@ function DashboardApp() {
                             }
                         />
                     )}
-                    {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canCreate={Boolean(summary.capabilities.canManageUsers)} openCreate={() => openContextModal("user")} />}
+                    {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canImport={Boolean(summary.capabilities.canManageUsers)} openImport={() => openContextModal("import-users")} />}
                     {view === "identity" && <IdentityView summary={summary} myAccess={myAccess} />}
                     {view === "access" && summary?.capabilities.canViewAccess && (
                         <AccessView
@@ -372,6 +425,7 @@ function DashboardApp() {
                             openGroup={() => openContextModal("group")}
                             openRole={() => openContextModal("role")}
                             openGrant={() => openContextModal("grant")}
+                            saveRolePermissions={saveRolePermissions}
                             deleteGrant={(grant) =>
                                 mutateWithToast(async () => {
                                     if (!window.confirm("Delete this role binding?")) {
@@ -410,12 +464,11 @@ function DashboardApp() {
                     }}
                 />
             )}
-            {modal === "user" && (
-                <UserModal
+            {modal === "import-users" && (
+                <ImportUsersModal
                     onClose={() => setModal(null)}
                     onSubmit={async (values) => {
-                        await createUser(values);
-                        setModal(null);
+                        return importUsers(values);
                     }}
                 />
             )}
@@ -467,7 +520,9 @@ const mount = document.getElementById("dashboard-root");
 if (mount) {
     createRoot(mount).render(
         <BrowserRouter>
-            <DashboardApp />
+            <QueryClientProvider client={queryClient}>
+                <DashboardApp />
+            </QueryClientProvider>
         </BrowserRouter>
     );
 }
