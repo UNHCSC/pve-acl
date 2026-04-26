@@ -14,11 +14,15 @@
     display: flex;
     justify-content: flex-end;
     justify-self: end;
-    width: 100%;
 }
 
 .row-menu-button {
     align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--color-ink-muted);
+    cursor: pointer;
     display: inline-flex;
     font-size: 20px;
     font-weight: 700;
@@ -26,6 +30,15 @@
     letter-spacing: 0;
     line-height: 1;
     padding: 0;
+    height: 28px;
+    width: 28px;
+}
+
+.row-menu-button:hover,
+.row-menu-button[aria-expanded="true"] {
+    background: var(--color-paper);
+    border-color: var(--color-line);
+    color: var(--color-ink);
 }
 
 .row-menu[hidden] {
@@ -79,6 +92,54 @@
     justify-content: space-between;
 }
 
+.access-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.access-row-subject {
+    align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+}
+
+.access-row-subject > div {
+    min-width: 0;
+}
+
+.access-row-subject strong,
+.access-row-subject span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.access-pill {
+    align-items: center;
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    color: var(--color-ink-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 30px;
+    padding: 5px 9px;
+    white-space: nowrap;
+}
+
+.access-pill.is-sync {
+    border-color: color-mix(in srgb, var(--color-success) 42%, var(--color-line));
+    color: var(--color-success);
+}
+
+.access-pill.is-inherited {
+    border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-line));
+    color: var(--color-accent-strong);
+}
+
 .project-detail-actions {
     align-items: center;
     display: flex;
@@ -97,6 +158,52 @@
 .compact-button {
     min-height: 38px;
     padding: 8px 12px;
+}
+
+.access-role-select {
+    min-width: min(230px, 42vw);
+    width: auto;
+}
+
+.role-row-actions {
+    flex: 0 0 auto;
+}
+
+.access-row-actions {
+    flex: 0 0 auto;
+}
+
+.access-list-row .tree-actions,
+.group-member-row .tree-actions {
+    opacity: 1;
+}
+
+.role-list-row {
+    grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.role-list-row .project-access-actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+
+.role-list-subject span {
+    max-width: min(680px, 52vw);
+}
+
+.role-scope-pill {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    min-height: 24px;
+    padding: 3px 7px;
+    text-transform: uppercase;
+}
+
+.role-inline-menu {
+    max-height: min(220px, calc(100vh - 16px));
+    min-width: 176px;
+    position: fixed;
+    z-index: 120;
 }
 
 .floating-popover[hidden] {
@@ -162,20 +269,23 @@
     box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
 }
 
-.menu-dots {
-    align-items: center;
-    display: inline-flex;
-    gap: 2px;
-    height: 100%;
-    justify-content: center;
-    width: 14px;
+.row-menu-icon {
+    display: block;
+    height: 18px;
+    position: relative;
+    width: 18px;
 }
 
-.menu-dots span {
+.row-menu-icon::before {
     background: currentColor;
     border-radius: 999px;
-    display: block;
+    box-shadow: -6px 0 0 currentColor, 6px 0 0 currentColor;
+    content: "";
     height: 3px;
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
     width: 3px;
 }
 

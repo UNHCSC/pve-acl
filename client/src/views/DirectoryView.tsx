@@ -1,7 +1,6 @@
-import { Children, useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Detail, EmptyDetail, EmptyState, PanelHeading } from "../components/common";
-import type { ModalKey, OrgNode, Organization, Project, ProjectMembership, Selection } from "../types";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "../components/common";
+import type { Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, Role, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
 
@@ -21,7 +20,13 @@ type DirectoryViewProps = {
     selection: Selection;
     selectedOrg: OrgNode | null;
     selectedProject: Project | null;
+    orgMemberships: OrganizationMembership[];
+    orgRoles: Role[];
+    orgGroups: Group[];
     memberships: ProjectMembership[];
+    projectRoles: Role[];
+    projectGroups: Group[];
+    loadingOrg: boolean;
     loadingProject: boolean;
     openMenu: string | null;
     setOpenMenu: (key: string | null) => void;
@@ -33,21 +38,26 @@ type DirectoryViewProps = {
     moveProject: (project: Project, organizationID: number) => Promise<void> | void;
     deleteOrg: (org: Organization) => void;
     deleteProject: (project: Project) => void;
+    addOrganizationMember: (subjectType: ProjectMemberSubject) => void;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
+    createGroup: (context: Organization | Project) => void;
+    editRole: (role: Role, context: Organization | Project) => void;
+    deleteRole: (role: Role) => void;
+    manageGroupMembers: (group: { id: number; name: string }) => void;
+    updateOrganizationMemberRole: (membership: OrganizationMembership, roleID: number) => void;
+    updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
+    deleteOrganizationMember: (membership: OrganizationMembership) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 };
 
 type TreeRuntime = {
     canDropOnOrg: (target: OrgNode) => boolean;
-    canDropOnRoot: () => boolean;
     clearDrag: () => void;
     clearDropTarget: () => void;
     dragState: DraggedItem;
     dropOnOrg: (event: ReactDragEvent, target: OrgNode) => void;
-    dropOnRoot: (event: ReactDragEvent) => void;
     dropTarget: string | null;
     markOrgDropTarget: (event: ReactDragEvent, target: OrgNode) => void;
-    markRootDropTarget: (event: ReactDragEvent) => void;
     startOrgDrag: (event: ReactDragEvent, org: Organization) => void;
     startProjectDrag: (event: ReactDragEvent, project: Project) => void;
 };
@@ -100,8 +110,6 @@ export function DirectoryView(props: DirectoryViewProps) {
         return draggedNode ? !orgContains(draggedNode, target.id) : false;
     };
 
-    const canDropOnRoot = () => dragState?.type === "org" && dragState.org.parent_org_id !== null;
-
     const clearDrag = () => {
         setDragState(null);
         setDropTarget(null);
@@ -133,16 +141,6 @@ export function DirectoryView(props: DirectoryViewProps) {
         setDropTarget(`org-${target.id}`);
     };
 
-    const markRootDropTarget = (event: ReactDragEvent) => {
-        if (!canDropOnRoot()) {
-            event.dataTransfer.dropEffect = "none";
-            return;
-        }
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        setDropTarget("root");
-    };
-
     const dropOnOrg = (event: ReactDragEvent, target: OrgNode) => {
         event.preventDefault();
         if (!canDropOnOrg(target) || !dragState) {
@@ -158,28 +156,14 @@ export function DirectoryView(props: DirectoryViewProps) {
         }
     };
 
-    const dropOnRoot = (event: ReactDragEvent) => {
-        event.preventDefault();
-        if (!canDropOnRoot() || dragState?.type !== "org") {
-            clearDrag();
-            return;
-        }
-        const org = dragState.org;
-        clearDrag();
-        void props.moveOrg(org, null);
-    };
-
     const runtime: TreeRuntime = {
         canDropOnOrg,
-        canDropOnRoot,
         clearDrag,
         clearDropTarget: () => setDropTarget(null),
         dragState,
         dropOnOrg,
-        dropOnRoot,
         dropTarget,
         markOrgDropTarget,
-        markRootDropTarget,
         startOrgDrag,
         startProjectDrag
     };
@@ -194,16 +178,6 @@ export function DirectoryView(props: DirectoryViewProps) {
                 <aside className="project-tree-sidebar">
                     <div className="project-tree" aria-label="Organization and project tree">
                         {props.orgTree.length === 0 && <EmptyState>No organizations are visible yet.</EmptyState>}
-                        {dragState?.type === "org" && (
-                            <div
-                                className={classNames("tree-root-drop", dropTarget === "root" && "is-drop-target", canDropOnRoot() && "can-drop")}
-                                onDragLeave={() => setDropTarget(null)}
-                                onDragOver={runtime.markRootDropTarget}
-                                onDrop={runtime.dropOnRoot}
-                            >
-                                Root level
-                            </div>
-                        )}
                         {props.orgTree.map((node) => (
                             <TreeNode key={node.id} node={node} depth={0} runtime={runtime} {...props} />
                         ))}
@@ -221,13 +195,37 @@ export function DirectoryView(props: DirectoryViewProps) {
                 />
 
                 <div className="project-render-pane">
-                    {props.selection?.type === "org" && props.selectedOrg && <OrgDetail org={props.selectedOrg} />}
+                    {props.selection?.type === "org" && props.selectedOrg && (
+                        <OrgDetail
+                            org={props.selectedOrg}
+                            memberships={props.orgMemberships}
+                            orgRoles={props.orgRoles}
+                            orgGroups={props.orgGroups}
+                            loading={props.loadingOrg}
+                            addOrganizationMember={props.addOrganizationMember}
+                            createOrgRole={() => props.openModal("role", props.selectedOrg)}
+                            createOrgGroup={() => props.createGroup(props.selectedOrg!)}
+                            editRole={(role) => props.editRole(role, props.selectedOrg!)}
+                            deleteRole={props.deleteRole}
+                            manageGroupMembers={props.manageGroupMembers}
+                            updateOrganizationMemberRole={props.updateOrganizationMemberRole}
+                            deleteOrganizationMember={props.deleteOrganizationMember}
+                        />
+                    )}
                     {props.selection?.type === "project" && props.selectedProject && (
                         <ProjectDetail
                             project={props.selectedProject}
                             memberships={props.memberships}
+                            projectRoles={props.projectRoles}
+                            projectGroups={props.projectGroups}
                             loading={props.loadingProject}
                             addProjectMember={props.addProjectMember}
+                            createProjectRole={() => props.openModal("role", props.selectedProject)}
+                            createProjectGroup={() => props.createGroup(props.selectedProject!)}
+                            editRole={(role) => props.editRole(role, props.selectedProject!)}
+                            deleteRole={props.deleteRole}
+                            manageGroupMembers={props.manageGroupMembers}
+                            updateProjectMemberRole={props.updateProjectMemberRole}
                             deleteProjectMember={props.deleteProjectMember}
                         />
                     )}
@@ -265,11 +263,11 @@ function TreeNode(props: DirectoryViewProps & { node: OrgNode; depth: number; ru
                 <button type="button" className="tree-label" onClick={() => props.selectOrg(node)} title={node.name}>
                     <span>{node.name}</span>
                 </button>
-                <TreeActions open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
-                    <button type="button" onClick={() => props.openModal("org", node)}>New organization</button>
-                    <button type="button" onClick={() => props.openModal("project", node)}>New project</button>
-                    {node.parent_org_id !== null && <button type="button" className="danger-action" onClick={() => props.deleteOrg(node)}>Delete</button>}
-                </TreeActions>
+            <RowActionMenu className="tree-actions" menuClassName="tree-inline-menu" open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
+                <button type="button" onClick={() => props.openModal("org", node)}>New organization</button>
+                <button type="button" onClick={() => props.openModal("project", node)}>New project</button>
+                {node.parent_org_id !== null && <button type="button" className="danger-action" onClick={() => props.deleteOrg(node)}>Delete</button>}
+            </RowActionMenu>
             </div>
             <div className={classNames("tree-children", expanded && "is-expanded")} aria-hidden={!expanded} style={{ "--tree-depth": depth + 1 } as CSSProperties}>
                 <div className="tree-children-inner">
@@ -303,72 +301,83 @@ function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: n
             <button type="button" className="tree-label" onClick={() => props.selectProject(project)} title={project.name}>
                 <span>{project.name}</span>
             </button>
-            <TreeActions open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
+            <RowActionMenu className="tree-actions" menuClassName="tree-inline-menu" open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
                 <button type="button" className="danger-action" onClick={() => props.deleteProject(project)}>Delete</button>
-            </TreeActions>
+            </RowActionMenu>
         </div>
     );
 }
 
-function TreeActions({ children, open, setOpen }: { children: ReactNode; open: boolean; setOpen: (open: boolean) => void }) {
-    const [position, setPosition] = useState<CSSProperties>({});
+type ScopedMembership = ProjectMembership | OrganizationMembership;
 
+function OrgDetail(props: {
+    org: OrgNode;
+    memberships: OrganizationMembership[];
+    orgRoles: Role[];
+    orgGroups: Group[];
+    loading: boolean;
+    addOrganizationMember: (subjectType: ProjectMemberSubject) => void;
+    createOrgRole: () => void;
+    createOrgGroup: () => void;
+    editRole: (role: Role) => void;
+    deleteRole: (role: Role) => void;
+    manageGroupMembers: (group: { id: number; name: string }) => void;
+    updateOrganizationMemberRole: (membership: OrganizationMembership, roleID: number) => void;
+    deleteOrganizationMember: (membership: OrganizationMembership) => void;
+}) {
     return (
-        <div className="tree-actions">
-            <button
-                type="button"
-                className="icon-button tree-menu-button"
-                aria-label="More actions"
-                onClick={(event) => {
-                    event.stopPropagation();
-                    const width = 176;
-                    const height = Math.min(280, Math.max(44, Children.count(children) * 41 + 2));
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
-                    setPosition({
-                        left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
-                        maxHeight: height,
-                        top
-                    });
-                    setOpen(!open);
-                }}
-            >
-                <span className="menu-dots" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                </span>
-            </button>
-            {open && createPortal(
-                <div className="row-menu tree-inline-menu" style={position} onClick={(event) => event.stopPropagation()}>
-                    {children}
-                </div>,
-                document.body
-            )}
-        </div>
-    );
-}
-
-function OrgDetail({ org }: { org: OrgNode }) {
-    return (
-        <article className="project-detail-page">
-            <header className="project-detail-header">
-                <div>
-                    <span className="panel-label">Organization</span>
-                    <h2>{org.name}</h2>
-                    <p>{org.description || "No organization description set."}</p>
-                </div>
-                <span className="detail-status-pill">org</span>
-            </header>
-            <div className="project-detail-content">
-                <section className="dashboard-panel">
-                    <PanelHeading label="Tree position" title="Contents" />
-                    <dl className="detail-list expanded-detail-list">
-                        <Detail label="Slug">{org.slug}</Detail>
-                        <Detail label="Child orgs">{org.children.length}</Detail>
-                        <Detail label="Projects">{org.projects.length}</Detail>
-                    </dl>
-                </section>
+        <article className="project-detail-page project-detail-card-page">
+            <section className="dashboard-panel project-summary-panel">
+                <header className="project-detail-header">
+                    <div>
+                        <span className="panel-label">Organization</span>
+                        <h2>{props.org.name}</h2>
+                        <p>{props.org.description || "No organization description set."}</p>
+                    </div>
+                    <span className="detail-status-pill">org</span>
+                </header>
+                <ScopeSummaryStrip
+                    items={[
+                        { label: "Child orgs", value: props.org.children.length },
+                        { label: "Projects", value: props.org.projects.length },
+                        { label: "Members", value: props.memberships.length },
+                        { label: "Owned groups", value: props.orgGroups.length },
+                        { label: "Roles", value: props.orgRoles.length }
+                    ]}
+                />
+                <dl className="detail-list expanded-detail-list scope-detail-list">
+                    <Detail label="Slug">{props.org.slug}</Detail>
+                    <Detail label="Scope">Organization</Detail>
+                    <Detail label="Parent">{props.org.parent_org_id ? `Org ${props.org.parent_org_id}` : "Root"}</Detail>
+                </dl>
+            </section>
+            <div className="access-panel-grid">
+                <ScopedMembershipPanel
+                    className="access-panel-wide"
+                    scopeLabel="Organization"
+                    memberships={props.memberships}
+                    roles={props.orgRoles}
+                    loading={props.loading}
+                    addMember={props.addOrganizationMember}
+                    manageGroupMembers={props.manageGroupMembers}
+                    updateMemberRole={(membership, roleID) => props.updateOrganizationMemberRole(membership as OrganizationMembership, roleID)}
+                    deleteMember={(membership) => props.deleteOrganizationMember(membership as OrganizationMembership)}
+                />
+                <ScopedGroupsPanel
+                    scopeLabel="Organization"
+                    groups={props.orgGroups}
+                    createGroup={props.createOrgGroup}
+                    manageGroupMembers={props.manageGroupMembers}
+                />
+                <ScopedRolesPanel
+                    scopeLabel="Organization"
+                    scopeType="org"
+                    scopeID={props.org.id}
+                    roles={props.orgRoles}
+                    createRole={props.createOrgRole}
+                    editRole={props.editRole}
+                    deleteRole={props.deleteRole}
+                />
             </div>
         </article>
     );
@@ -377,15 +386,18 @@ function OrgDetail({ org }: { org: OrgNode }) {
 function ProjectDetail(props: {
     project: Project;
     memberships: ProjectMembership[];
+    projectRoles: Role[];
+    projectGroups: Group[];
     loading: boolean;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
+    createProjectRole: () => void;
+    createProjectGroup: () => void;
+    editRole: (role: Role) => void;
+    deleteRole: (role: Role) => void;
+    manageGroupMembers: (group: { id: number; name: string }) => void;
+    updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
 }) {
-    const [membershipView, setMembershipView] = useState<ProjectMemberSubject>("user");
-    const userMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "user");
-    const groupMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "group");
-    const visibleMemberships = membershipView === "group" ? groupMemberships : userMemberships;
-
     return (
         <article className="project-detail-page project-detail-card-page">
             <section className="dashboard-panel project-summary-panel">
@@ -399,62 +411,282 @@ function ProjectDetail(props: {
                         <span className="detail-status-pill">{props.project.is_active === false ? "inactive" : "active"}</span>
                     </div>
                 </header>
-                <dl className="detail-list expanded-detail-list">
+                <ScopeSummaryStrip
+                    items={[
+                        { label: "Members", value: props.memberships.length },
+                        { label: "Owned groups", value: props.projectGroups.length },
+                        { label: "Roles", value: props.projectRoles.length },
+                        { label: "State", value: props.project.is_active === false ? "Inactive" : "Active" }
+                    ]}
+                />
+                <dl className="detail-list expanded-detail-list scope-detail-list">
                     <Detail label="Slug">{props.project.slug}</Detail>
-                    <Detail label="Organization ID">{props.project.organization_id}</Detail>
-                    <Detail label="Direct members">{props.memberships.length}</Detail>
-                    <Detail label="Users">{userMemberships.length}</Detail>
-                    <Detail label="Groups">{groupMemberships.length}</Detail>
+                    <Detail label="Organization">{props.project.organization?.name || `Org ${props.project.organization_id}`}</Detail>
+                    <Detail label="Scope">Project</Detail>
                 </dl>
             </section>
-            <section className="dashboard-panel project-members-panel">
-                <PanelHeading
-                    label="Access"
-                    title="Project members"
-                    action={
-                        <div className="project-members-heading-actions">
-                            <div className="segmented-control project-member-tabs" role="tablist" aria-label="Project membership views">
-                                {[
-                                    ["user", "Users", userMemberships.length],
-                                    ["group", "Groups", groupMemberships.length]
-                                ].map(([key, label, count]) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        className={membershipView === key ? "is-active" : ""}
-                                        onClick={() => setMembershipView(key as ProjectMemberSubject)}
-                                    >
-                                        <span>{label}</span>
-                                        <strong>{count}</strong>
-                                    </button>
-                                ))}
-                            </div>
-                            <button className="button-primary compact-button" type="button" onClick={() => props.addProjectMember(membershipView)}>
-                                Add {membershipView}
-                            </button>
-                        </div>
-                    }
+            <div className="access-panel-grid">
+                <ScopedMembershipPanel
+                    className="access-panel-wide"
+                    scopeLabel="Project"
+                    memberships={props.memberships}
+                    roles={props.projectRoles}
+                    loading={props.loading}
+                    addMember={props.addProjectMember}
+                    manageGroupMembers={props.manageGroupMembers}
+                    updateMemberRole={(membership, roleID) => props.updateProjectMemberRole(membership as ProjectMembership, roleID)}
+                    deleteMember={(membership) => props.deleteProjectMember(membership as ProjectMembership)}
                 />
-                {props.loading && <EmptyState>Loading project members...</EmptyState>}
-                {!props.loading && visibleMemberships.length === 0 && <EmptyState>No direct {membershipView} memberships.</EmptyState>}
-                {!props.loading && visibleMemberships.length > 0 && (
-                    <div className="compact-list">
-                        {visibleMemberships.map((membership) => (
-                            <div className="compact-list-row action-list-row" key={membership.id}>
-                                <div>
-                                    <strong>{membership.subject?.label || membership.subject?.name || membership.subject?.username || `Subject ${membership.subject_id}`}</strong>
-                                    <span>{subjectTypeLabel(membership.subject_type)} / {membership.subject?.meta || "direct project member"}</span>
-                                </div>
+                <ScopedGroupsPanel
+                    scopeLabel="Project"
+                    groups={props.projectGroups}
+                    createGroup={props.createProjectGroup}
+                    manageGroupMembers={props.manageGroupMembers}
+                />
+                <ScopedRolesPanel
+                    scopeLabel="Project"
+                    scopeType="project"
+                    scopeID={props.project.id}
+                    roles={props.projectRoles}
+                    createRole={props.createProjectRole}
+                    editRole={props.editRole}
+                    deleteRole={props.deleteRole}
+                />
+            </div>
+        </article>
+    );
+}
+
+function ScopedMembershipPanel(props: {
+    className?: string;
+    scopeLabel: "Organization" | "Project";
+    memberships: ScopedMembership[];
+    roles: Role[];
+    loading: boolean;
+    addMember: (subjectType: ProjectMemberSubject) => void;
+    manageGroupMembers: (group: { id: number; name: string }) => void;
+    updateMemberRole: (membership: ScopedMembership, roleID: number) => void;
+    deleteMember: (membership: ScopedMembership) => void;
+}) {
+    const [membershipView, setMembershipView] = useState<ProjectMemberSubject>("user");
+    const userMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "user");
+    const groupMemberships = props.memberships.filter((membership) => subjectTypeLabel(membership.subject_type) === "group");
+    const visibleMemberships = membershipView === "group" ? groupMemberships : userMemberships;
+
+    return (
+        <section className={classNames("dashboard-panel project-members-panel", props.className)}>
+            <PanelHeading
+                label="Access assignments"
+                title={`${props.scopeLabel} role assignments`}
+                action={
+                    <div className="project-members-heading-actions">
+                        <div className="segmented-control project-member-tabs" role="tablist" aria-label={`${props.scopeLabel} membership views`}>
+                            {[
+                                ["user", "Users", userMemberships.length],
+                                ["group", "Groups", groupMemberships.length]
+                            ].map(([key, label, count]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    className={membershipView === key ? "is-active" : ""}
+                                    onClick={() => setMembershipView(key as ProjectMemberSubject)}
+                                >
+                                    <span>{label}</span>
+                                    <strong>{count}</strong>
+                                </button>
+                            ))}
+                        </div>
+                        {props.roles.length > 0 && (
+                            <button className="button-primary compact-button" type="button" onClick={() => props.addMember(membershipView)}>
+                                Add {membershipView} grant
+                            </button>
+                        )}
+                    </div>
+                }
+            />
+            {props.loading && <EmptyState>Loading {props.scopeLabel.toLowerCase()} members...</EmptyState>}
+            {!props.loading && visibleMemberships.length === 0 && <EmptyState>No direct {membershipView} role assignments.</EmptyState>}
+            {!props.loading && visibleMemberships.length > 0 && (
+                <div className="compact-list">
+                    {visibleMemberships.map((membership) => {
+                        const subjectLabel = membership.subject?.label || membership.subject?.name || membership.subject?.username || `Subject ${membership.subject_id}`;
+                        const subjectKind = subjectTypeLabel(membership.subject_type) as ProjectMemberSubject;
+                        const roleLabel = membership.access_role_name || ("project_role_label" in membership ? membership.project_role_label : "") || "direct member";
+                        return (
+                            <div className="compact-list-row action-list-row access-list-row" key={membership.id}>
+                                <AccessRowSubject
+                                    title={subjectLabel}
+                                    meta={[subjectKind, membership.subject?.meta || "local"].join(" / ")}
+                                />
                                 <div className="project-access-actions">
-                                    <button type="button" className="button-secondary compact-button danger-button" onClick={() => props.deleteProjectMember(membership)}>
-                                        Remove
-                                    </button>
+                                    {props.roles.length > 0 ? (
+                                        <select
+                                            className="field-input compact-select access-role-select"
+                                            value={membership.access_role_id || ""}
+                                            aria-label={`${props.scopeLabel} access role`}
+                                            onChange={(event) => props.updateMemberRole(membership, Number(event.currentTarget.value))}
+                                        >
+                                            <option value="" disabled>Role</option>
+                                            {props.roles.map((role) => (
+                                                <option key={role.id} value={role.id}>
+                                                    {role.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="access-pill">{roleLabel}</span>
+                                    )}
+                                    <RowActionMenu ariaLabel={`${subjectLabel} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                        {membershipView === "group" && (
+                                            <button type="button" role="menuitem" onClick={() => props.manageGroupMembers({ id: membership.subject_id, name: subjectLabel })}>
+                                                Manage members
+                                            </button>
+                                        )}
+                                        <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteMember(membership)}>
+                                            Remove assignment
+                                        </button>
+                                    </RowActionMenu>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </section>
-        </article>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ScopedGroupsPanel(props: {
+    scopeLabel: "Organization" | "Project";
+    groups: Group[];
+    createGroup: () => void;
+    manageGroupMembers: (group: { id: number; name: string }) => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel">
+            <PanelHeading
+                label="Managed groups"
+                title={`${props.scopeLabel}-owned groups`}
+                action={<button className="button-secondary compact-button" type="button" onClick={props.createGroup}>New group</button>}
+            />
+            {props.groups.length === 0 && <EmptyState>No groups are owned by this scope yet.</EmptyState>}
+            {props.groups.length > 0 && (
+                <div className="compact-list">
+                    {props.groups.map((group) => (
+                        <div className="compact-list-row action-list-row access-list-row" key={group.id}>
+                            <AccessRowSubject
+                                title={group.name}
+                                meta={group.slug}
+                            />
+                            <div className="project-access-actions">
+                                <span className="access-pill">{group.member_count || 0} members</span>
+                                <span className={classNames("access-pill", group.sync_membership && "is-sync")}>{group.sync_membership ? "LDAP" : "Local"}</span>
+                                <RowActionMenu ariaLabel={`${group.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                    <button type="button" role="menuitem" onClick={() => props.manageGroupMembers({ id: group.id, name: group.name })}>
+                                        Manage members
+                                    </button>
+                                </RowActionMenu>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ScopedRolesPanel(props: {
+    scopeLabel: "Organization" | "Project";
+    scopeType: "org" | "project";
+    scopeID: number;
+    roles: Role[];
+    createRole: () => void;
+    editRole: (role: Role) => void;
+    deleteRole: (role: Role) => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel">
+            <PanelHeading
+                label="Roles"
+                title={`${props.scopeLabel} roles`}
+                action={<button className="button-secondary compact-button" type="button" onClick={props.createRole}>New role</button>}
+            />
+            {props.roles.length === 0 && <EmptyState>No assignable roles are available here.</EmptyState>}
+            {props.roles.length > 0 && (
+                <div className="compact-list">
+                    {props.roles.map((role) => {
+                        const localRole = String(role.owner_scope_label || "").toLowerCase() === props.scopeType && role.owner_scope_id === props.scopeID;
+                        const canManageRole = localRole && !role.is_system_role;
+                        return (
+                            <div className="compact-list-row action-list-row access-list-row role-list-row" key={role.id}>
+                                <AccessRowSubject
+                                    className="role-list-subject"
+                                    title={role.name}
+                                    meta={role.description || `${role.permission_count || 0} permissions`}
+                                />
+                                <div className="project-access-actions">
+                                    <span
+                                        className={classNames("access-pill role-scope-pill", !localRole && "is-inherited")}
+                                        title={localRole ? "Owned by this scope" : `Inherited from ${role.owner_scope_label || "another scope"}`}
+                                    >
+                                        {localRole ? "Local" : compactScopeLabel(role.owner_scope_label)}
+                                    </span>
+                                    <RowActionMenu ariaLabel="Role actions" className="tree-actions role-row-actions" menuClassName="role-inline-menu">
+                                        <button type="button" role="menuitem" onClick={() => props.editRole(role)}>{canManageRole ? "Edit role" : "View role"}</button>
+                                        {canManageRole && <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteRole(role)}>Delete role</button>}
+                                    </RowActionMenu>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function compactScopeLabel(scopeLabel?: string) {
+    switch (String(scopeLabel || "").toLowerCase()) {
+        case "project":
+            return "Project";
+        case "org":
+        case "organization":
+            return "Org";
+        case "global":
+            return "Global";
+        default:
+            return "Inherited";
+    }
+}
+
+function ScopeSummaryStrip({ items }: { items: { label: string; value: ReactNode }[] }) {
+    return (
+        <div className="scope-summary-strip">
+            {items.map((item) => (
+                <div className="scope-summary-item" key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function AccessRowSubject({
+    className,
+    title,
+    meta
+}: {
+    className?: string;
+    title: string;
+    meta: string;
+}) {
+    return (
+        <div className={classNames("access-row-subject", className)}>
+            <div>
+                <strong>{title}</strong>
+                <span>{meta}</span>
+            </div>
+        </div>
     );
 }

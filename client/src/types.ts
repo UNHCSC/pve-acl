@@ -1,7 +1,7 @@
 export type ToastKind = "info" | "success" | "warning";
-export type ViewKey = "overview" | "directory" | "people" | "identity" | "access";
+export type ViewKey = "overview" | "directory" | "people" | "identity";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
-export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "grant" | "project-member" | null;
+export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | null;
 export type Selection =
     | { type: "org"; id: number }
     | { type: "project"; id: number; slug: string }
@@ -25,7 +25,6 @@ export type Summary = {
         canManageRoles?: boolean;
         canManageOrgs?: boolean;
         canViewUsers?: boolean;
-        canViewAccess?: boolean;
     };
 };
 
@@ -95,6 +94,7 @@ export type Group = {
     owner_scope_type?: number | string;
     owner_scope_label?: string;
     owner_scope_id?: number | null;
+    sync_membership?: boolean;
     member_count?: number;
     role_binding_count?: number;
 };
@@ -104,6 +104,9 @@ export type Role = {
     name: string;
     description?: string;
     is_system_role?: boolean;
+    owner_scope_type?: number | string;
+    owner_scope_label?: string;
+    owner_scope_id?: number | null;
     permission_count?: number;
 };
 
@@ -133,13 +136,6 @@ export type RoleBinding = {
     scope_id?: number | null;
 };
 
-export type AccessData = {
-    groups: Group[];
-    roles: Role[];
-    permissions: Permission[];
-    roleBindings: RoleBinding[];
-};
-
 export type MyAccess = {
     groups: Group[];
     roles: Role[];
@@ -152,7 +148,30 @@ export type ProjectMembership = {
     project_id: number;
     subject_type: number | string;
     subject_id: number;
+    project_role?: number | string;
+    project_role_label?: string;
+    access_role_id?: number;
+    access_role_name?: string;
     subject?: { label?: string; meta?: string; username?: string; slug?: string; name?: string };
+};
+
+export type OrganizationMembership = {
+    id: number;
+    organization_id: number;
+    subject_type: number | string;
+    subject_id: number;
+    access_role_id?: number;
+    access_role_name?: string;
+    subject?: { label?: string; meta?: string; username?: string; slug?: string; name?: string };
+};
+
+export type GroupMembership = {
+    id: number;
+    user_id: number;
+    group_id: number;
+    membership_role: number | string;
+    membership_role_label?: string;
+    user?: { id: number; username: string; display_name?: string; email?: string; label?: string };
 };
 
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
@@ -162,5 +181,4 @@ export const viewTitles: Record<ViewKey, string> = {
     directory: "Directory",
     people: "People",
     identity: "Identity",
-    access: "Access"
 };

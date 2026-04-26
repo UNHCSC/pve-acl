@@ -1,4 +1,5 @@
-import { FormEvent, ReactNode, useState, type CSSProperties } from "react";
+import { Children, FormEvent, ReactNode, useEffect, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { ToastItem } from "../hooks/useToasts";
 import { classNames } from "../ui-helpers";
 
@@ -60,6 +61,94 @@ export function CompactList<T extends { id: number }>({ items, render }: { items
     );
 }
 
+export function RowActionMenu({
+    ariaLabel = "More actions",
+    buttonClassName,
+    children,
+    className,
+    closeOnSelect = true,
+    menuClassName,
+    menuWidth = 176,
+    open,
+    setOpen
+}: {
+    ariaLabel?: string;
+    buttonClassName?: string;
+    children: ReactNode;
+    className?: string;
+    closeOnSelect?: boolean;
+    menuClassName?: string;
+    menuWidth?: number;
+    open?: boolean;
+    setOpen?: (open: boolean) => void;
+}) {
+    const [internalOpen, setInternalOpen] = useState(false);
+    const [position, setPosition] = useState<CSSProperties>({});
+    const actualOpen = open ?? internalOpen;
+    const updateOpen = setOpen ?? setInternalOpen;
+
+    useEffect(() => {
+        if (!actualOpen) {
+            return;
+        }
+        const close = () => updateOpen(false);
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                updateOpen(false);
+            }
+        };
+        window.addEventListener("click", close);
+        window.addEventListener("keydown", closeOnEscape);
+        return () => {
+            window.removeEventListener("click", close);
+            window.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [actualOpen, updateOpen]);
+
+    return (
+        <div className={classNames("row-actions", className)}>
+            <button
+                type="button"
+                className={classNames("row-menu-button", buttonClassName)}
+                aria-label={ariaLabel}
+                aria-haspopup="menu"
+                aria-expanded={actualOpen}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    const itemCount = Children.toArray(children).length;
+                    const height = Math.min(280, Math.max(44, itemCount * 41 + 2));
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : Math.max(8, rect.top - height - 6);
+                    setPosition({
+                        left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+                        maxHeight: height,
+                        top
+                    });
+                    updateOpen(!actualOpen);
+                }}
+            >
+                <span className="row-menu-icon" aria-hidden="true" />
+            </button>
+            {actualOpen && createPortal(
+                <div
+                    role="menu"
+                    className={classNames("row-menu", menuClassName)}
+                    style={position}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        if (closeOnSelect) {
+                            updateOpen(false);
+                        }
+                    }}
+                >
+                    {children}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}
+
 export function ToastStack({ toasts }: { toasts: ToastItem[] }) {
     return (
         <div className="toast-stack">
@@ -109,16 +198,25 @@ export function SimpleFormModal({
     onClose: () => void;
 }) {
     const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setSubmitting(true);
-        await onSubmit(new FormData(event.currentTarget));
+        setError("");
+        try {
+            await onSubmit(new FormData(event.currentTarget));
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "Action failed");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
         <ModalFrame title={title} label={label} onClose={onClose}>
             <form className="modal-form" onSubmit={submit}>
                 {children}
+                {error && <p className="form-message is-warning">{error}</p>}
                 <ModalActions disabled={submitting} onClose={onClose} />
             </form>
         </ModalFrame>

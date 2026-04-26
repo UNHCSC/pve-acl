@@ -50,14 +50,11 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"error": "failed to check organization permissions",
 		})
 	}
-	canViewAccess := canManageRoles
-
 	counts, err := systemCounts(c, fiber.Map{
 		"canManageUsers":  canManageUsers,
 		"canManageGroups": canManageGroups,
 		"canManageRoles":  canManageRoles,
 		"canManageOrgs":   canManageOrgs,
-		"canViewAccess":   canViewAccess,
 	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -83,7 +80,6 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"canManageRoles":    canManageRoles,
 			"canManageOrgs":     canManageOrgs,
 			"canViewUsers":      canManageUsers,
-			"canViewAccess":     canViewAccess,
 		},
 	})
 }
@@ -106,7 +102,7 @@ func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (fiber.Map, error) {
 	}
 
 	counts["groups"] = int64(0)
-	if capabilities["canManageGroups"] == true || capabilities["canViewAccess"] == true {
+	if capabilities["canManageGroups"] == true {
 		if counts["groups"], err = db.CloudGroups.Count(); err != nil {
 			return nil, err
 		}

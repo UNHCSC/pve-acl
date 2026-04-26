@@ -1,0 +1,11 @@
+{
+    "name": "pve-acl-playwright",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "screenshots": "playwright install chromium && node role-ui-screenshots.mjs"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.57.0"
+    }
+}

@@ -58,4 +58,15 @@ func TestCloudGroupIDsForUser(t *testing.T) {
 	if !slices.Contains(groupIDs, group.ID) {
 		t.Fatalf("expected group IDs to contain %d, got %#v", group.ID, groupIDs)
 	}
+
+	if err := ArchiveCloudGroup(group); err != nil {
+		t.Fatalf("ArchiveCloudGroup returned error: %v", err)
+	}
+	groupIDs, err = CloudGroupIDsForUser(user.ID)
+	if err != nil {
+		t.Fatalf("CloudGroupIDsForUser after archive returned error: %v", err)
+	}
+	if slices.Contains(groupIDs, group.ID) {
+		t.Fatalf("expected archived group ID to be omitted, got %#v", groupIDs)
+	}
 }

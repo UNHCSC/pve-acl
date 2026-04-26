@@ -225,6 +225,82 @@ func TestGroupManagerCanPatchMembershipRole(t *testing.T) {
 	}
 }
 
+func TestAdminCanUpdateAndArchiveCloudGroup(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	group, _, err := db.EnsureCloudGroup("Archive Me", "archive-me", db.GroupTypeCustom)
+	if err != nil {
+		t.Fatalf("EnsureCloudGroup returned error: %v", err)
+	}
+	token := authenticateTestUser(t, "group-archive-admin", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Patch("/api/v1/groups/:id", patchCloudGroup)
+	fiberApp.Delete("/api/v1/groups/:id", deleteCloudGroup)
+	fiberApp.Get("/api/v1/groups", getCloudGroups)
+
+	patchReq := httptest.NewRequest("PATCH", "/api/v1/groups/"+strconv.Itoa(group.ID), bytes.NewBufferString(`{
+		"name": "Updated Group",
+		"description": "Updated description"
+	}`))
+	patchReq.Header.Set("Authorization", "Bearer "+token)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchResp, err := fiberApp.Test(patchReq)
+	if err != nil {
+		t.Fatalf("patch group route returned error: %v", err)
+	}
+	if patchResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", patchResp.StatusCode)
+	}
+	updated, found, err := db.GetCloudGroupByID(group.ID)
+	if err != nil || !found {
+		t.Fatalf("expected updated group, found=%v err=%v", found, err)
+	}
+	if updated.Name != "Updated Group" || updated.Description != "Updated description" {
+		t.Fatalf("group was not updated: %#v", updated)
+	}
+
+	deleteReq := httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(group.ID), nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteResp, err := fiberApp.Test(deleteReq)
+	if err != nil {
+		t.Fatalf("delete group route returned error: %v", err)
+	}
+	if deleteResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected 204, got %d", deleteResp.StatusCode)
+	}
+	archived, found, err := db.GetCloudGroupByID(group.ID)
+	if err != nil || !found {
+		t.Fatalf("expected archived group to remain, found=%v err=%v", found, err)
+	}
+	if archived.ArchivedAt == nil {
+		t.Fatal("expected group to be archived")
+	}
+
+	listReq := httptest.NewRequest("GET", "/api/v1/groups", nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	listResp, err := fiberApp.Test(listReq)
+	if err != nil {
+		t.Fatalf("list groups route returned error: %v", err)
+	}
+	if listResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", listResp.StatusCode)
+	}
+	var groups []map[string]any
+	if err := json.NewDecoder(listResp.Body).Decode(&groups); err != nil {
+		t.Fatalf("decode groups: %v", err)
+	}
+	for _, item := range groups {
+		if item["slug"] == "archive-me" {
+			t.Fatalf("archived group should be omitted from list: %#v", groups)
+		}
+	}
+}
+
 func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 	initACLTestDB(t)
 	if err := db.EnsureInitialSetup(); err != nil {
@@ -304,72 +380,127 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 	}
 }
 
-func TestAdminCanManageAccessGrants(t *testing.T) {
+func TestAdminCanUpdateAndDeleteUnboundCustomRole(t *testing.T) {
 	initACLTestDB(t)
 	if err := db.EnsureInitialSetup(); err != nil {
 		t.Fatalf("EnsureInitialSetup returned error: %v", err)
 	}
 
-	group, _, err := db.EnsureCloudGroup("Grant Group", "grant-group", db.GroupTypeCustom)
+	role, _, err := db.EnsureRole("TemporaryOperator", "Temporary role", false)
 	if err != nil {
-		t.Fatalf("EnsureCloudGroup returned error: %v", err)
+		t.Fatalf("EnsureRole returned error: %v", err)
 	}
-	role := findTestRoleByName(t, db.DefaultLabAdminRoleName)
-	token := authenticateTestUser(t, "grant-admin", true)
+	token := authenticateTestUser(t, "role-edit-admin", true)
 
 	fiberApp := fiber.New()
 	fiberApp.Use(requireAPIAuth)
-	fiberApp.Post("/api/v1/role-bindings", postCreateRoleBinding)
-	fiberApp.Get("/api/v1/role-bindings", getRoleBindings)
-	fiberApp.Delete("/api/v1/role-bindings/:bindingID", deleteRoleBinding)
+	fiberApp.Patch("/api/v1/roles/:id", patchRole)
+	fiberApp.Delete("/api/v1/roles/:id", deleteRole)
 
-	createBody := `{"roleID":` + strconv.Itoa(role.ID) + `,"subjectType":"group","subjectID":` + strconv.Itoa(group.ID) + `,"scopeType":"group","scopeID":` + strconv.Itoa(group.ID) + `}`
-	createReq := httptest.NewRequest("POST", "/api/v1/role-bindings", bytes.NewBufferString(createBody))
-	createReq.Header.Set("Authorization", "Bearer "+token)
-	createReq.Header.Set("Content-Type", "application/json")
-
-	createResp, err := fiberApp.Test(createReq)
+	patchReq := httptest.NewRequest("PATCH", "/api/v1/roles/"+strconv.Itoa(role.ID), bytes.NewBufferString(`{
+		"name": "TemporaryViewer",
+		"description": "Updated temporary role"
+	}`))
+	patchReq.Header.Set("Authorization", "Bearer "+token)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchResp, err := fiberApp.Test(patchReq)
 	if err != nil {
-		t.Fatalf("create role binding route returned error: %v", err)
+		t.Fatalf("patch role route returned error: %v", err)
 	}
-	if createResp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("expected 201, got %d", createResp.StatusCode)
+	if patchResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", patchResp.StatusCode)
 	}
-
-	listReq := httptest.NewRequest("GET", "/api/v1/role-bindings", nil)
-	listReq.Header.Set("Authorization", "Bearer "+token)
-	listResp, err := fiberApp.Test(listReq)
-	if err != nil {
-		t.Fatalf("list role bindings route returned error: %v", err)
+	updated, found, err := db.GetRoleByName("TemporaryViewer")
+	if err != nil || !found {
+		t.Fatalf("expected updated role, found=%v err=%v", found, err)
 	}
-	if listResp.StatusCode != fiber.StatusOK {
-		t.Fatalf("expected 200, got %d", listResp.StatusCode)
+	if updated.Description != "Updated temporary role" {
+		t.Fatalf("expected updated description, got %#v", updated)
 	}
 
-	var grants []map[string]any
-	if err := json.NewDecoder(listResp.Body).Decode(&grants); err != nil {
-		t.Fatalf("decode grants response: %v", err)
-	}
-	var grantID int
-	for _, grant := range grants {
-		subject, _ := grant["subject"].(map[string]any)
-		if subject["slug"] == "grant-group" {
-			grantID = int(grant["id"].(float64))
-			break
-		}
-	}
-	if grantID == 0 {
-		t.Fatalf("expected readable grant for grant-group, got %#v", grants)
-	}
-
-	deleteReq := httptest.NewRequest("DELETE", "/api/v1/role-bindings/"+strconv.Itoa(grantID), nil)
+	deleteReq := httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(updated.ID), nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
 	deleteResp, err := fiberApp.Test(deleteReq)
 	if err != nil {
-		t.Fatalf("delete role binding route returned error: %v", err)
+		t.Fatalf("delete role route returned error: %v", err)
 	}
 	if deleteResp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("expected 204, got %d", deleteResp.StatusCode)
+	}
+	if deleted, err := db.Roles.Select(updated.ID); err != nil {
+		t.Fatalf("select deleted role: %v", err)
+	} else if deleted != nil {
+		t.Fatalf("expected role to be deleted, got %#v", deleted)
+	}
+}
+
+func TestSystemRoleEditAndDeleteAreProtected(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	role := findTestRoleByName(t, db.DefaultLabAdminRoleName)
+	token := authenticateTestUser(t, "system-role-admin", true)
+
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Patch("/api/v1/roles/:id", patchRole)
+	fiberApp.Delete("/api/v1/roles/:id", deleteRole)
+
+	patchReq := httptest.NewRequest("PATCH", "/api/v1/roles/"+strconv.Itoa(role.ID), bytes.NewBufferString(`{"description":"changed"}`))
+	patchReq.Header.Set("Authorization", "Bearer "+token)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchResp, err := fiberApp.Test(patchReq)
+	if err != nil {
+		t.Fatalf("patch system role route returned error: %v", err)
+	}
+	if patchResp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", patchResp.StatusCode)
+	}
+
+	deleteReq := httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(role.ID), nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteResp, err := fiberApp.Test(deleteReq)
+	if err != nil {
+		t.Fatalf("delete system role route returned error: %v", err)
+	}
+	if deleteResp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", deleteResp.StatusCode)
+	}
+}
+
+func TestBoundCustomRoleCannotBeDeleted(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	role, _, err := db.EnsureRole("StillInUse", "Bound role", false)
+	if err != nil {
+		t.Fatalf("EnsureRole returned error: %v", err)
+	}
+	user, _, err := db.EnsureUser("bound-role-user", "Bound Role User", "bound@example.test", "local", "bound-role-user")
+	if err != nil {
+		t.Fatalf("EnsureUser returned error: %v", err)
+	}
+	if _, err := db.EnsureRoleBinding(role.ID, db.RoleBindingSubjectUser, user.ID, db.RoleBindingScopeGlobal, nil); err != nil {
+		t.Fatalf("EnsureRoleBinding returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "bound-role-admin", true)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Delete("/api/v1/roles/:id", deleteRole)
+
+	req := httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(role.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := fiberApp.Test(req)
+	if err != nil {
+		t.Fatalf("delete bound role route returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
 	}
 }
 
@@ -421,6 +552,88 @@ func TestGroupRoleBindingRequiresScopedRoleManage(t *testing.T) {
 	}
 	if scopedResp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("expected scoped binding to be created, got %d", scopedResp.StatusCode)
+	}
+}
+
+func TestGroupOwnerCanManageOnlyOwnScopedRoleBindings(t *testing.T) {
+	initACLTestDB(t)
+	if err := db.EnsureInitialSetup(); err != nil {
+		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+	}
+
+	group, _, err := db.EnsureCloudGroup("Owner Scoped Group", "owner-scoped-group", db.GroupTypeProject)
+	if err != nil {
+		t.Fatalf("EnsureCloudGroup returned error: %v", err)
+	}
+	otherGroup, _, err := db.EnsureCloudGroup("Other Scoped Group", "other-scoped-group", db.GroupTypeProject)
+	if err != nil {
+		t.Fatalf("EnsureCloudGroup other returned error: %v", err)
+	}
+	owner, _, err := db.EnsureUser("group-owner", "Group Owner", "owner@example.test", "local", "group-owner")
+	if err != nil {
+		t.Fatalf("EnsureUser returned error: %v", err)
+	}
+	if _, err := db.EnsureCloudGroupMembership(owner.ID, group.ID, db.MembershipRoleOwner); err != nil {
+		t.Fatalf("EnsureCloudGroupMembership returned error: %v", err)
+	}
+
+	token := authenticateTestUser(t, "group-owner", false)
+	fiberApp := fiber.New()
+	fiberApp.Use(requireAPIAuth)
+	fiberApp.Post("/api/v1/groups/:id/role-bindings", postCreateGroupRoleBinding)
+	fiberApp.Delete("/api/v1/groups/:id/role-bindings/:bindingID", deleteGroupRoleBinding)
+
+	globalReq := httptest.NewRequest("POST", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings", bytes.NewBufferString(`{
+		"roleName": "ProjectViewer",
+		"scopeType": "global"
+	}`))
+	globalReq.Header.Set("Authorization", "Bearer "+token)
+	globalReq.Header.Set("Content-Type", "application/json")
+	globalResp, err := fiberApp.Test(globalReq)
+	if err != nil {
+		t.Fatalf("global owner grant route returned error: %v", err)
+	}
+	if globalResp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected global binding to be forbidden, got %d", globalResp.StatusCode)
+	}
+
+	scopedBody := `{"roleName":"ProjectViewer","scopeType":"group","scopeID":` + strconv.Itoa(group.ID) + `}`
+	scopedReq := httptest.NewRequest("POST", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings", bytes.NewBufferString(scopedBody))
+	scopedReq.Header.Set("Authorization", "Bearer "+token)
+	scopedReq.Header.Set("Content-Type", "application/json")
+	scopedResp, err := fiberApp.Test(scopedReq)
+	if err != nil {
+		t.Fatalf("scoped owner grant route returned error: %v", err)
+	}
+	if scopedResp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected scoped binding to be created, got %d", scopedResp.StatusCode)
+	}
+
+	bindings, err := db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, group.ID)
+	if err != nil {
+		t.Fatalf("RoleBindingsForSubject returned error: %v", err)
+	}
+	if len(bindings) != 1 {
+		t.Fatalf("expected one group binding, got %#v", bindings)
+	}
+	wrongGroupReq := httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(otherGroup.ID)+"/role-bindings/"+strconv.Itoa(bindings[0].ID), nil)
+	wrongGroupReq.Header.Set("Authorization", "Bearer "+token)
+	wrongGroupResp, err := fiberApp.Test(wrongGroupReq)
+	if err != nil {
+		t.Fatalf("wrong group delete route returned error: %v", err)
+	}
+	if wrongGroupResp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected wrong group delete to return 404, got %d", wrongGroupResp.StatusCode)
+	}
+
+	deleteReq := httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings/"+strconv.Itoa(bindings[0].ID), nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteResp, err := fiberApp.Test(deleteReq)
+	if err != nil {
+		t.Fatalf("delete owner grant route returned error: %v", err)
+	}
+	if deleteResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected scoped binding to be deleted, got %d", deleteResp.StatusCode)
 	}
 }
 

@@ -134,6 +134,15 @@ func (key PermissionKey) String() string {
 	return permissionNames[key]
 }
 
+func PermissionKeyFromName(name string) (PermissionKey, bool) {
+	for key, candidate := range permissionNames {
+		if candidate == name {
+			return key, true
+		}
+	}
+	return 0, false
+}
+
 func permissionKeyNames(keys []PermissionKey) []string {
 	names := make([]string, 0, len(keys))
 	for _, key := range keys {

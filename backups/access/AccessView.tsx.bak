@@ -122,6 +122,7 @@ function roleDisplayDescription(role: Role): string {
         ProjectOwner: "Full control inside the project scope.",
         ResourceUser: "Semi-private resource console and power access."
     };
+    
     return descriptions[role.name] || role.description || `${role.permission_count || 0} permissions`;
 }
 

@@ -1,18 +1,16 @@
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { AccessData, ProjectTree, Selection, Summary, ViewKey } from "../types";
+import type { ProjectTree, Selection, Summary, ViewKey } from "../types";
 import { formatCount } from "../ui-helpers";
 
 export function OverviewView({
     counts,
     tree,
-    access,
     capabilities,
     setView,
     selectProject
 }: {
     counts: Record<string, number>;
     tree: ProjectTree | null;
-    access: AccessData;
     capabilities: Summary["capabilities"];
     setView: (view: ViewKey) => void;
     selectProject: (selection: Selection) => void;
@@ -24,7 +22,6 @@ export function OverviewView({
         ...(capabilities.canViewUsers ? [["Users", "users"]] : []),
         ...(counts.auditEvents ? [["Audit events", "auditEvents"]] : [])
     ];
-    const showAccessPanels = Boolean(capabilities.canViewAccess);
 
     return (
         <section className="dashboard-view is-active">
@@ -38,25 +35,6 @@ export function OverviewView({
             </div>
 
             <section className="dashboard-grid">
-                {showAccessPanels && (
-                    <article className="dashboard-panel">
-                        <PanelHeading label="System data" title="Local tables" />
-                        <div className="table-count-grid">
-                            {[
-                                ["Groups", "groups"],
-                                ["Roles", "roles"],
-                                ["Permissions", "permissions"],
-                                ["Role bindings", "roleBindings"]
-                            ].map(([label, key]) => (
-                                <div key={key}>
-                                    <span>{label}</span>
-                                    <strong>{formatCount(counts[key])}</strong>
-                                </div>
-                            ))}
-                        </div>
-                    </article>
-                )}
-
                 <article className="dashboard-panel">
                     <PanelHeading label="Directory" title="Recent projects" action={<TextButton onClick={() => setView("directory")}>Open</TextButton>} />
                     <div className="recent-list">
@@ -83,19 +61,6 @@ export function OverviewView({
                     </div>
                 </article>
 
-                {showAccessPanels && (
-                    <article className="dashboard-panel wide-panel">
-                        <PanelHeading label="Access" title="Permissions available" />
-                        <div className="permission-cloud">
-                            {access.permissions.slice(0, 24).map((permission) => (
-                                <span className="permission-pill" key={permission.id}>
-                                    {permission.name}
-                                </span>
-                            ))}
-                            {access.permissions.length === 0 && <span className="permission-pill">No permissions loaded</span>}
-                        </div>
-                    </article>
-                )}
             </section>
         </section>
     );

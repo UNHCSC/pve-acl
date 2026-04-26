@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { Field, ModalFrame, Select, SimpleFormModal, Textarea } from "./common";
-import type { AccessData, Organization, Project, UserImportResponse } from "../types";
+import { useEffect, useState, type FormEvent } from "react";
+import { apiFetch } from "../api";
+import { Field, ModalFrame, RowActionMenu, Select, SimpleFormModal, Textarea } from "./common";
+import type { GroupMembership, Organization, Project, UserImportResponse } from "../types";
 import { classNames, displayUser } from "../ui-helpers";
 
 export function OrgModal({
@@ -14,6 +15,7 @@ export function OrgModal({
     onSubmit: (values: { name: string; slug: string; description: string; parentOrgID: number | null }) => Promise<void>;
     onClose: () => void;
 }) {
+    const defaultParentID = context?.id ?? orgs[0]?.id ?? "";
     return (
         <SimpleFormModal
             title="New organization"
@@ -31,8 +33,8 @@ export function OrgModal({
             <Field name="name" label="Name" required />
             <Field name="slug" label="Slug" required />
             <Textarea name="description" label="Description" />
-            <Select name="parentOrgID" label="Parent organization" defaultValue={context?.id ?? ""}>
-                <option value="">Root level</option>
+            <Select name="parentOrgID" label="Parent organization" required={orgs.length > 0} defaultValue={defaultParentID}>
+                {orgs.length === 0 && <option value="">Root level</option>}
                 {orgs.map((org) => (
                     <option key={org.id} value={org.id}>
                         {org.name}
@@ -154,15 +156,18 @@ export function ImportUsersModal({
 }
 
 export function GroupModal({
+    context,
     onSubmit,
     onClose
 }: {
+    context?: Organization | Project | null;
     onSubmit: (values: { name: string; slug: string; description: string }) => Promise<void>;
     onClose: () => void;
 }) {
+    const scopedTitle = context ? `New group for ${context.name}` : "New group";
     return (
         <SimpleFormModal
-            title="New group"
+            title={scopedTitle}
             label="Access"
             onClose={onClose}
             onSubmit={(data) =>
@@ -181,15 +186,18 @@ export function GroupModal({
 }
 
 export function RoleModal({
+    context,
     onSubmit,
     onClose
 }: {
+    context?: Organization | Project | null;
     onSubmit: (values: { name: string; description: string }) => Promise<void>;
     onClose: () => void;
 }) {
+    const scopedTitle = context ? `New role for ${context.name}` : "New role";
     return (
         <SimpleFormModal
-            title="New role"
+            title={scopedTitle}
             label="Access"
             onClose={onClose}
             onSubmit={(data) =>
@@ -205,70 +213,42 @@ export function RoleModal({
     );
 }
 
-export function GrantModal({
-    access,
-    orgs,
-    projects,
+export function ProjectMemberModal({
+    defaultSubjectType = "user",
+    scopeLabel = "Project",
+    roles,
     onSubmit,
     onClose
 }: {
-    access: AccessData;
-    orgs: Organization[];
-    projects: Project[];
-    onSubmit: (values: { roleID: number; subjectType: string; subjectRef: string; scopeType: string; scopeID: number | null }) => Promise<void>;
+    defaultSubjectType?: "user" | "group";
+    scopeLabel?: string;
+    roles?: { id: number; name: string }[];
+    onSubmit: (values: { subjectType: string; subjectRef: string; roleID?: number }) => Promise<void>;
     onClose: () => void;
 }) {
-    const [scopeType, setScopeType] = useState("global");
+    const subjectType = defaultSubjectType;
+    const isGroup = subjectType === "group";
+    const defaultRoleID = roles?.[0]?.id || "";
 
     return (
         <SimpleFormModal
-            title="New role binding"
-            label="Access"
+            title={isGroup ? `Add ${scopeLabel.toLowerCase()} group` : `Add ${scopeLabel.toLowerCase()} user`}
+            label={isGroup ? "Group access" : "User access"}
             onClose={onClose}
             onSubmit={(data) =>
                 onSubmit({
-                    roleID: Number(data.get("roleID")),
-                    subjectType: String(data.get("subjectType") || "user"),
+                    subjectType,
                     subjectRef: String(data.get("subjectRef") || ""),
-                    scopeType,
-                    scopeID: scopeType === "global" ? null : Number(data.get("scopeID"))
+                    roleID: data.get("roleID") ? Number(data.get("roleID")) : undefined
                 })
             }
         >
-            <Select name="roleID" label="Role" required>
-                {access.roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                        {role.name}
-                    </option>
-                ))}
-            </Select>
-            <Select name="subjectType" label="Subject type">
-                <option value="user">User</option>
-                <option value="group">Group</option>
-            </Select>
-            <Field name="subjectRef" label="Subject username or group slug" required />
-            <label className="field-group">
-                <span className="field-label">Scope</span>
-                <select className="field-input" value={scopeType} onChange={(event) => setScopeType(event.target.value)}>
-                    <option value="global">Global</option>
-                    <option value="org">Organization</option>
-                    <option value="project">Project</option>
-                </select>
-            </label>
-            {scopeType === "org" && (
-                <Select name="scopeID" label="Organization" required>
-                    {orgs.map((org) => (
-                        <option key={org.id} value={org.id}>
-                            {org.name}
-                        </option>
-                    ))}
-                </Select>
-            )}
-            {scopeType === "project" && (
-                <Select name="scopeID" label="Project" required>
-                    {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                            {project.name}
+            <Field name="subjectRef" label={isGroup ? "Group slug" : "Username or email"} required />
+            {roles && roles.length > 0 && (
+                <Select name="roleID" label={`${scopeLabel} role`} defaultValue={defaultRoleID} required>
+                    {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                            {role.name}
                         </option>
                     ))}
                 </Select>
@@ -277,31 +257,158 @@ export function GrantModal({
     );
 }
 
-export function ProjectMemberModal({
-    defaultSubjectType = "user",
-    onSubmit,
+export function GroupMembersModal({
+    group,
+    onError,
     onClose
 }: {
-    defaultSubjectType?: "user" | "group";
-    onSubmit: (values: { subjectType: string; subjectRef: string }) => Promise<void>;
+    group: { id: number; name: string };
+    onError?: (message: string) => void;
     onClose: () => void;
 }) {
-    const subjectType = defaultSubjectType;
-    const isGroup = subjectType === "group";
+    const [memberships, setMemberships] = useState<GroupMembership[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const reportError = (caughtError: unknown, fallback: string) => {
+        const message = caughtError instanceof Error ? caughtError.message : fallback;
+        setError(message);
+        onError?.(message);
+    };
+
+    const loadMemberships = async () => {
+        setLoading(true);
+        setError("");
+        try {
+            setMemberships(await apiFetch<GroupMembership[]>(`/api/v1/groups/${group.id}/memberships`));
+        } catch (loadError) {
+            reportError(loadError, "Failed to load group members");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadMemberships();
+    }, [group.id]);
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setSaving(true);
+        setError("");
+        const data = new FormData(event.currentTarget);
+        try {
+            await apiFetch(`/api/v1/groups/${group.id}/memberships`, {
+                method: "POST",
+                body: JSON.stringify({
+                    userRef: String(data.get("userRef") || ""),
+                    membershipRole: String(data.get("membershipRole") || "member")
+                })
+            });
+            event.currentTarget.reset();
+            await loadMemberships();
+        } catch (saveError) {
+            reportError(saveError, "Failed to add group member");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const updateRole = async (membership: GroupMembership, membershipRole: string) => {
+        setSaving(true);
+        setError("");
+        try {
+            await apiFetch(`/api/v1/groups/${group.id}/memberships/${membership.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ membershipRole })
+            });
+            await loadMemberships();
+        } catch (saveError) {
+            reportError(saveError, "Failed to update group member");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const remove = async (membership: GroupMembership) => {
+        if (!window.confirm("Remove this group member?")) {
+            return;
+        }
+        setSaving(true);
+        setError("");
+        try {
+            await apiFetch(`/api/v1/groups/${group.id}/memberships/${membership.id}`, { method: "DELETE" });
+            await loadMemberships();
+        } catch (saveError) {
+            reportError(saveError, "Failed to remove group member");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
-        <SimpleFormModal
-            title={isGroup ? "Add project group" : "Add project user"}
-            label={isGroup ? "Group access" : "User access"}
-            onClose={onClose}
-            onSubmit={(data) =>
-                onSubmit({
-                    subjectType,
-                    subjectRef: String(data.get("subjectRef") || "")
-                })
-            }
-        >
-            <Field name="subjectRef" label={isGroup ? "Group slug" : "Username or email"} required />
-        </SimpleFormModal>
+        <ModalFrame title={`${group.name} members`} label="Group" onClose={onClose}>
+            <div className="group-members-modal">
+                <form className="modal-form group-member-form" onSubmit={submit}>
+                    <div className="modal-section-heading">
+                        <span className="panel-label">Add user</span>
+                        <strong>{group.name}</strong>
+                    </div>
+                    <Field name="userRef" label="Username or email" required />
+                    <Select name="membershipRole" label="Group role" defaultValue="member">
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="owner">Owner</option>
+                    </Select>
+                    <div className="modal-actions">
+                        <button type="submit" className="button-primary" disabled={saving}>
+                            Add member
+                        </button>
+                    </div>
+                </form>
+                <section className="group-member-list-panel">
+                    <div className="modal-section-heading">
+                        <span className="panel-label">Current members</span>
+                        <strong>{memberships.length}</strong>
+                    </div>
+                    {error && <p className="form-message is-warning">{error}</p>}
+                    {loading && <p className="form-message">Loading members...</p>}
+                    {!loading && memberships.length === 0 && <p className="form-message">No local members.</p>}
+                    {!loading && memberships.length > 0 && (
+                        <div className="compact-list">
+                            {memberships.map((membership) => (
+                                <div className="compact-list-row action-list-row group-member-row" key={membership.id}>
+                                    <div className="access-row-subject">
+                                        <div>
+                                            <strong>{membership.user?.label || membership.user?.username || `User ${membership.user_id}`}</strong>
+                                            <span>{membership.user?.email || membership.user?.username || "local member"}</span>
+                                        </div>
+                                    </div>
+                                    <div className="project-access-actions">
+                                        <select
+                                            className="field-input compact-select access-role-select"
+                                            value={String(membership.membership_role_label || membership.membership_role || "member")}
+                                            disabled={saving}
+                                            aria-label="Group membership role"
+                                            onChange={(event) => updateRole(membership, event.currentTarget.value)}
+                                        >
+                                            <option value="member">Member</option>
+                                            <option value="manager">Manager</option>
+                                            <option value="owner">Owner</option>
+                                        </select>
+                                        <RowActionMenu ariaLabel={`${membership.user?.label || membership.user?.username || "Member"} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                            <button type="button" role="menuitem" className="danger-action" disabled={saving} onClick={() => remove(membership)}>
+                                                Remove member
+                                            </button>
+                                        </RowActionMenu>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </div>
+        </ModalFrame>
     );
 }

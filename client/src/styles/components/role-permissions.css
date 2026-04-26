@@ -1,47 +1,18 @@
-/* Access view layout. */
-.access-grid {
-    display: grid;
-    gap: 20px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.access-grants-panel {
-    grid-column: 1 / -1;
-}
-
-.access-select-row {
-    align-items: start;
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--color-line);
-    display: grid;
-    font: inherit;
-    gap: 4px;
-    justify-items: start;
-    text-align: left;
-    transition: background 140ms ease, box-shadow 140ms ease;
-    width: 100%;
-}
-
-.access-select-row:hover {
-    background: var(--color-paper);
-}
-
-.access-select-row small {
-    color: var(--color-ink-muted);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-}
-
+/* Reusable role permission tree. */
 .modal-panel:has(.role-permission-modal) {
-    max-width: 780px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    max-height: calc(100dvh - 32px);
+    max-width: 760px;
+    overflow: hidden;
+    width: min(calc(100vw - 32px), 760px);
 }
 
 .role-permission-modal {
     display: grid;
     gap: 16px;
+    min-height: 0;
+    overflow: auto;
     padding: 16px;
 }
 
@@ -77,6 +48,16 @@
     padding: 5px 9px;
 }
 
+.role-editor-fields {
+    display: grid;
+    gap: 14px;
+}
+
+.role-editor-fields .field-input:disabled {
+    color: var(--color-ink-muted);
+    opacity: 0.82;
+}
+
 .permission-tree {
     --permission-tree-indent: 24px;
     --permission-tree-line-width: 2px;
@@ -85,7 +66,7 @@
     justify-items: start;
     list-style: none;
     margin: 0;
-    max-height: min(58vh, 560px);
+    max-height: min(34dvh, 360px);
     overflow: auto;
     padding: 0;
 }

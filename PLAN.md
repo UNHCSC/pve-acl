@@ -66,39 +66,36 @@ Lab
         └── Groups
 ```
 
-Access control must follow this tree. A role binding on an organization applies to that organization, all descendant organizations, and projects attached anywhere below it. A project-scoped binding applies only to that project unless a higher org binding grants the same permission through inheritance.
+Access control must follow this tree. There is exactly one root organization. A role granted through membership on an organization applies to that organization, all descendant organizations, and projects attached anywhere below it. A project-scoped grant applies only to that project and its owned resources unless a higher org grant supplies the same permission through inheritance.
 
 ### 3.2 Ownership
 
-Every managed resource should have a clear owner.
-
-Owners may be:
-
-* A user
-* A group
-* A project
-* An organization
+Every managed resource should have a clear lifecycle owner. In the MVP cloud model, projects own resources for quota, billing, audit, and lifecycle. Users and user groups may receive assignments to individual resources or asset groups, but those assignments do not transfer project ownership.
 
 Examples only:
 
 ```text
-VM 1201 is owned by user alice
-VM 1301 is owned by IT666-Fall2026 Group 03
-Network it666-lab1-g03 is owned by IT666-Fall2026 Group 03
-Template ubuntu-24.04-base is owned by Lab Admins
+VM 1201 is owned by IT666-Fall2026 and assigned to alice
+VM 1301 is owned by IT666-Fall2026 and assigned to IT666-Fall2026 Group 03
+Network it666-lab1-g03 is owned by IT666-Fall2026
+Template ubuntu-24.04-base is owned by Lab Infrastructure
 ```
 
 ### 3.3 Role-Based Access Control
 
-The system must support local roles and permissions. Roles are first-class, editable collections of permission grants. The application should ship with a small set of system roles needed to bootstrap the environment, but administrators must be able to create custom roles, add or remove permissions from those roles, and bind any number of roles to users or groups over the appropriate scope.
+The system must support local roles and permissions. Roles are first-class, editable collections of permission grants. The application should ship with a small set of system roles needed to bootstrap the environment, but administrators must be able to create custom roles, add or remove permissions from those roles, and grant those roles to users or groups through org/project memberships and asset assignments.
 
 The MVP access model should stay intentionally small:
 
 * Groups answer "who is in this set?"
 * Roles answer "what permissions does this grant?"
-* Role bindings answer "who receives which role, and where?"
+* Membership and assignment grants answer "who receives which role, and where?"
 
-Group membership roles such as `member`, `manager`, and `owner` are only for administering that group itself. They should not be treated as infrastructure permissions. Infrastructure permissions should come from role bindings so there is one primary access path to reason about.
+Group membership roles such as `member`, `manager`, and `owner` are only for administering that group itself. They should not be treated as infrastructure permissions. Infrastructure permissions should come from scoped membership/assignment role grants so there is one primary access path to reason about.
+
+Scoped administrators must be able to manage access at the point where they own work. A project or organization administrator should be able to create local custom roles, assign those roles to users or groups through scoped memberships, create local-only groups owned by their scope, and maintain those local group memberships from the project or organization screens. The system must prevent privilege escalation: a delegated administrator may not create, grant, or assign a role containing permissions they do not already have at that scope. LDAP-backed group import and synchronization remains a system-administration capability even when a delegated project or organization administrator owns the group locally.
+
+There is no global Access tab in the MVP. Day-to-day access work belongs on the org, project, group, role, and future asset pages where the scoped object already exists. A future site-admin inventory can summarize access paths and deep-link to those pages, but it should not become the main workflow.
 
 Example roles only:
 
@@ -473,7 +470,7 @@ UNIQUE(role_id, permission_id)
 
 ### 7.7 role_bindings
 
-Assigns any number of roles to users or groups over a scope. In the UI these should be presented as "access grants" so an administrator can see the entire access surface in one place instead of hunting inside each group.
+Stores the derived role grant for a user or group at a scope. Org/project membership and asset-assignment workflows are the primary source of these rows; UI should present the source membership or assignment rather than making administrators hunt through raw bindings.
 
 ```sql
 role_bindings
@@ -1175,7 +1172,7 @@ VM power state changed
 * Group memberships
 * Roles
 * Permissions
-* Role bindings surfaced as access grants
+* Role bindings surfaced through scoped memberships and assignments
 
 ### Milestone 2: Proxmox Inventory
 
@@ -1254,18 +1251,23 @@ Completed or substantially implemented:
 * Temporary-test-database setup for Go tests.
 * Auth route tests, middleware tests, enum tests, config tests, and focused `db` helper tests.
 * Authenticated API middleware that resolves the current auth user and local database user.
-* MVP gomysql models for users, groups, memberships, organizations, projects, project memberships, roles, permissions, role permissions, role bindings, quotas, resources, Proxmox inventory, jobs, audit events, and secrets.
+* MVP gomysql models for users, groups, memberships, organizations, projects, project memberships, roles, permissions, role permissions, role bindings, quotas, resources, asset groups, asset assignments, Proxmox inventory, jobs, audit events, and secrets.
 * Idempotent initial setup for the root lab organization, configured administrator groups, `LabAdmin`, core permissions, and admin role bindings.
 * LDAP login sync limited to bootstrap admin groups and explicitly configured LDAP-synced cloud groups. Arbitrary LDAP groups are no longer imported by default.
-* Central RBAC evaluation through roles, permissions, role bindings, scopes, and site-admin override behavior.
-* User, group, role, permission, role-binding/access-grant, and project helper APIs.
+* Central RBAC evaluation through roles, permissions, scoped grants, scopes, site-admin override behavior, and a Casbin-derived policy engine backed by application-owned tables.
+* User, group, role, permission, scoped membership/access, and project helper APIs.
 * Project create/list/detail/delete, project membership management, project member role editing, direct user lookup/sync, and group assignment to projects.
-* Organization create, move, guarded delete, and project move APIs with permission checks.
-* Custom role creation and role permission grant editing.
-* Access UI organized around the simplified model: groups are membership sets, roles are permission bundles, and access grants are role bindings over scopes.
-* Access UI role-permission editor for selecting a role, reviewing system/custom status, toggling permissions on custom roles, and saving through the role permission APIs.
-* Dashboard tabs for overview, directory, people, identity, and access, with account menu, toasts, URL routing, responsive navigation, and user-scoped recents.
-* Directory UI with draggable organizations/projects, nested tree context lines, project member management, separate add-user/add-group member flows, and tighter two-column chrome.
+* Exactly-one-root organization enforcement, organization create/move guarded by the root rule, guarded delete, and project move APIs with permission checks.
+* Organization archive/deactivate behavior for empty organizations, active-tree filtering, and archived organization project-attachment guards.
+* Custom role creation and role permission grant editing, including project/org-scoped custom roles and privilege-ceiling checks.
+* Safe custom role edit/delete APIs with system-role protection and in-use role delete guards.
+* Group update/archive APIs, active-group filtering, and archived-group RBAC deactivation.
+* Delegated group-scoped role grant management for group owners, with global grants remaining site-admin only.
+* Delegated organization and project member role assignment with privilege-ceiling checks so managers cannot assign roles above their own scoped permissions.
+* Organization/project-owned group membership management from the directory detail UI, with LDAP import/sync remaining site-admin-only.
+* Access tab and `/api/v1/system/access` backend removed after backup; reusable role-permission editing now lives in directory-scoped role panels.
+* Dashboard tabs for overview, directory, people, and identity, with account menu, toasts, URL routing, responsive navigation, and user-scoped recents.
+* Directory UI with one-root organization/project tree behavior, scoped org/project member management, local group creation, group membership management, custom role creation, and reusable role-permission editing.
 * People UI import flow for bringing in multiple FreeIPA users at once, including partial success and per-entry failure display.
 * React/TypeScript client split into reusable components, views, API helpers, hooks, tree utilities, and layered CSS partials, built with Bun, Vite, and Tailwind.
 * TanStack Query wired into the dashboard data and project membership loaders so API consumption can move away from manual fetch state.
@@ -1273,10 +1275,11 @@ Completed or substantially implemented:
 Known deliberate leftovers:
 
 * Some legacy local ACL tables and routes still exist for compatibility while the MVP cloud model takes over. Remove them only after replacement routes and tests cover the same use cases.
-* Organization management is now usable from the directory tree, but full edit/archive screens still need polish.
+* Organization management is now usable from the directory tree, but full edit screens and archive UI affordances still need polish.
+* Asset group and assignment tables/helpers exist, but full resource/asset group APIs and UI workflows are still pending.
 * Resources, quotas, Proxmox integration, and job execution are scaffolded in the schema but not yet functional product workflows.
 * Audit events exist and setup writes some audit rows, but audit logging is not yet consistently applied to all management actions.
-* Several destructive operations still hard-delete rows. MVP should prefer archive/deactivate behavior for organizations, projects, groups, resources, and assignments where historical context matters.
+* Several destructive operations still hard-delete rows. MVP should prefer archive/deactivate behavior for projects, resources, and assignments where historical context matters.
 * TanStack Query is installed and used for core reads, but mutations still mostly use manual invalidation/refresh helpers.
 
 Current baseline checks:
@@ -1288,8 +1291,8 @@ cd client && bun run check && bun run build
 
 MVP gap summary, in recommended order:
 
-* Finish identity/access durability: role edit/delete protections, group update/archive, delegated grant rules, and consistent audit events.
-* Finish tenant/project lifecycle: archive/deactivate instead of hard delete, richer organization/project edit screens, readable grant scope selectors, and project-level access shortcuts backed by normal role bindings.
+* Finish identity/access durability: consistent audit events, mutation conversion to TanStack Query mutations, and explanation/deep-link views from roles/groups back to the org/project/asset where access is granted.
+* Finish tenant/project lifecycle: project archive/deactivate instead of hard delete, richer organization/project edit screens, and readable scoped membership/assignment selectors.
 * Implement quota policies and local usage calculation before touching Proxmox mutations.
 * Implement resource registry APIs and UI sections against local database rows only, with RBAC, ownership, quota checks, and audit writes.
 * Add a Proxmox service boundary with fake tests, then read-only cluster/node/VM/CT discovery and drift-safe inventory sync.
@@ -1298,25 +1301,36 @@ MVP gap summary, in recommended order:
 
 ### 20.2 Working Rules Going Forward
 
-* Keep the access model simple: groups answer "who", roles answer "what", access grants answer "where".
-* Do not add a second permission system in project membership or group membership. Project/group-local roles may control local administration, but infrastructure permissions should come from scoped role bindings.
+* Keep the access model simple: groups answer "who", roles answer "what", memberships/assignments answer "where".
+* Do not add a second permission system in project membership or group membership. Project/group-local roles may control local administration, but infrastructure permissions should come from scoped role grants represented in the application database and mirrored into the policy engine.
+* Put delegated access management where the scope lives. Project/org/group/role/asset screens should provide day-to-day scoped access tools; any future global view should summarize and deep-link for site administrators.
+* Enforce privilege ceilings in the API, not only in the UI. Delegated administrators can grant only permissions and roles they already hold at the target scope.
+* Keep LDAP import/sync controls site-admin-only, even for groups owned by a project or organization.
 * Prefer one vertical slice at a time: schema/helper, API, UI, tests, build.
 * Keep handlers thin. Put repeated gomysql lookups and mutations into `db` helpers or small app helper functions.
 * Use readable labels in APIs wherever the UI would otherwise need to render raw IDs.
-* Do not remove legacy tables or routes in the same patch as unrelated feature work.
+* Remove legacy tables or routes only when the replacement workflow and tests for the same user goal are in place.
 
-### 20.3 Next Slice: Access Polish and Delegation
+### 20.3 Next Slice: Scoped Access Durability
 
 Goal: finish the identity/access foundation before moving into resources.
 
 Implementation scope:
 
-* Add edit/delete endpoints for roles where safe. System roles should not be deletable from the UI.
-* Add group update/archive endpoints and a cleaner group detail payload.
-* Add optional delegated grant management: group owners may manage access grants only within their own group scope, while global grants remain site-admin only.
+* Completed: add edit/delete endpoints for roles where safe. System roles should not be deletable from the UI.
+* Completed: add group update/archive endpoints and a cleaner group detail payload.
+* Completed: add optional delegated scoped grant management: group owners may manage grants only within their own group scope, while global grants remain site-admin only.
+* Completed: add project-scoped role creation, permission editing, assignable-role listing, and project member role assignment with privilege-ceiling checks.
+* Completed: add project group membership management UI for project-owned groups.
+* Completed: remove the global Access tab and system access endpoint after backup.
+* Completed: add organization-scoped memberships, assignable roles, owned groups, local role creation, and reusable role-permission editing from the directory UI.
+* Completed: add exactly-one-root organization enforcement in API/db/UI.
+* Completed: add initial Casbin-backed scoped RBAC evaluation while keeping application tables as source of truth.
+* Completed: add asset group and asset assignment schema/helpers as the local foundation for resource assignment workflows.
 * Convert access mutations to TanStack Query mutations with targeted invalidation.
-* Add audit events for user, group, role, permission grant, and access grant changes.
-* Add tests for system role protection, group update/archive behavior, and delegated scoped grant management.
+* Add audit events for user, group, role, permission grant, scoped membership, and asset assignment changes.
+* Add access explanation APIs that can show the "you get X through Y" path for memberships and resource assignments.
+* Completed: add tests for system role protection, group update/archive behavior, delegated scoped grant management, one-root org enforcement, project/org-scoped role privilege ceilings, Casbin-backed scope inheritance, and asset assignment foundations.
 
 Acceptance checks:
 
@@ -1331,11 +1345,13 @@ Goal: make the tenant hierarchy real enough to attach projects, groups, quotas, 
 
 Implementation scope:
 
-* Replace organization hard delete with archive/deactivate behavior after API tests cover the expected constraints.
+* Completed: replace organization hard delete with archive/deactivate behavior after API tests cover the expected constraints.
+* Completed: enforce exactly one root organization and disallow moving normal orgs back to root.
+* Completed: add organization detail panels for memberships, owned groups, and roles.
 * Add organization edit UI for name, slug, description, and parent movement rather than only drag-and-drop movement.
-* Add focused organization detail panels for child orgs, projects, grants, and quota bindings.
-* Update access grants so org/project scopes can be selected by readable name rather than raw ID.
-* Add tests for organization archive, move cycle prevention, visible-tree filtering, and readable scope labels.
+* Add focused organization detail panels for child orgs, projects, quota bindings, and access explanation/deep-link views.
+* Update scoped membership/assignment selectors so org/project/resource scopes can be selected by readable name rather than raw ID.
+* Partially completed: add tests for organization archive and visible-tree filtering. Still needed: move cycle prevention coverage and readable scope label coverage.
 
 Acceptance checks:
 
@@ -1352,7 +1368,7 @@ Implementation scope:
 
 * Add full project update for name, slug, description, organization, and active/archive state.
 * Replace project hard delete as the default UI behavior with archive/deactivate.
-* Add project-level access grant shortcuts that create normal role bindings rather than separate permission logic.
+* Partially completed: add project-level scoped access shortcuts that create normal scoped grants rather than separate permission logic. Current project member role assignment writes normal project-scoped role bindings; still needed: assignment panels, explanation paths, and deep links.
 * Add quota policy CRUD and quota bindings for projects and groups.
 * Add usage-calculation helpers that can run before Proxmox integration.
 * Add tests for project archive, quota binding, and quota calculation with local resource rows.
@@ -1372,9 +1388,11 @@ Implementation scope:
 
 * Implement resource CRUD/archive APIs for VM, CT, network, template, volume, secret, Terraform workspace, and Ansible inventory rows.
 * Attach resources to projects and owners.
-* Enforce access grants and quota checks before resource creation/update.
-* Add dashboard project detail sections for resources.
-* Add audit events for create, update, archive, and assignment changes.
+* Implement asset group CRUD and resource-to-asset-group membership APIs.
+* Implement direct resource and asset-group assignment APIs that grant scoped roles without transferring project ownership.
+* Enforce scoped role grants and quota checks before resource creation/update.
+* Add dashboard project detail sections for resources, asset groups, and assignments.
+* Add audit events for create, update, archive, asset group, and assignment changes.
 * Keep these APIs Proxmox-free so quota/RBAC/resource ownership can be tested without infrastructure access.
 
 Acceptance checks:
@@ -1430,7 +1448,7 @@ Implementation scope:
 * Implement VM create-from-template, start, stop, reboot, delete/archive, and console-ticket workflows first.
 * Repeat the same shape for containers after VM behavior is stable.
 * Queue mutating operations as jobs and update resource status as jobs progress.
-* Enforce access grants and quotas before job creation.
+* Enforce scoped role grants and quotas before job creation.
 * Use a non-production Proxmox cluster or fake service until the workflow is proven.
 
 Acceptance checks:

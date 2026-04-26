@@ -2,9 +2,9 @@
 @import "./settings/theme.css";
 @import "./layers/base.css";
 @import "./layers/components.css";
-@import "./views/access.css";
 @import "./components/actions.css";
 @import "./components/membership.css";
+@import "./components/role-permissions.css";
 @import "./components/chrome.css";
 @import "./components/data.css";
 @import "./components/overlays.css";

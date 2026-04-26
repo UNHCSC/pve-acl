@@ -35,10 +35,15 @@ func CreateProject(input ProjectCreateInput) (*Project, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !found {
+		if !found || org.ArchivedAt != nil {
 			return nil, fmt.Errorf("default organization %q was not found", DefaultRootOrganizationSlug)
 		}
 		input.OrganizationID = org.ID
+	}
+	if org, found, err := GetOrganizationByID(input.OrganizationID); err != nil {
+		return nil, err
+	} else if !found || org.ArchivedAt != nil {
+		return nil, fmt.Errorf("organization was not found")
 	}
 
 	if existing, found, err := findProjectBySlug(input.Slug); err != nil || found {
@@ -190,10 +195,6 @@ func ProjectRoleForRoleName(name string) (ProjectRole, bool) {
 }
 
 func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int, projectRole ProjectRole) error {
-	if err := RemoveProjectMemberAccessRoles(projectID, subjectType, subjectID); err != nil {
-		return err
-	}
-
 	role, found, err := GetRoleByName(ProjectRoleName(projectRole))
 	if err != nil {
 		return err
@@ -201,33 +202,25 @@ func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubje
 	if !found {
 		return fmt.Errorf("project access role %q was not found", ProjectRoleName(projectRole))
 	}
+	return EnsureProjectMemberRoleBinding(projectID, subjectType, subjectID, role.ID)
+}
 
+func EnsureProjectMemberRoleBinding(projectID int, subjectType ProjectMemberSubject, subjectID int, roleID int) error {
+	if err := RemoveProjectMemberAccessRoles(projectID, subjectType, subjectID); err != nil {
+		return err
+	}
 	scopeID := projectID
-	_, err = ensureRoleBinding(role.ID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeProject, &scopeID, time.Now().UTC())
+	_, err := ensureRoleBinding(roleID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeProject, &scopeID, time.Now().UTC())
 	return err
 }
 
 func RemoveProjectMemberAccessRoles(projectID int, subjectType ProjectMemberSubject, subjectID int) error {
-	roles, err := Roles.SelectAll()
-	if err != nil {
-		return err
-	}
-	roleIDs := map[int]bool{}
-	for _, role := range roles {
-		if _, ok := ProjectRoleForRoleName(role.Name); ok {
-			roleIDs[role.ID] = true
-		}
-	}
-	if len(roleIDs) == 0 {
-		return nil
-	}
-
 	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return err
 	}
 	for _, binding := range bindings {
-		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID || !roleIDs[binding.RoleID] {
+		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID {
 			continue
 		}
 		if err := RoleBindings.Delete(binding.ID); err != nil {

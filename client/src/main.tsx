@@ -5,19 +5,20 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { apiFetch } from "./api";
+import { RolePermissionModal } from "./components/RolePermissionModal";
 import { ThemeSettings } from "./components/ThemeSettings";
 import { ToastStack } from "./components/common";
-import { GrantModal, GroupModal, ImportUsersModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal } from "./components/modals";
+import { GroupMembersModal, GroupModal, ImportUsersModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal } from "./components/modals";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDirectorySelection } from "./hooks/useDirectorySelection";
+import { useOrganizationAccess } from "./hooks/useOrganizationAccess";
 import { useProjectMemberships } from "./hooks/useProjectMemberships";
 import { useToasts } from "./hooks/useToasts";
 import "./styles/site.css";
-import type { Group, ModalKey, Organization, Project, Role, RoleBinding, RolePermissionGrant, ThemeKey, UserImportResponse, ViewKey } from "./types";
+import type { Group, ModalKey, Organization, Project, Role, RolePermissionGrant, ThemeKey, UserImportResponse, ViewKey } from "./types";
 import { applyTheme, readStoredTheme } from "./theme";
 import { viewTitles } from "./types";
 import { classNames, displayUser, initialView, initials } from "./ui-helpers";
-import { AccessView } from "./views/AccessView";
 import { DirectoryView } from "./views/DirectoryView";
 import { HomePage } from "./views/HomePage";
 import { IdentityView } from "./views/IdentityView";
@@ -36,17 +37,14 @@ const queryClient = new QueryClient({
     }
 });
 
-function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean; canViewAccess?: boolean } } | null) {
+function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean } } | null) {
     if (view === "people") {
         return Boolean(summary?.capabilities.canViewUsers);
-    }
-    if (view === "access") {
-        return Boolean(summary?.capabilities.canViewAccess);
     }
     return true;
 }
 
-function allowedViews(summary: { capabilities: { canViewUsers?: boolean; canViewAccess?: boolean } } | null): ViewKey[] {
+function allowedViews(summary: { capabilities: { canViewUsers?: boolean } } | null): ViewKey[] {
     return (Object.keys(viewTitles) as ViewKey[]).filter((key) => viewIsAllowed(key, summary));
 }
 
@@ -60,11 +58,14 @@ function DashboardApp() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [theme, setTheme] = useState<ThemeKey>(readStoredTheme);
     const [projectMemberSubjectType, setProjectMemberSubjectType] = useState<"user" | "group">("user");
+    const [groupMembersContext, setGroupMembersContext] = useState<{ id: number; name: string } | null>(null);
+    const [editingRole, setEditingRole] = useState<{ role: Role; context: Organization | Project } | null>(null);
 
     const { toasts, showToast } = useToasts();
-    const { access, loadAccess, loadMyAccess, loadSummary, loadTree, loadUsers, myAccess, summary, tree, users } = useDashboardData((message) => showToast(message, "warning"));
+    const { loadMyAccess, loadSummary, loadTree, loadUsers, myAccess, summary, tree, users } = useDashboardData((message) => showToast(message, "warning"));
     const { expanded, orgTree, selectedOrg, selectedProject, selection, setSelection, toggleOrg } = useDirectorySelection(tree);
-    const { activeProject, loadingProject, memberships, reloadMemberships } = useProjectMemberships(selectedProject, (message) => showToast(message, "warning"));
+    const { loadingOrg, orgGroups, orgMemberships, orgRoles, reloadOrgGroups, reloadOrgMemberships, reloadOrgRoles } = useOrganizationAccess(selectedOrg, (message) => showToast(message, "warning"));
+    const { activeProject, loadingProject, memberships, projectGroups, projectRoles, reloadMemberships, reloadProjectGroups, reloadProjectRoles } = useProjectMemberships(selectedProject, (message) => showToast(message, "warning"));
     const counts = summary?.counts || {};
 
     useEffect(() => {
@@ -167,6 +168,24 @@ function DashboardApp() {
         setModal(nextModal);
     };
 
+    const errorMessage = (error: unknown, fallback = "Action failed") => (error instanceof Error ? error.message : fallback);
+
+    const toastError = (error: unknown, fallback = "Action failed") => {
+        const message = errorMessage(error, fallback);
+        showToast(message, "warning");
+        return message;
+    };
+
+    const submitModalMutation = async (operation: () => Promise<void>) => {
+        try {
+            await operation();
+            setModal(null);
+        } catch (error) {
+            toastError(error);
+            throw error;
+        }
+    };
+
     const createOrg = async (values: { name: string; slug: string; description: string; parentOrgID: number | null }) => {
         await apiFetch<Organization>("/api/v1/organizations", { method: "POST", body: JSON.stringify(values) });
         await Promise.all([loadTree(), loadSummary()]);
@@ -187,51 +206,114 @@ function DashboardApp() {
     };
 
     const createGroup = async (values: { name: string; slug: string; description: string }) => {
+        const scope =
+            modalContext && "organization_id" in modalContext
+                ? { ownerScopeType: "project", ownerScopeID: modalContext.id, groupType: "project" }
+                : modalContext && "parent_org_id" in modalContext
+                    ? { ownerScopeType: "org", ownerScopeID: modalContext.id, groupType: "custom" }
+                    : { ownerScopeType: "global", groupType: "custom" };
         await apiFetch<Group>("/api/v1/groups", {
             method: "POST",
-            body: JSON.stringify({ ...values, groupType: "custom", syncSource: "local", syncMembership: false })
+            body: JSON.stringify({ ...values, ...scope, syncSource: "local", syncMembership: false })
         });
-        await Promise.all([loadAccess(), loadSummary()]);
+        await Promise.all([
+            loadSummary(),
+            loadTree(),
+            activeProject ? reloadProjectGroups() : Promise.resolve(),
+            selectedOrg ? reloadOrgGroups() : Promise.resolve()
+        ]);
         showToast("Group created", "success");
     };
 
     const createRole = async (values: { name: string; description: string }) => {
-        await apiFetch<Role>("/api/v1/roles", { method: "POST", body: JSON.stringify(values) });
-        await Promise.all([loadAccess(), loadSummary()]);
+        const scope =
+            modalContext && "organization_id" in modalContext
+                ? { scopeType: "project", scopeID: modalContext.id }
+                : modalContext && "parent_org_id" in modalContext
+                    ? { scopeType: "org", scopeID: modalContext.id }
+                    : {};
+        await apiFetch<Role>("/api/v1/roles", { method: "POST", body: JSON.stringify({ ...values, ...scope }) });
+        await Promise.all([
+            loadSummary(),
+            activeProject ? reloadProjectRoles() : Promise.resolve(),
+            selectedOrg ? reloadOrgRoles() : Promise.resolve()
+        ]);
         showToast("Role created", "success");
     };
 
-    const saveRolePermissions = async (role: Role, permissionIDs: number[]) => {
-        const currentGrants = await apiFetch<RolePermissionGrant[]>(`/api/v1/roles/${role.id}/permissions`);
-        const currentIDs = new Set(currentGrants.map((grant) => grant.permission_id));
-        const nextIDs = new Set(permissionIDs);
-        const additions = permissionIDs.filter((permissionID) => !currentIDs.has(permissionID));
-        const removals = currentGrants.filter((grant) => !nextIDs.has(grant.permission_id));
-
+    const reloadRoleSurfaces = async () => {
         await Promise.all([
-            ...additions.map((permissionID) =>
-                apiFetch(`/api/v1/roles/${role.id}/permissions`, {
-                    method: "POST",
-                    body: JSON.stringify({ permissionID })
-                })
-            ),
-            ...removals.map((grant) =>
-                apiFetch(`/api/v1/roles/${role.id}/permissions/${grant.permission_id}`, {
-                    method: "DELETE"
-                })
-            )
+            loadMyAccess(),
+            loadSummary(),
+            activeProject ? reloadProjectRoles() : Promise.resolve(),
+            selectedOrg ? reloadOrgRoles() : Promise.resolve()
         ]);
-        await Promise.all([loadAccess(), loadMyAccess(), loadSummary()]);
-        showToast("Role permissions updated", "success");
     };
 
-    const createGrant = async (values: { roleID: number; subjectType: string; subjectRef: string; scopeType: string; scopeID: number | null }) => {
-        await apiFetch<RoleBinding>("/api/v1/role-bindings", { method: "POST", body: JSON.stringify(values) });
-        await Promise.all([loadAccess(), loadMyAccess(), loadSummary()]);
-        showToast("Role binding created", "success");
+    const saveRole = async (role: Role, values: { name: string; description: string; permissionIDs: number[]; updateDetails: boolean; updatePermissions: boolean }) => {
+        try {
+            let updatedRole = role;
+            if (values.updateDetails) {
+                updatedRole = await apiFetch<Role>(`/api/v1/roles/${role.id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ name: values.name, description: values.description })
+                });
+            }
+
+            if (values.updatePermissions) {
+                const currentGrants = await apiFetch<RolePermissionGrant[]>(`/api/v1/roles/${role.id}/permissions`);
+                const currentIDs = new Set(currentGrants.map((grant) => grant.permission_id));
+                const nextIDs = new Set(values.permissionIDs);
+                const additions = values.permissionIDs.filter((permissionID) => !currentIDs.has(permissionID));
+                const removals = currentGrants.filter((grant) => !nextIDs.has(grant.permission_id));
+
+                await Promise.all([
+                    ...additions.map((permissionID) =>
+                        apiFetch(`/api/v1/roles/${role.id}/permissions`, {
+                            method: "POST",
+                            body: JSON.stringify({ permissionID })
+                        })
+                    ),
+                    ...removals.map((grant) =>
+                        apiFetch(`/api/v1/roles/${role.id}/permissions/${grant.permission_id}`, {
+                            method: "DELETE"
+                        })
+                    )
+                ]);
+            }
+
+            await reloadRoleSurfaces();
+            showToast("Role updated", "success");
+            return updatedRole;
+        } catch (error) {
+            toastError(error, "Failed to update role");
+            throw error;
+        }
     };
 
-    const addProjectMember = async (values: { subjectType: string; subjectRef: string }) => {
+    const deleteRole = async (role: Role) => {
+        if (role.is_system_role) {
+            showToast("System roles cannot be deleted.", "warning");
+            return;
+        }
+        if (!window.confirm(`Delete ${role.name}? This only works when the role is not assigned anywhere.`)) {
+            return;
+        }
+        await apiFetch(`/api/v1/roles/${role.id}`, { method: "DELETE" });
+        await reloadRoleSurfaces();
+        showToast("Role deleted", "success");
+    };
+
+    const addOrganizationMember = async (values: { subjectType: string; subjectRef: string; roleID?: number }) => {
+        if (!selectedOrg) {
+            return;
+        }
+        await apiFetch(`/api/v1/organizations/${selectedOrg.id}/memberships`, { method: "POST", body: JSON.stringify(values) });
+        await reloadOrgMemberships();
+        showToast("Organization member added", "success");
+    };
+
+    const addProjectMember = async (values: { subjectType: string; subjectRef: string; roleID?: number }) => {
         if (!activeProject) {
             return;
         }
@@ -277,7 +359,7 @@ function DashboardApp() {
         try {
             await operation();
         } catch (error) {
-            showToast(error instanceof Error ? error.message : "Action failed", "warning");
+            toastError(error);
         }
     };
 
@@ -380,7 +462,7 @@ function DashboardApp() {
                 </header>
 
                 <main className="dashboard-content">
-                    {view === "overview" && <OverviewView counts={counts} tree={tree} access={access} capabilities={summary?.capabilities || {}} setView={setView} selectProject={setSelection} />}
+                    {view === "overview" && <OverviewView counts={counts} tree={tree} capabilities={summary?.capabilities || {}} setView={setView} selectProject={setSelection} />}
                     {view === "directory" && (
                         <DirectoryView
                             orgTree={orgTree}
@@ -388,7 +470,13 @@ function DashboardApp() {
                             selection={selection}
                             selectedOrg={selectedOrg}
                             selectedProject={activeProject || selectedProject}
+                            orgMemberships={orgMemberships}
+                            orgRoles={orgRoles}
+                            orgGroups={orgGroups}
                             memberships={memberships}
+                            projectRoles={projectRoles}
+                            projectGroups={projectGroups}
+                            loadingOrg={loadingOrg}
                             loadingProject={loadingProject}
                             openMenu={openMenu}
                             setOpenMenu={setOpenMenu}
@@ -400,10 +488,57 @@ function DashboardApp() {
                             moveProject={(project, organizationID) => mutateWithToast(() => moveProject(project, organizationID))}
                             deleteOrg={(org) => mutateWithToast(() => deleteOrg(org))}
                             deleteProject={(project) => mutateWithToast(() => deleteProject(project))}
+                            addOrganizationMember={(subjectType) => {
+                                setProjectMemberSubjectType(subjectType);
+                                openContextModal("project-member", selectedOrg);
+                            }}
                             addProjectMember={(subjectType) => {
                                 setProjectMemberSubjectType(subjectType);
                                 openContextModal("project-member", activeProject || selectedProject);
                             }}
+                            createGroup={(context) => openContextModal("group", context)}
+                            editRole={(role, context) => setEditingRole({ role, context })}
+                            deleteRole={(role) => mutateWithToast(() => deleteRole(role))}
+                            manageGroupMembers={(group) => {
+                                setGroupMembersContext(group);
+                                openContextModal("group-members");
+                            }}
+                            updateOrganizationMemberRole={(membership, roleID) =>
+                                mutateWithToast(async () => {
+                                    if (!selectedOrg || !roleID) {
+                                        return;
+                                    }
+                                    await apiFetch(`/api/v1/organizations/${selectedOrg.id}/memberships/${membership.id}`, {
+                                        method: "PATCH",
+                                        body: JSON.stringify({ roleID })
+                                    });
+                                    await reloadOrgMemberships();
+                                    showToast("Organization role updated", "success");
+                                })
+                            }
+                            updateProjectMemberRole={(membership, roleID) =>
+                                mutateWithToast(async () => {
+                                    if (!activeProject || !roleID) {
+                                        return;
+                                    }
+                                    await apiFetch(`/api/v1/projects/${activeProject.id}/memberships/${membership.id}`, {
+                                        method: "PATCH",
+                                        body: JSON.stringify({ roleID })
+                                    });
+                                    await reloadMemberships();
+                                    showToast("Project role updated", "success");
+                                })
+                            }
+                            deleteOrganizationMember={(membership) =>
+                                mutateWithToast(async () => {
+                                    if (!selectedOrg || !window.confirm("Remove this organization member?")) {
+                                        return;
+                                    }
+                                    await apiFetch(`/api/v1/organizations/${selectedOrg.id}/memberships/${membership.id}`, { method: "DELETE" });
+                                    await reloadOrgMemberships();
+                                    showToast("Organization member removed", "success");
+                                })
+                            }
                             deleteProjectMember={(membership) =>
                                 mutateWithToast(async () => {
                                     if (!activeProject || !window.confirm("Remove this project member?")) {
@@ -418,26 +553,6 @@ function DashboardApp() {
                     )}
                     {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canImport={Boolean(summary.capabilities.canManageUsers)} openImport={() => openContextModal("import-users")} />}
                     {view === "identity" && <IdentityView summary={summary} myAccess={myAccess} />}
-                    {view === "access" && summary?.capabilities.canViewAccess && (
-                        <AccessView
-                            access={access}
-                            capabilities={summary.capabilities}
-                            openGroup={() => openContextModal("group")}
-                            openRole={() => openContextModal("role")}
-                            openGrant={() => openContextModal("grant")}
-                            saveRolePermissions={saveRolePermissions}
-                            deleteGrant={(grant) =>
-                                mutateWithToast(async () => {
-                                    if (!window.confirm("Delete this role binding?")) {
-                                        return;
-                                    }
-                                    await apiFetch(`/api/v1/role-bindings/${grant.id}`, { method: "DELETE" });
-                                    await Promise.all([loadAccess(), loadMyAccess(), loadSummary()]);
-                                    showToast("Role binding deleted", "success");
-                                })
-                            }
-                        />
-                    )}
                 </main>
             </div>
 
@@ -447,10 +562,7 @@ function DashboardApp() {
                     context={modalContext as Organization | null}
                     orgs={tree?.organizations || []}
                     onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await createOrg(values);
-                        setModal(null);
-                    }}
+                    onSubmit={(values) => submitModalMutation(() => createOrg(values))}
                 />
             )}
             {modal === "project" && (
@@ -458,62 +570,80 @@ function DashboardApp() {
                     context={modalContext as Organization | null}
                     orgs={tree?.organizations || []}
                     onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await createProject(values);
-                        setModal(null);
-                    }}
+                    onSubmit={(values) => submitModalMutation(() => createProject(values))}
                 />
             )}
             {modal === "import-users" && (
                 <ImportUsersModal
                     onClose={() => setModal(null)}
                     onSubmit={async (values) => {
-                        return importUsers(values);
+                        try {
+                            return await importUsers(values);
+                        } catch (error) {
+                            toastError(error, "User import failed");
+                            throw error;
+                        }
                     }}
                 />
             )}
             {modal === "group" && (
                 <GroupModal
+                    context={modalContext}
                     onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await createGroup(values);
-                        setModal(null);
-                    }}
+                    onSubmit={(values) => submitModalMutation(() => createGroup(values))}
                 />
             )}
             {modal === "role" && (
                 <RoleModal
+                    context={modalContext}
                     onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await createRole(values);
-                        setModal(null);
-                    }}
-                />
-            )}
-            {modal === "grant" && (
-                <GrantModal
-                    access={access}
-                    orgs={tree?.organizations || []}
-                    projects={tree?.projects || []}
-                    onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await createGrant(values);
-                        setModal(null);
-                    }}
+                    onSubmit={(values) => submitModalMutation(() => createRole(values))}
                 />
             )}
             {modal === "project-member" && (
                 <ProjectMemberModal
                     defaultSubjectType={projectMemberSubjectType}
+                    scopeLabel={modalContext && "parent_org_id" in modalContext ? "Organization" : "Project"}
+                    roles={modalContext && "parent_org_id" in modalContext ? orgRoles : projectRoles}
                     onClose={() => setModal(null)}
-                    onSubmit={async (values) => {
-                        await addProjectMember(values);
-                        setModal(null);
-                    }}
+                    onSubmit={(values) =>
+                        submitModalMutation(async () => {
+                            if (modalContext && "parent_org_id" in modalContext) {
+                                await addOrganizationMember(values);
+                            } else {
+                                await addProjectMember(values);
+                            }
+                        })
+                    }
+                />
+            )}
+            {modal === "group-members" && groupMembersContext && (
+                <GroupMembersModal
+                    group={groupMembersContext}
+                    onError={(message) => showToast(message, "warning")}
+                    onClose={() => setModal(null)}
+                />
+            )}
+            {editingRole && (
+                <RolePermissionModal
+                    role={editingRole.role}
+                    editable={roleIsLocalToContext(editingRole.role, editingRole.context)}
+                    onClose={() => setEditingRole(null)}
+                    saveRole={saveRole}
                 />
             )}
         </div>
     );
+}
+
+function roleIsLocalToContext(role: Role, context: Organization | Project): boolean {
+    if (role.is_system_role) {
+        return false;
+    }
+    if ("organization_id" in context) {
+        return String(role.owner_scope_label || "").toLowerCase() === "project" && role.owner_scope_id === context.id;
+    }
+    return String(role.owner_scope_label || "").toLowerCase() === "org" && role.owner_scope_id === context.id;
 }
 
 const mount = document.getElementById("dashboard-root");

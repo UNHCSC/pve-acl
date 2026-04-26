@@ -11,6 +11,62 @@
     width: min(calc(100vw - 48px), 1180px);
 }
 
+.modal-panel:has(.group-members-modal) {
+    max-width: 980px;
+    width: min(calc(100vw - 48px), 980px);
+}
+
+.group-members-modal {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.78fr) minmax(0, 1.35fr);
+    max-height: calc(100vh - 148px);
+}
+
+.group-member-form {
+    align-content: start;
+    border-right: 1px solid var(--color-line);
+}
+
+.group-member-list-panel {
+    display: grid;
+    gap: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 360px;
+    overflow: auto;
+}
+
+.modal-section-heading {
+    align-items: end;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 0 0 2px;
+}
+
+.modal-section-heading strong {
+    color: var(--color-ink);
+    font-size: 16px;
+    font-weight: 700;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-member-list-panel > .modal-section-heading {
+    border-bottom: 1px solid var(--color-line);
+    padding: 16px 18px;
+}
+
+.group-member-list-panel .compact-list {
+    overflow: auto;
+}
+
+.group-member-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .membership-transfer {
     display: grid;
     gap: 18px;
@@ -60,15 +116,29 @@
 }
 
 @media (max-width: 760px) {
-    .access-grid {
-        grid-template-columns: 1fr;
-    }
-
     .membership-transfer {
         grid-template-columns: 1fr;
     }
 
     .transfer-actions {
         grid-template-columns: repeat(4, 1fr);
+    }
+
+    .group-members-modal {
+        grid-template-columns: 1fr;
+        max-height: none;
+    }
+
+    .group-member-form {
+        border-bottom: 1px solid var(--color-line);
+        border-right: 0;
+    }
+
+    .group-member-list-panel {
+        min-height: 0;
+    }
+
+    .group-member-row {
+        grid-template-columns: 1fr;
     }
 }

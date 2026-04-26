@@ -73,12 +73,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 
 	// API v1 system
 	apiV1System.Get("/summary", getSystemSummary)
-	apiV1System.Get("/access", getAccessData)
-
-	// API v1 access grants
-	apiV1.Get("/role-bindings", getRoleBindings)
-	apiV1.Post("/role-bindings", postCreateRoleBinding)
-	apiV1.Delete("/role-bindings/:bindingID", deleteRoleBinding)
+	apiV1.Get("/permissions", getPermissions)
 
 	// API v1 users
 	apiV1.Get("/users", getUsers)
@@ -106,6 +101,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Groups.Get("/:id/role-bindings", getGroupRoleBindings)
 	apiV1Groups.Post("/:id/role-bindings", postCreateGroupRoleBinding)
 	apiV1Groups.Delete("/:id/role-bindings/:bindingID", deleteGroupRoleBinding)
+	apiV1Groups.Patch("/:id", patchCloudGroup)
+	apiV1Groups.Delete("/:id", deleteCloudGroup)
 	apiV1Groups.Get("/search", _noop)
 	apiV1Groups.Get("/some/:groupnames", _noop)
 	apiV1Groups.Post("/update/:groupnames", _noop)
@@ -115,6 +112,12 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1.Get("/organizations", getProjectTree)
 	apiV1.Post("/organizations", postCreateOrganization)
 	apiV1Orgs.Post("/", postCreateOrganization)
+	apiV1Orgs.Get("/:id/memberships", getOrganizationMemberships)
+	apiV1Orgs.Get("/:id/groups", getOrganizationOwnedGroups)
+	apiV1Orgs.Get("/:id/roles", getOrganizationAssignableRoles)
+	apiV1Orgs.Post("/:id/memberships", postCreateOrganizationMembership)
+	apiV1Orgs.Patch("/:id/memberships/:membershipID", patchOrganizationMembership)
+	apiV1Orgs.Delete("/:id/memberships/:membershipID", deleteOrganizationMembership)
 	apiV1Orgs.Patch("/:id", patchOrganization)
 	apiV1Orgs.Delete("/:id", deleteOrganization)
 
@@ -123,6 +126,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1.Post("/roles", postCreateRole)
 	apiV1Roles.Get("/", getRoles)
 	apiV1Roles.Post("/", postCreateRole)
+	apiV1Roles.Patch("/:id", patchRole)
+	apiV1Roles.Delete("/:id", deleteRole)
 	apiV1Roles.Get("/:id/permissions", getRolePermissions)
 	apiV1Roles.Post("/:id/permissions", postCreateRolePermission)
 	apiV1Roles.Delete("/:id/permissions/:permissionID", deleteRolePermission)
@@ -134,6 +139,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Projects.Get("/", getProjects)
 	apiV1Projects.Post("/", postCreateProject)
 	apiV1Projects.Get("/:id/memberships", getProjectMemberships)
+	apiV1Projects.Get("/:id/groups", getProjectOwnedGroups)
+	apiV1Projects.Get("/:id/roles", getProjectAssignableRoles)
 	apiV1Projects.Post("/:id/memberships", postCreateProjectMembership)
 	apiV1Projects.Patch("/:id/memberships/:membershipID", patchProjectMembership)
 	apiV1Projects.Delete("/:id/memberships/:membershipID", deleteProjectMembership)

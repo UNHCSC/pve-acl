@@ -55,7 +55,6 @@
 
 .metric-grid,
 .dashboard-grid,
-.access-grid,
 .project-detail-content {
     gap: 16px;
 }
@@ -161,6 +160,62 @@
 .project-role-grid {
     border-top: 1px solid var(--color-line);
     margin-top: 14px;
+}
+
+@media (min-width: 1025px) {
+    #dashboard-root,
+    #dashboard-root > .dashboard-shell {
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .dashboard-shell {
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .dashboard-sidebar {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .dashboard-main {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .dashboard-content {
+        min-height: 0;
+        overflow: auto;
+    }
+
+    .dashboard-main.is-directory-view .dashboard-content {
+        overflow: hidden;
+    }
+
+    .dashboard-main.is-directory-view .dashboard-view,
+    .project-browser {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .project-tree-sidebar {
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+        top: auto;
+    }
+
+    .project-tree,
+    .project-render-pane {
+        min-height: 0;
+    }
+
+    .project-render-pane {
+        overflow: auto;
+    }
 }
 
 @media (max-width: 1024px) {
@@ -273,8 +328,7 @@
     }
 
     .metric-grid,
-    .dashboard-grid,
-    .access-grid {
+    .dashboard-grid {
         grid-template-columns: 1fr;
     }
 
@@ -316,5 +370,13 @@
     .project-members-heading-actions {
         justify-content: flex-start;
         width: 100%;
+    }
+
+    .role-list-row .project-access-actions {
+        flex-wrap: wrap;
+    }
+
+    .role-list-subject span {
+        max-width: none;
     }
 }

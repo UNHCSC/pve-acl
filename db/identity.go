@@ -1,6 +1,7 @@
 package db
 
 import (
+	"strings"
 	"time"
 
 	"github.com/z46-dev/gomysql"
@@ -52,12 +53,36 @@ func GetUserByID(id int) (*User, bool, error) {
 }
 
 func ListCloudGroups() ([]*CloudGroup, error) {
-	return CloudGroups.SelectAll()
+	return CloudGroups.SelectAllWithFilter(gomysql.NewFilter().
+		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+}
+
+func CloudGroupsForOwner(scopeType RoleBindingScope, scopeID *int) ([]*CloudGroup, error) {
+	filter := gomysql.NewFilter().
+		KeyCmp(CloudGroups.FieldBySQLName("owner_scope_type"), gomysql.OpEqual, scopeType).
+		And()
+	if scopeID == nil {
+		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gomysql.OpIsNull, nil)
+	} else {
+		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gomysql.OpEqual, *scopeID)
+	}
+	return CloudGroups.SelectAllWithFilter(filter.
+		And().
+		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
 func UpdateCloudGroup(group *CloudGroup) error {
 	if group.SyncSource == "" {
 		group.SyncSource = CloudGroupSyncSourceLocal
+	}
+	group.UpdatedAt = time.Now().UTC()
+	return CloudGroups.Update(group)
+}
+
+func ArchiveCloudGroup(group *CloudGroup) error {
+	if group.ArchivedAt == nil {
+		now := time.Now().UTC()
+		group.ArchivedAt = &now
 	}
 	group.UpdatedAt = time.Now().UTC()
 	return CloudGroups.Update(group)
@@ -72,6 +97,10 @@ func GetCloudGroupByID(id int) (*CloudGroup, bool, error) {
 		return nil, false, nil
 	}
 	return group, true, nil
+}
+
+func GetCloudGroupBySlug(slug string) (*CloudGroup, bool, error) {
+	return findOneByStringField(CloudGroups, CloudGroups.FieldBySQLName("slug"), strings.TrimSpace(slug))
 }
 
 func CloudGroupMembershipsForGroup(groupID int) ([]*CloudGroupMembership, error) {
@@ -90,9 +119,16 @@ func CloudGroupIDsForUser(userID int) ([]int, error) {
 		return nil, err
 	}
 
-	groupIDs := make([]int, len(memberships))
-	for i, membership := range memberships {
-		groupIDs[i] = membership.GroupID
+	groupIDs := make([]int, 0, len(memberships))
+	for _, membership := range memberships {
+		group, err := CloudGroups.Select(membership.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil || group.ArchivedAt != nil {
+			continue
+		}
+		groupIDs = append(groupIDs, membership.GroupID)
 	}
 
 	return groupIDs, nil
@@ -109,6 +145,9 @@ func CloudGroupsForUser(userID int) ([]*CloudGroup, error) {
 		group, err := CloudGroups.Select(membership.GroupID)
 		if err != nil {
 			return nil, err
+		}
+		if group == nil || group.ArchivedAt != nil {
+			continue
 		}
 		groups = append(groups, group)
 	}

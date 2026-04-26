@@ -51,6 +51,7 @@ type (
 		SyncMembership bool             `gomysql:"sync_membership" json:"sync_membership"`
 		CreatedAt      time.Time        `gomysql:"created_at,notnull" json:"created_at"`
 		UpdatedAt      time.Time        `gomysql:"updated_at,notnull" json:"updated_at"`
+		ArchivedAt     *time.Time       `gomysql:"archived_at" json:"archived_at,omitempty"`
 	}
 
 	CloudGroupMembership struct {
@@ -62,14 +63,15 @@ type (
 	}
 
 	Organization struct {
-		ID          int       `gomysql:"id,primary,increment" json:"id"`
-		UUID        string    `gomysql:"uuid,unique,notnull" json:"uuid"`
-		Name        string    `gomysql:"name,notnull" json:"name"`
-		Slug        string    `gomysql:"slug,unique,notnull" json:"slug"`
-		Description string    `gomysql:"description" json:"description"`
-		ParentOrgID *int      `gomysql:"parent_org_id,fkey:Organization.id" json:"parent_org_id,omitempty"`
-		CreatedAt   time.Time `gomysql:"created_at,notnull" json:"created_at"`
-		UpdatedAt   time.Time `gomysql:"updated_at,notnull" json:"updated_at"`
+		ID          int        `gomysql:"id,primary,increment" json:"id"`
+		UUID        string     `gomysql:"uuid,unique,notnull" json:"uuid"`
+		Name        string     `gomysql:"name,notnull" json:"name"`
+		Slug        string     `gomysql:"slug,unique,notnull" json:"slug"`
+		Description string     `gomysql:"description" json:"description"`
+		ParentOrgID *int       `gomysql:"parent_org_id,fkey:Organization.id" json:"parent_org_id,omitempty"`
+		CreatedAt   time.Time  `gomysql:"created_at,notnull" json:"created_at"`
+		UpdatedAt   time.Time  `gomysql:"updated_at,notnull" json:"updated_at"`
+		ArchivedAt  *time.Time `gomysql:"archived_at" json:"archived_at,omitempty"`
 	}
 
 	OrganizationMembership struct {
@@ -103,12 +105,15 @@ type (
 	}
 
 	Role struct {
-		ID           int       `gomysql:"id,primary,increment" json:"id"`
-		Name         string    `gomysql:"name,unique,notnull" json:"name"`
-		Description  string    `gomysql:"description" json:"description"`
-		IsSystemRole bool      `gomysql:"is_system_role,notnull" json:"is_system_role"`
-		CreatedAt    time.Time `gomysql:"created_at,notnull" json:"created_at"`
-		UpdatedAt    time.Time `gomysql:"updated_at,notnull" json:"updated_at"`
+		ID              int              `gomysql:"id,primary,increment" json:"id"`
+		Name            string           `gomysql:"name,unique,notnull" json:"name"`
+		Description     string           `gomysql:"description" json:"description"`
+		IsSystemRole    bool             `gomysql:"is_system_role,notnull" json:"is_system_role"`
+		OwnerScopeType  RoleBindingScope `gomysql:"owner_scope_type,notnull" json:"owner_scope_type"`
+		OwnerScopeID    *int             `gomysql:"owner_scope_id" json:"owner_scope_id,omitempty"`
+		CreatedByUserID *int             `gomysql:"created_by_user_id" json:"created_by_user_id,omitempty"`
+		CreatedAt       time.Time        `gomysql:"created_at,notnull" json:"created_at"`
+		UpdatedAt       time.Time        `gomysql:"updated_at,notnull" json:"updated_at"`
 	}
 
 	Permission struct {
@@ -179,6 +184,38 @@ type (
 		SubjectType OwnerSubjectType `gomysql:"subject_type,notnull" json:"subject_type"`
 		SubjectID   int              `gomysql:"subject_id,notnull" json:"subject_id"`
 		CreatedAt   time.Time        `gomysql:"created_at,notnull" json:"created_at"`
+	}
+
+	AssetGroup struct {
+		ID          int        `gomysql:"id,primary,increment" json:"id"`
+		UUID        string     `gomysql:"uuid,unique,notnull" json:"uuid"`
+		ProjectID   int        `gomysql:"project_id,fkey:Project.id,notnull" json:"project_id"`
+		Name        string     `gomysql:"name,notnull" json:"name"`
+		Slug        string     `gomysql:"slug,notnull" json:"slug"`
+		Description string     `gomysql:"description" json:"description"`
+		CreatedAt   time.Time  `gomysql:"created_at,notnull" json:"created_at"`
+		UpdatedAt   time.Time  `gomysql:"updated_at,notnull" json:"updated_at"`
+		ArchivedAt  *time.Time `gomysql:"archived_at" json:"archived_at,omitempty"`
+	}
+
+	AssetGroupResource struct {
+		ID           int       `gomysql:"id,primary,increment" json:"id"`
+		AssetGroupID int       `gomysql:"asset_group_id,fkey:AssetGroup.id,notnull" json:"asset_group_id"`
+		ResourceID   int       `gomysql:"resource_id,fkey:Resource.id,notnull" json:"resource_id"`
+		CreatedAt    time.Time `gomysql:"created_at,notnull" json:"created_at"`
+	}
+
+	AssetAssignment struct {
+		ID              int                `gomysql:"id,primary,increment" json:"id"`
+		ProjectID       int                `gomysql:"project_id,fkey:Project.id,notnull" json:"project_id"`
+		ResourceID      *int               `gomysql:"resource_id,fkey:Resource.id" json:"resource_id,omitempty"`
+		AssetGroupID    *int               `gomysql:"asset_group_id,fkey:AssetGroup.id" json:"asset_group_id,omitempty"`
+		SubjectType     RoleBindingSubject `gomysql:"subject_type,notnull" json:"subject_type"`
+		SubjectID       int                `gomysql:"subject_id,notnull" json:"subject_id"`
+		RoleID          int                `gomysql:"role_id,fkey:Role.id,notnull" json:"role_id"`
+		CreatedByUserID *int               `gomysql:"created_by_user_id" json:"created_by_user_id,omitempty"`
+		CreatedAt       time.Time          `gomysql:"created_at,notnull" json:"created_at"`
+		ArchivedAt      *time.Time         `gomysql:"archived_at" json:"archived_at,omitempty"`
 	}
 
 	ProxmoxCluster struct {

@@ -35,6 +35,9 @@ var (
 	QuotaBindings                  *gomysql.RegisteredStruct[QuotaBinding]
 	Resources                      *gomysql.RegisteredStruct[Resource]
 	ResourceOwners                 *gomysql.RegisteredStruct[ResourceOwner]
+	AssetGroups                    *gomysql.RegisteredStruct[AssetGroup]
+	AssetGroupResources            *gomysql.RegisteredStruct[AssetGroupResource]
+	AssetAssignments               *gomysql.RegisteredStruct[AssetAssignment]
 	ProxmoxClusters                *gomysql.RegisteredStruct[ProxmoxCluster]
 	ProxmoxNodes                   *gomysql.RegisteredStruct[ProxmoxNode]
 	VirtualMachines                *gomysql.RegisteredStruct[VirtualMachine]
@@ -150,6 +153,18 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("ResourceOwners", &ResourceOwners, ResourceOwner{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("AssetGroups", &AssetGroups, AssetGroup{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("AssetGroupResources", &AssetGroupResources, AssetGroupResource{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("AssetAssignments", &AssetAssignments, AssetAssignment{}, migrationOpts); err != nil {
 		return
 	}
 

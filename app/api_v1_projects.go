@@ -240,10 +240,19 @@ func postCreateOrganization(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid organization request"})
 	}
 
+	if req.ParentOrgID == nil {
+		rootExists, rootErr := db.ActiveRootOrganizationExists()
+		if rootErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate root organization"})
+		}
+		if rootExists {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "parent organization is required"})
+		}
+	}
 	if req.ParentOrgID != nil {
-		if _, found, err := db.GetOrganizationByID(*req.ParentOrgID); err != nil {
+		if parent, found, err := db.GetOrganizationByID(*req.ParentOrgID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load parent organization"})
-		} else if !found {
+		} else if !found || parent.ArchivedAt != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "parent organization was not found"})
 		}
 	}
@@ -274,6 +283,9 @@ func patchOrganization(c *fiber.Ctx) error {
 	if err != nil {
 		return organizationParamError(c, err)
 	}
+	if org.ArchivedAt != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "archived organizations cannot be updated"})
+	}
 
 	var req organizationUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -287,13 +299,19 @@ func patchOrganization(c *fiber.Ctx) error {
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	if req.ParentOrgID == nil && org.Slug != db.DefaultRootOrganizationSlug {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization must remain under the root organization"})
+	}
+	if req.ParentOrgID != nil && org.Slug == db.DefaultRootOrganizationSlug {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "root organization must remain at the root"})
+	}
 	if req.ParentOrgID != nil {
 		if *req.ParentOrgID == org.ID {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization cannot be its own parent"})
 		}
-		if _, found, loadErr := db.GetOrganizationByID(*req.ParentOrgID); loadErr != nil {
+		if parent, found, loadErr := db.GetOrganizationByID(*req.ParentOrgID); loadErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load parent organization"})
-		} else if !found {
+		} else if !found || parent.ArchivedAt != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "parent organization was not found"})
 		}
 		ancestors, ancestorErr := db.OrganizationAncestorIDs(*req.ParentOrgID)
@@ -357,8 +375,8 @@ func deleteOrganization(c *fiber.Ctx) error {
 		}
 	}
 
-	if err := db.DeleteOrganization(org.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete organization"})
+	if err := db.ArchiveOrganization(org); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive organization"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -391,9 +409,9 @@ func patchProject(c *fiber.Ctx) error {
 	if req.OrganizationID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization is required"})
 	}
-	if _, found, err := db.GetOrganizationByID(req.OrganizationID); err != nil {
+	if org, found, err := db.GetOrganizationByID(req.OrganizationID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organization"})
-	} else if !found {
+	} else if !found || org.ArchivedAt != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization was not found"})
 	}
 	allowed, err = currentUserCanManageOrganization(c, req.OrganizationID)
@@ -419,6 +437,7 @@ func organizationResponse(org *db.Organization) fiber.Map {
 		"slug":          org.Slug,
 		"description":   org.Description,
 		"parent_org_id": org.ParentOrgID,
+		"archived_at":   org.ArchivedAt,
 		"created_at":    org.CreatedAt,
 		"updated_at":    org.UpdatedAt,
 	}
@@ -426,8 +445,10 @@ func organizationResponse(org *db.Organization) fiber.Map {
 
 func resolveProjectOrganizationID(id int) (int, error) {
 	if id > 0 {
-		if _, found, err := db.GetOrganizationByID(id); err != nil || found {
+		if org, found, err := db.GetOrganizationByID(id); err != nil {
 			return id, err
+		} else if found && org.ArchivedAt == nil {
+			return id, nil
 		}
 		return 0, fiber.NewError(fiber.StatusBadRequest, "organization was not found")
 	}
@@ -436,7 +457,7 @@ func resolveProjectOrganizationID(id int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if !found {
+	if !found || org.ArchivedAt != nil {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "default organization was not found")
 	}
 	return org.ID, nil
