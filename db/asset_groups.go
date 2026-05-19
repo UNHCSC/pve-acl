@@ -15,7 +15,8 @@ type AssetGroupCreateInput struct {
 	Description string
 }
 
-func CreateAssetGroup(input AssetGroupCreateInput) (*AssetGroup, error) {
+// CreateAssetGroup creates asset group.
+func CreateAssetGroup(input AssetGroupCreateInput) (assetGroupResult *AssetGroup, errResult error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Slug = slugify(input.Slug)
 	if input.Slug == "" {
@@ -30,13 +31,25 @@ func CreateAssetGroup(input AssetGroupCreateInput) (*AssetGroup, error) {
 	if input.Slug == "" {
 		return nil, fmt.Errorf("asset group slug is required")
 	}
-	if project, found, err := GetProjectByID(input.ProjectID); err != nil {
-		return nil, err
-	} else if !found || !project.IsActive {
-		return nil, fmt.Errorf("project was not found")
-	}
+	{
+		var (
+			project *Project
+			found   bool
+			err     error
+		)
 
-	existing, err := AssetGroupsForProject(input.ProjectID)
+		if project, found, err = GetProjectByID(input.ProjectID); err != nil {
+			return nil, err
+		} else if !found || !project.IsActive {
+			return nil, fmt.Errorf("project was not found")
+		}
+	}
+	var (
+		existing []*AssetGroup
+		err      error
+	)
+
+	existing, err = AssetGroupsForProject(input.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -45,13 +58,18 @@ func CreateAssetGroup(input AssetGroupCreateInput) (*AssetGroup, error) {
 			return nil, fmt.Errorf("asset group slug %q already exists in this project", group.Slug)
 		}
 	}
+	var uuid string
 
-	uuid, err := randomUUID()
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
-	group := &AssetGroup{
+	var now time.Time
+
+	now = time.Now().UTC()
+	var group *AssetGroup
+
+	group = &AssetGroup{
 		UUID:        uuid,
 		ProjectID:   input.ProjectID,
 		Name:        input.Name,
@@ -60,57 +78,82 @@ func CreateAssetGroup(input AssetGroupCreateInput) (*AssetGroup, error) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := AssetGroups.Insert(group); err != nil {
-		return nil, err
+	{
+		var err error
+
+		if err = AssetGroups.Insert(group); err != nil {
+			return nil, err
+		}
 	}
 	return group, nil
 }
 
-func AssetGroupsForProject(projectID int) ([]*AssetGroup, error) {
+// AssetGroupsForProject returns active asset groups for a project.
+func AssetGroupsForProject(projectID int) (itemsResult []*AssetGroup, errResult error) {
 	return AssetGroups.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(AssetGroups.FieldBySQLName("project_id"), gomysql.OpEqual, projectID).
 		And().
 		KeyCmp(AssetGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
-func AssetGroupResourcesForGroup(assetGroupID int) ([]*AssetGroupResource, error) {
+// AssetGroupResourcesForGroup returns resources attached to an asset group.
+func AssetGroupResourcesForGroup(assetGroupID int) (itemsResult []*AssetGroupResource, errResult error) {
 	return AssetGroupResources.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID))
 }
 
-func EnsureAssetGroupResource(assetGroupID, resourceID int) (bool, error) {
-	assetGroup, err := AssetGroups.Select(assetGroupID)
+// EnsureAssetGroupResource ensures asset group resource exists.
+func EnsureAssetGroupResource(assetGroupID, resourceID int) (okResult bool, errResult error) {
+	var (
+		assetGroup *AssetGroup
+		err        error
+	)
+
+	assetGroup, err = AssetGroups.Select(assetGroupID)
 	if err != nil || assetGroup == nil {
 		return false, err
 	}
-	resource, err := Resources.Select(resourceID)
+	var resource *Resource
+
+	resource, err = Resources.Select(resourceID)
 	if err != nil || resource == nil {
 		return false, err
 	}
 	if assetGroup.ProjectID != resource.ProjectID {
 		return false, fmt.Errorf("asset group and resource must belong to the same project")
 	}
+	var filter *gomysql.Filter
 
-	filter := gomysql.NewFilter().
+	filter = gomysql.NewFilter().
 		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID).
 		And().
 		KeyCmp(AssetGroupResources.FieldBySQLName("resource_id"), gomysql.OpEqual, resourceID)
-	existing, err := AssetGroupResources.SelectAllWithFilter(filter.Limit(1))
+	var existing []*AssetGroupResource
+
+	existing, err = AssetGroupResources.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return false, err
 	}
 	if len(existing) > 0 {
 		return false, ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID)
 	}
-	if err := AssetGroupResources.Insert(&AssetGroupResource{
-		AssetGroupID: assetGroupID,
-		ResourceID:   resourceID,
-		CreatedAt:    time.Now().UTC(),
-	}); err != nil {
-		return false, err
+	{
+		var err error
+
+		if err = AssetGroupResources.Insert(&AssetGroupResource{
+			AssetGroupID: assetGroupID,
+			ResourceID:   resourceID,
+			CreatedAt:    time.Now().UTC(),
+		}); err != nil {
+			return false, err
+		}
 	}
-	if err := ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID); err != nil {
-		return false, err
+	{
+		var err error
+
+		if err = ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }
@@ -125,7 +168,8 @@ type AssetAssignmentInput struct {
 	CreatedByUserID *int
 }
 
-func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, error) {
+// EnsureAssetAssignment ensures asset assignment exists.
+func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *AssetAssignment, okResult bool, errResult error) {
 	if input.ProjectID <= 0 {
 		return nil, false, fmt.Errorf("project is required")
 	}
@@ -139,7 +183,12 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, 
 		return nil, false, fmt.Errorf("assignment role is required")
 	}
 	if input.ResourceID != nil {
-		resource, err := Resources.Select(*input.ResourceID)
+		var (
+			resource *Resource
+			err      error
+		)
+
+		resource, err = Resources.Select(*input.ResourceID)
 		if err != nil || resource == nil {
 			return nil, false, err
 		}
@@ -148,7 +197,12 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, 
 		}
 	}
 	if input.AssetGroupID != nil {
-		assetGroup, err := AssetGroups.Select(*input.AssetGroupID)
+		var (
+			assetGroup *AssetGroup
+			err        error
+		)
+
+		assetGroup, err = AssetGroups.Select(*input.AssetGroupID)
 		if err != nil || assetGroup == nil {
 			return nil, false, err
 		}
@@ -156,8 +210,9 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, 
 			return nil, false, fmt.Errorf("asset group is not owned by the assignment project")
 		}
 	}
+	var filter *gomysql.Filter
 
-	filter := gomysql.NewFilter().
+	filter = gomysql.NewFilter().
 		KeyCmp(AssetAssignments.FieldBySQLName("project_id"), gomysql.OpEqual, input.ProjectID).
 		And().
 		KeyCmp(AssetAssignments.FieldBySQLName("subject_type"), gomysql.OpEqual, input.SubjectType).
@@ -177,25 +232,41 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, 
 			And().
 			KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gomysql.OpIsNull, nil)
 	}
-	existing, err := AssetAssignments.SelectAllWithFilter(filter.Limit(1))
+	var (
+		existing []*AssetAssignment
+		err      error
+	)
+
+	existing, err = AssetAssignments.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return nil, false, err
 	}
 	if len(existing) > 0 {
 		if input.ResourceID != nil {
-			scopeID := *input.ResourceID
-			if _, err := ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
-				return nil, false, err
+			var scopeID int
+
+			scopeID = *input.ResourceID
+			{
+				var err error
+
+				if _, err = ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
+					return nil, false, err
+				}
 			}
 		} else if input.AssetGroupID != nil {
-			if err := ensureAssetGroupAssignmentRoleBindings(*input.AssetGroupID, existing[0]); err != nil {
-				return nil, false, err
+			{
+				var err error
+
+				if err = ensureAssetGroupAssignmentRoleBindings(*input.AssetGroupID, existing[0]); err != nil {
+					return nil, false, err
+				}
 			}
 		}
 		return existing[0], false, nil
 	}
+	var assignment *AssetAssignment
 
-	assignment := &AssetAssignment{
+	assignment = &AssetAssignment{
 		ProjectID:       input.ProjectID,
 		ResourceID:      input.ResourceID,
 		AssetGroupID:    input.AssetGroupID,
@@ -205,50 +276,90 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (*AssetAssignment, bool, 
 		CreatedByUserID: input.CreatedByUserID,
 		CreatedAt:       time.Now().UTC(),
 	}
-	if err := AssetAssignments.Insert(assignment); err != nil {
-		return nil, false, err
-	}
-	if input.ResourceID != nil {
-		scopeID := *input.ResourceID
-		if _, err := ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
+	{
+		var err error
+
+		if err = AssetAssignments.Insert(assignment); err != nil {
 			return nil, false, err
 		}
+	}
+	if input.ResourceID != nil {
+		var scopeID int
+
+		scopeID = *input.ResourceID
+		{
+			var err error
+
+			if _, err = ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
+				return nil, false, err
+			}
+		}
 	} else if input.AssetGroupID != nil {
-		if err := ensureAssetGroupAssignmentRoleBindings(*input.AssetGroupID, assignment); err != nil {
-			return nil, false, err
+		{
+			var err error
+
+			if err = ensureAssetGroupAssignmentRoleBindings(*input.AssetGroupID, assignment); err != nil {
+				return nil, false, err
+			}
 		}
 	}
 	return assignment, true, nil
 }
 
-func ensureAssetGroupAssignmentRoleBindings(assetGroupID int, assignment *AssetAssignment) error {
-	resources, err := AssetGroupResourcesForGroup(assetGroupID)
+func ensureAssetGroupAssignmentRoleBindings(assetGroupID int, assignment *AssetAssignment) (errResult error) {
+	var (
+		resources []*AssetGroupResource
+		err       error
+	)
+
+	resources, err = AssetGroupResourcesForGroup(assetGroupID)
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
+	var now time.Time
+
+	now = time.Now().UTC()
 	for _, resource := range resources {
-		scopeID := resource.ResourceID
-		if _, err := ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
-			return err
+		var scopeID int
+
+		scopeID = resource.ResourceID
+		{
+			var err error
+
+			if _, err = ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID int) error {
-	assignments, err := AssetAssignments.SelectAllWithFilter(gomysql.NewFilter().
+func ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID int) (errResult error) {
+	var (
+		assignments []*AssetAssignment
+		err         error
+	)
+
+	assignments, err = AssetAssignments.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID).
 		And().
 		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
+	var now time.Time
+
+	now = time.Now().UTC()
 	for _, assignment := range assignments {
-		scopeID := resourceID
-		if _, err := ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
-			return err
+		var scopeID int
+
+		scopeID = resourceID
+		{
+			var err error
+
+			if _, err = ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

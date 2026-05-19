@@ -2,7 +2,6 @@
 *.toml
 *.db
 *.log
-.pve-acl-session-key
 .organesson-session-key
 log/
 

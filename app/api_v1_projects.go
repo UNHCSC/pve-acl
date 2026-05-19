@@ -8,39 +8,51 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type projectCreateRequest struct {
-	Name           string `json:"name"`
-	Slug           string `json:"slug"`
-	Description    string `json:"description"`
-	OrganizationID int    `json:"organizationID"`
-}
+type (
+	projectCreateRequest struct {
+		Name           string `json:"name"`
+		Slug           string `json:"slug"`
+		Description    string `json:"description"`
+		OrganizationID int    `json:"organizationID"`
+	}
 
-type projectUpdateRequest struct {
-	OrganizationID int `json:"organizationID"`
-}
+	projectUpdateRequest struct {
+		OrganizationID int `json:"organizationID"`
+	}
 
-type organizationCreateRequest struct {
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
-	ParentOrgID *int   `json:"parentOrgID"`
-}
+	organizationCreateRequest struct {
+		Name        string `json:"name"`
+		Slug        string `json:"slug"`
+		Description string `json:"description"`
+		ParentOrgID *int   `json:"parentOrgID"`
+	}
 
-type organizationUpdateRequest struct {
-	ParentOrgID *int `json:"parentOrgID"`
-}
+	organizationUpdateRequest struct {
+		ParentOrgID *int `json:"parentOrgID"`
+	}
+)
 
-func getProjects(c *fiber.Ctx) error {
-	projects, err := db.ListProjects()
+// getProjects lists projects the current user can view.
+func getProjects(c *fiber.Ctx) (errResult error) {
+	var (
+		projects []*db.Project
+		err      error
+	)
+	projects, err = db.ListProjects()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load projects",
 		})
 	}
+	var visible []*db.Project
 
-	visible := make([]*db.Project, 0, len(projects))
+	visible = make([]*db.Project, 0, len(projects))
 	for _, project := range projects {
-		allowed, allowErr := currentUserCanViewProject(c, project)
+		var (
+			allowed  bool
+			allowErr error
+		)
+		allowed, allowErr = currentUserCanViewProject(c, project)
 		if allowErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "permission check failed",
@@ -54,24 +66,35 @@ func getProjects(c *fiber.Ctx) error {
 	return c.JSON(visible)
 }
 
-func getProjectTree(c *fiber.Ctx) error {
-	orgs, err := db.ListOrganizations()
+// getProjectTree returns visible organizations and projects for navigation.
+func getProjectTree(c *fiber.Ctx) (errResult error) {
+	var (
+		orgs []*db.Organization
+		err  error
+	)
+	orgs, err = db.ListOrganizations()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load organizations",
 		})
 	}
+	var projects []*db.Project
 
-	projects, err := db.ListProjects()
+	projects, err = db.ListProjects()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load projects",
 		})
 	}
+	var visibleProjects []fiber.Map
 
-	visibleProjects := make([]fiber.Map, 0, len(projects))
+	visibleProjects = make([]fiber.Map, 0, len(projects))
 	for _, project := range projects {
-		allowed, allowErr := currentUserCanViewProject(c, project)
+		var (
+			allowed  bool
+			allowErr error
+		)
+		allowed, allowErr = currentUserCanViewProject(c, project)
 		if allowErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "permission check failed",
@@ -80,8 +103,9 @@ func getProjectTree(c *fiber.Ctx) error {
 		if !allowed {
 			continue
 		}
+		var item fiber.Map
 
-		item := fiber.Map{
+		item = fiber.Map{
 			"id":              project.ID,
 			"uuid":            project.UUID,
 			"organization_id": project.OrganizationID,
@@ -93,7 +117,12 @@ func getProjectTree(c *fiber.Ctx) error {
 			"created_at":      project.CreatedAt,
 			"updated_at":      project.UpdatedAt,
 		}
-		if org, found, orgErr := db.GetOrganizationByID(project.OrganizationID); orgErr != nil {
+		var (
+			org    *db.Organization
+			found  bool
+			orgErr error
+		)
+		if org, found, orgErr = db.GetOrganizationByID(project.OrganizationID); orgErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "failed to load project organization",
 			})
@@ -102,15 +131,17 @@ func getProjectTree(c *fiber.Ctx) error {
 		}
 		visibleProjects = append(visibleProjects, item)
 	}
+	var visibleOrgIDs map[int]bool
 
-	visibleOrgIDs, err := visibleOrganizationIDs(c, orgs, visibleProjects)
+	visibleOrgIDs, err = visibleOrganizationIDs(c, orgs, visibleProjects)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "permission check failed",
 		})
 	}
+	var orgItems []fiber.Map
 
-	orgItems := make([]fiber.Map, 0, len(visibleOrgIDs))
+	orgItems = make([]fiber.Map, 0, len(visibleOrgIDs))
 	for _, org := range orgs {
 		if !visibleOrgIDs[org.ID] {
 			continue
@@ -124,8 +155,10 @@ func getProjectTree(c *fiber.Ctx) error {
 	})
 }
 
-func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjects []fiber.Map) (map[int]bool, error) {
-	visible := map[int]bool{}
+// visibleOrganizationIDs collects organizations visible through project access or org management rights.
+func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjects []fiber.Map) (mapResult map[int]bool, errResult error) {
+	var visible map[int]bool
+	visible = map[int]bool{}
 	if currentUserIsSiteAdmin(c) {
 		for _, org := range orgs {
 			visible[org.ID] = true
@@ -134,22 +167,28 @@ func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjec
 	}
 
 	for _, project := range visibleProjects {
-		orgID, _ := project["organization_id"].(int)
+		var orgID int
+		orgID, _ = project["organization_id"].(int)
 		if orgID == 0 {
 			continue
 		}
-		if err := addOrganizationAncestors(visible, orgID); err != nil {
+		var err error
+		if err = addOrganizationAncestors(visible, orgID); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, org := range orgs {
-		allowed, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeOrg, &org.ID)
+		var (
+			allowed bool
+			err     error
+		)
+		allowed, err = currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeOrg, &org.ID)
 		if err != nil {
 			return nil, err
 		}
 		if allowed {
-			if err := addOrganizationAncestors(visible, org.ID); err != nil {
+			if err = addOrganizationAncestors(visible, org.ID); err != nil {
 				return nil, err
 			}
 		}
@@ -158,8 +197,13 @@ func visibleOrganizationIDs(c *fiber.Ctx, orgs []*db.Organization, visibleProjec
 	return visible, nil
 }
 
-func addOrganizationAncestors(visible map[int]bool, orgID int) error {
-	ancestors, err := db.OrganizationAncestorIDs(orgID)
+// addOrganizationAncestors marks an organization and all of its ancestors as visible.
+func addOrganizationAncestors(visible map[int]bool, orgID int) (errResult error) {
+	var (
+		ancestors []int
+		err       error
+	)
+	ancestors, err = db.OrganizationAncestorIDs(orgID)
 	if err != nil {
 		return err
 	}
@@ -169,22 +213,26 @@ func addOrganizationAncestors(visible map[int]bool, orgID int) error {
 	return nil
 }
 
-func postCreateProject(c *fiber.Ctx) error {
+// postCreateProject creates a custom project in an accessible organization.
+func postCreateProject(c *fiber.Ctx) (errResult error) {
 	var req projectCreateRequest
-	if err := c.BodyParser(&req); err != nil {
+	var err error
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid project request",
 		})
 	}
+	var organizationID int
 
-	organizationID, err := resolveProjectOrganizationID(req.OrganizationID)
+	organizationID, err = resolveProjectOrganizationID(req.OrganizationID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
+	allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "permission check failed",
@@ -203,8 +251,9 @@ func postCreateProject(c *fiber.Ctx) error {
 			"error": "permission denied",
 		})
 	}
+	var project *db.Project
 
-	project, err := db.CreateProject(db.ProjectCreateInput{
+	project, err = db.CreateProject(db.ProjectCreateInput{
 		Name:           strings.TrimSpace(req.Name),
 		Slug:           strings.TrimSpace(req.Slug),
 		Description:    strings.TrimSpace(req.Description),
@@ -216,15 +265,16 @@ func postCreateProject(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+	var dbUser *db.User
 
-	dbUser := currentDBUser(c)
+	dbUser = currentDBUser(c)
 	if dbUser != nil {
-		if _, err := db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil {
+		if _, err = db.EnsureProjectMembership(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "failed to assign project owner",
 			})
 		}
-		if err := db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
+		if err = db.EnsureProjectMemberAccessRole(project.ID, db.ProjectMemberSubjectUser, dbUser.ID, db.ProjectRoleOwner); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "failed to assign project owner",
 			})
@@ -234,14 +284,20 @@ func postCreateProject(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(project)
 }
 
-func postCreateOrganization(c *fiber.Ctx) error {
+// postCreateOrganization creates an organization under an allowed parent.
+func postCreateOrganization(c *fiber.Ctx) (errResult error) {
 	var req organizationCreateRequest
-	if err := c.BodyParser(&req); err != nil {
+	var err error
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid organization request"})
 	}
 
 	if req.ParentOrgID == nil {
-		rootExists, rootErr := db.ActiveRootOrganizationExists()
+		var (
+			rootExists bool
+			rootErr    error
+		)
+		rootExists, rootErr = db.ActiveRootOrganizationExists()
 		if rootErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate root organization"})
 		}
@@ -250,22 +306,28 @@ func postCreateOrganization(c *fiber.Ctx) error {
 		}
 	}
 	if req.ParentOrgID != nil {
-		if parent, found, err := db.GetOrganizationByID(*req.ParentOrgID); err != nil {
+		var (
+			parent *db.Organization
+			found  bool
+		)
+		if parent, found, err = db.GetOrganizationByID(*req.ParentOrgID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load parent organization"})
 		} else if !found || parent.ArchivedAt != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "parent organization was not found"})
 		}
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanCreateOrganization(c, req.ParentOrgID)
+	allowed, err = currentUserCanCreateOrganization(c, req.ParentOrgID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var org *db.Organization
 
-	org, err := db.CreateOrganization(db.OrganizationCreateInput{
+	org, err = db.CreateOrganization(db.OrganizationCreateInput{
 		Name:        strings.TrimSpace(req.Name),
 		Slug:        strings.TrimSpace(req.Slug),
 		Description: strings.TrimSpace(req.Description),
@@ -278,8 +340,13 @@ func postCreateOrganization(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(organizationResponse(org))
 }
 
-func patchOrganization(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// patchOrganization updates organization parent placement.
+func patchOrganization(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
@@ -288,11 +355,12 @@ func patchOrganization(c *fiber.Ctx) error {
 	}
 
 	var req organizationUpdateRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid organization request"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -309,12 +377,21 @@ func patchOrganization(c *fiber.Ctx) error {
 		if *req.ParentOrgID == org.ID {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization cannot be its own parent"})
 		}
-		if parent, found, loadErr := db.GetOrganizationByID(*req.ParentOrgID); loadErr != nil {
+		var (
+			parent  *db.Organization
+			found   bool
+			loadErr error
+		)
+		if parent, found, loadErr = db.GetOrganizationByID(*req.ParentOrgID); loadErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load parent organization"})
 		} else if !found || parent.ArchivedAt != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "parent organization was not found"})
 		}
-		ancestors, ancestorErr := db.OrganizationAncestorIDs(*req.ParentOrgID)
+		var (
+			ancestors   []int
+			ancestorErr error
+		)
+		ancestors, ancestorErr = db.OrganizationAncestorIDs(*req.ParentOrgID)
 		if ancestorErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate organization tree"})
 		}
@@ -333,30 +410,37 @@ func patchOrganization(c *fiber.Ctx) error {
 	}
 
 	org.ParentOrgID = req.ParentOrgID
-	if err := db.UpdateOrganization(org); err != nil {
+	if err = db.UpdateOrganization(org); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(organizationResponse(org))
 }
 
-func deleteOrganization(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// deleteOrganization archives an empty non-root organization.
+func deleteOrganization(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
 	if org.Slug == db.DefaultRootOrganizationSlug {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "default organization cannot be deleted"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var orgs []*db.Organization
 
-	orgs, err := db.ListOrganizations()
+	orgs, err = db.ListOrganizations()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organizations"})
 	}
@@ -365,7 +449,8 @@ func deleteOrganization(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization has child organizations"})
 		}
 	}
-	projects, err := db.ListProjects()
+	var projects []*db.Project
+	projects, err = db.ListProjects()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load projects"})
 	}
@@ -375,26 +460,36 @@ func deleteOrganization(c *fiber.Ctx) error {
 		}
 	}
 
-	if err := db.ArchiveOrganization(org); err != nil {
+	if err = db.ArchiveOrganization(org); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive organization"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func patchProject(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// patchProject moves a project to a new organization.
+func patchProject(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
-	project, found, err := db.GetProjectByID(projectID)
+	var (
+		project *db.Project
+		found   bool
+	)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -403,13 +498,14 @@ func patchProject(c *fiber.Ctx) error {
 	}
 
 	var req projectUpdateRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project request"})
 	}
 	if req.OrganizationID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization is required"})
 	}
-	if org, found, err := db.GetOrganizationByID(req.OrganizationID); err != nil {
+	var org *db.Organization
+	if org, found, err = db.GetOrganizationByID(req.OrganizationID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organization"})
 	} else if !found || org.ArchivedAt != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization was not found"})
@@ -423,13 +519,14 @@ func patchProject(c *fiber.Ctx) error {
 	}
 
 	project.OrganizationID = req.OrganizationID
-	if err := db.UpdateProject(project); err != nil {
+	if err = db.UpdateProject(project); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(project)
 }
 
-func organizationResponse(org *db.Organization) fiber.Map {
+// organizationResponse serializes an organization for API responses.
+func organizationResponse(org *db.Organization) (mapResult fiber.Map) {
 	return fiber.Map{
 		"id":            org.ID,
 		"uuid":          org.UUID,
@@ -443,17 +540,28 @@ func organizationResponse(org *db.Organization) fiber.Map {
 	}
 }
 
-func resolveProjectOrganizationID(id int) (int, error) {
+// resolveProjectOrganizationID finds a valid target organization or the default root.
+func resolveProjectOrganizationID(id int) (countResult int, errResult error) {
 	if id > 0 {
-		if org, found, err := db.GetOrganizationByID(id); err != nil {
+		var (
+			org   *db.Organization
+			found bool
+			err   error
+		)
+		if org, found, err = db.GetOrganizationByID(id); err != nil {
 			return id, err
 		} else if found && org.ArchivedAt == nil {
 			return id, nil
 		}
 		return 0, fiber.NewError(fiber.StatusBadRequest, "organization was not found")
 	}
+	var (
+		org   *db.Organization
+		found bool
+		err   error
+	)
 
-	org, found, err := db.GetOrganizationBySlug(db.DefaultRootOrganizationSlug)
+	org, found, err = db.GetOrganizationBySlug(db.DefaultRootOrganizationSlug)
 	if err != nil {
 		return 0, err
 	}
@@ -463,12 +571,21 @@ func resolveProjectOrganizationID(id int) (int, error) {
 	return org.ID, nil
 }
 
-func organizationFromParam(c *fiber.Ctx) (*db.Organization, error) {
-	orgID, err := strconv.Atoi(c.Params("id"))
+// organizationFromParam loads an organization from the route id parameter.
+func organizationFromParam(c *fiber.Ctx) (organizationResult *db.Organization, errResult error) {
+	var (
+		orgID int
+		err   error
+	)
+	orgID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid organization id")
 	}
-	org, found, err := db.GetOrganizationByID(orgID)
+	var (
+		org   *db.Organization
+		found bool
+	)
+	org, found, err = db.GetOrganizationByID(orgID)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to load organization")
 	}
@@ -478,22 +595,33 @@ func organizationFromParam(c *fiber.Ctx) (*db.Organization, error) {
 	return org, nil
 }
 
-func organizationParamError(c *fiber.Ctx, err error) error {
-	if fiberErr, ok := err.(*fiber.Error); ok {
+// organizationParamError writes a JSON response for organization lookup errors.
+func organizationParamError(c *fiber.Ctx, err error) (errResult error) {
+	var (
+		fiberErr *fiber.Error
+		ok       bool
+	)
+	if fiberErr, ok = err.(*fiber.Error); ok {
 		return c.Status(fiberErr.Code).JSON(fiber.Map{"error": fiberErr.Message})
 	}
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organization"})
 }
 
-func currentUserCanCreateOrganization(c *fiber.Ctx, parentOrgID *int) (bool, error) {
+// currentUserCanCreateOrganization reports whether the current user can create under a parent.
+func currentUserCanCreateOrganization(c *fiber.Ctx, parentOrgID *int) (okResult bool, errResult error) {
 	if parentOrgID == nil {
 		return currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
 	}
 	return currentUserCanManageOrganization(c, *parentOrgID)
 }
 
-func currentUserCanManageOrganization(c *fiber.Ctx, orgID int) (bool, error) {
-	allowed, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
+// currentUserCanManageOrganization reports whether the current user can manage an organization.
+func currentUserCanManageOrganization(c *fiber.Ctx, orgID int) (okResult bool, errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
 		return allowed, err
 	}

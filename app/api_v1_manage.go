@@ -9,153 +9,177 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type userCreateRequest struct {
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	Email       string `json:"email"`
-}
+type (
+	userCreateRequest struct {
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+		Email       string `json:"email"`
+	}
 
-type userImportRequest struct {
-	Entries   string   `json:"entries"`
-	Usernames []string `json:"usernames"`
-}
+	userImportRequest struct {
+		Entries   string   `json:"entries"`
+		Usernames []string `json:"usernames"`
+	}
 
-type userImportResult struct {
-	Query       string   `json:"query"`
-	Status      string   `json:"status"`
-	Error       string   `json:"error,omitempty"`
-	User        *db.User `json:"user,omitempty"`
-	DisplayName string   `json:"displayName,omitempty"`
-	Email       string   `json:"email,omitempty"`
-}
+	userImportResult struct {
+		Query       string   `json:"query"`
+		Status      string   `json:"status"`
+		Error       string   `json:"error,omitempty"`
+		User        *db.User `json:"user,omitempty"`
+		DisplayName string   `json:"displayName,omitempty"`
+		Email       string   `json:"email,omitempty"`
+	}
 
-type groupCreateRequest struct {
-	Name           string `json:"name"`
-	Slug           string `json:"slug"`
-	Description    string `json:"description"`
-	GroupType      string `json:"groupType"`
-	ParentGroupID  *int   `json:"parentGroupID"`
-	OwnerScopeType string `json:"ownerScopeType"`
-	OwnerScopeID   *int   `json:"ownerScopeID"`
-	SyncSource     string `json:"syncSource"`
-	ExternalID     string `json:"externalID"`
-	SyncMembership bool   `json:"syncMembership"`
-}
+	groupCreateRequest struct {
+		Name           string `json:"name"`
+		Slug           string `json:"slug"`
+		Description    string `json:"description"`
+		GroupType      string `json:"groupType"`
+		ParentGroupID  *int   `json:"parentGroupID"`
+		OwnerScopeType string `json:"ownerScopeType"`
+		OwnerScopeID   *int   `json:"ownerScopeID"`
+		SyncSource     string `json:"syncSource"`
+		ExternalID     string `json:"externalID"`
+		SyncMembership bool   `json:"syncMembership"`
+	}
 
-type groupUpdateRequest struct {
-	Name           *string `json:"name"`
-	Slug           *string `json:"slug"`
-	Description    *string `json:"description"`
-	GroupType      *string `json:"groupType"`
-	ParentGroupID  *int    `json:"parentGroupID"`
-	OwnerScopeType *string `json:"ownerScopeType"`
-	OwnerScopeID   *int    `json:"ownerScopeID"`
-	SyncSource     *string `json:"syncSource"`
-	ExternalID     *string `json:"externalID"`
-	SyncMembership *bool   `json:"syncMembership"`
-}
+	groupUpdateRequest struct {
+		Name           *string `json:"name"`
+		Slug           *string `json:"slug"`
+		Description    *string `json:"description"`
+		GroupType      *string `json:"groupType"`
+		ParentGroupID  *int    `json:"parentGroupID"`
+		OwnerScopeType *string `json:"ownerScopeType"`
+		OwnerScopeID   *int    `json:"ownerScopeID"`
+		SyncSource     *string `json:"syncSource"`
+		ExternalID     *string `json:"externalID"`
+		SyncMembership *bool   `json:"syncMembership"`
+	}
 
-type groupMembershipRequest struct {
-	UserID         int    `json:"userID"`
-	UserRef        string `json:"userRef"`
-	MembershipRole string `json:"membershipRole"`
-}
+	groupMembershipRequest struct {
+		UserID         int    `json:"userID"`
+		UserRef        string `json:"userRef"`
+		MembershipRole string `json:"membershipRole"`
+	}
 
-type groupRoleBindingRequest struct {
-	RoleID      int    `json:"roleID"`
-	RoleName    string `json:"roleName"`
-	SubjectType string `json:"subjectType"`
-	SubjectID   int    `json:"subjectID"`
-	SubjectRef  string `json:"subjectRef"`
-	ScopeType   string `json:"scopeType"`
-	ScopeID     *int   `json:"scopeID"`
-}
+	groupRoleBindingRequest struct {
+		RoleID      int    `json:"roleID"`
+		RoleName    string `json:"roleName"`
+		SubjectType string `json:"subjectType"`
+		SubjectID   int    `json:"subjectID"`
+		SubjectRef  string `json:"subjectRef"`
+		ScopeType   string `json:"scopeType"`
+		ScopeID     *int   `json:"scopeID"`
+	}
 
-type projectMembershipRequest struct {
-	SubjectType string `json:"subjectType"`
-	SubjectID   int    `json:"subjectID"`
-	SubjectRef  string `json:"subjectRef"`
-	ProjectRole string `json:"projectRole"`
-	RoleID      int    `json:"roleID"`
-}
+	projectMembershipRequest struct {
+		SubjectType string `json:"subjectType"`
+		SubjectID   int    `json:"subjectID"`
+		SubjectRef  string `json:"subjectRef"`
+		ProjectRole string `json:"projectRole"`
+		RoleID      int    `json:"roleID"`
+	}
 
-type roleCreateRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ScopeType   string `json:"scopeType"`
-	ScopeID     *int   `json:"scopeID"`
-}
+	roleCreateRequest struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		ScopeType   string `json:"scopeType"`
+		ScopeID     *int   `json:"scopeID"`
+	}
 
-type roleUpdateRequest struct {
-	Name        *string `json:"name"`
-	Description *string `json:"description"`
-}
+	roleUpdateRequest struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
 
-type rolePermissionRequest struct {
-	PermissionID   int    `json:"permissionID"`
-	PermissionName string `json:"permissionName"`
-}
+	rolePermissionRequest struct {
+		PermissionID   int    `json:"permissionID"`
+		PermissionName string `json:"permissionName"`
+	}
+)
 
-func getUsers(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil || !allowed {
+// getUsers lists all local users for user managers.
+func getUsers(c *fiber.Ctx) (err error) {
+	var allowed bool
+	if allowed, err = requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil); err != nil || !allowed {
 		return err
 	}
 
-	users, err := db.ListUsers()
-	if err != nil {
+	var users []*db.User
+	if users, err = db.ListUsers(); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load users"})
 	}
+
 	return c.JSON(users)
 }
 
-func postCreateUser(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil || !allowed {
+// postCreateUser creates or updates a local user entry.
+func postCreateUser(c *fiber.Ctx) (errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+
+	if allowed, err = requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil); err != nil || !allowed {
 		return err
 	}
 
 	var req userCreateRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user request"})
 	}
 
-	user, _, err := db.EnsureUser(
+	var user *db.User
+	if user, _, err = db.EnsureUser(
 		strings.TrimSpace(req.Username),
 		strings.TrimSpace(req.DisplayName),
 		strings.TrimSpace(req.Email),
 		"local",
 		strings.TrimSpace(req.Username),
-	)
-	if err != nil {
+	); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(user)
 }
 
-func postImportUsers(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
+// postImportUsers imports one or more users from LDAP.
+func postImportUsers(c *fiber.Ctx) (errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || !allowed {
 		return err
 	}
 
 	var req userImportRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user import request"})
 	}
+	var queries []string
 
-	queries := userImportQueries(req)
+	queries = userImportQueries(req)
 	if len(queries) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "at least one FreeIPA username or email is required"})
 	}
+	var results []userImportResult
 
-	results := make([]userImportResult, 0, len(queries))
-	imported := 0
-	failed := 0
+	results = make([]userImportResult, 0, len(queries))
+	var imported int
+	imported = 0
+	var failed int
+	failed = 0
 	for _, query := range queries {
-		result := userImportResult{Query: query}
-		ldapUser, found, lookupErr := auth.LookupUser(query)
+		var result userImportResult
+		result = userImportResult{Query: query}
+		var (
+			ldapUser  *auth.LDAPUser
+			found     bool
+			lookupErr error
+		)
+		ldapUser, found, lookupErr = auth.LookupUser(query)
 		if lookupErr != nil {
 			result.Status = "failed"
 			result.Error = lookupErr.Error()
@@ -170,8 +194,13 @@ func postImportUsers(c *fiber.Ctx) error {
 			results = append(results, result)
 			continue
 		}
+		var (
+			user      *db.User
+			created   bool
+			ensureErr error
+		)
 
-		user, created, ensureErr := db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username)
+		user, created, ensureErr = db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username)
 		if ensureErr != nil {
 			result.Status = "failed"
 			result.Error = ensureErr.Error()
@@ -200,20 +229,26 @@ func postImportUsers(c *fiber.Ctx) error {
 	})
 }
 
-func userImportQueries(req userImportRequest) []string {
-	raw := append([]string{}, req.Usernames...)
+// userImportQueries normalizes and deduplicates user import request entries.
+func userImportQueries(req userImportRequest) (itemsResult []string) {
+	var raw []string
+	raw = append([]string{}, req.Usernames...)
 	raw = append(raw, strings.FieldsFunc(req.Entries, func(r rune) bool {
 		return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
 	})...)
+	var seen map[string]bool
 
-	seen := make(map[string]bool, len(raw))
-	queries := make([]string, 0, len(raw))
+	seen = make(map[string]bool, len(raw))
+	var queries []string
+	queries = make([]string, 0, len(raw))
 	for _, value := range raw {
-		query := strings.TrimSpace(value)
+		var query string
+		query = strings.TrimSpace(value)
 		if query == "" {
 			continue
 		}
-		key := strings.ToLower(query)
+		var key string
+		key = strings.ToLower(query)
 		if seen[key] {
 			continue
 		}
@@ -223,19 +258,30 @@ func userImportQueries(req userImportRequest) []string {
 	return queries
 }
 
-func getCloudGroups(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
+// getCloudGroups lists cloud groups visible to group managers.
+func getCloudGroups(c *fiber.Ctx) (errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = requirePermission(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || !allowed {
 		return err
 	}
+	var groups []*db.CloudGroup
 
-	groups, err := db.ListCloudGroups()
+	groups, err = db.ListCloudGroups()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load groups"})
 	}
-	items := make([]fiber.Map, 0, len(groups))
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(groups))
 	for _, group := range groups {
-		item, itemErr := groupResponse(group)
+		var (
+			item    fiber.Map
+			itemErr error
+		)
+		item, itemErr = groupResponse(group)
 		if itemErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group metadata"})
 		}
@@ -244,18 +290,22 @@ func getCloudGroups(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
-func postCreateCloudGroup(c *fiber.Ctx) error {
+// postCreateCloudGroup creates a cloud group in an allowed owner scope.
+func postCreateCloudGroup(c *fiber.Ctx) (errResult error) {
 	var req groupCreateRequest
-	if err := c.BodyParser(&req); err != nil {
+	var err error
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group request"})
 	}
-	ownerScopeType := parseGroupOwnerScope(req.OwnerScopeType)
+	var ownerScopeType db.RoleBindingScope
+	ownerScopeType = parseGroupOwnerScope(req.OwnerScopeType)
 	if ownerScopeType == db.RoleBindingScopeGlobal {
 		req.OwnerScopeID = nil
 	} else if req.OwnerScopeID == nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "owner scope id is required"})
 	}
-	allowed, err := currentUserCan(c, db.PermissionGroupManage, ownerScopeType, req.OwnerScopeID)
+	var allowed bool
+	allowed, err = currentUserCan(c, db.PermissionGroupManage, ownerScopeType, req.OwnerScopeID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -267,9 +317,11 @@ func postCreateCloudGroup(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "LDAP group sync requires site admin"})
 		}
 	}
+	var groupType db.GroupType
 
-	groupType := parseGroupType(req.GroupType)
-	group, _, err := db.EnsureCloudGroup(strings.TrimSpace(req.Name), strings.TrimSpace(req.Slug), groupType)
+	groupType = parseGroupType(req.GroupType)
+	var group *db.CloudGroup
+	group, _, err = db.EnsureCloudGroup(strings.TrimSpace(req.Name), strings.TrimSpace(req.Slug), groupType)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -279,7 +331,8 @@ func postCreateCloudGroup(c *fiber.Ctx) error {
 	if req.Description != "" {
 		group.Description = strings.TrimSpace(req.Description)
 	}
-	syncSource := parseCloudGroupSyncSource(req.SyncSource)
+	var syncSource string
+	syncSource = parseCloudGroupSyncSource(req.SyncSource)
 	if req.SyncMembership && syncSource == db.CloudGroupSyncSourceLocal {
 		syncSource = db.CloudGroupSyncSourceLDAP
 	}
@@ -294,14 +347,15 @@ func postCreateCloudGroup(c *fiber.Ctx) error {
 		group.ExternalID = ""
 		group.SyncMembership = false
 	}
-	if err := db.UpdateCloudGroup(group); err != nil {
+	if err = db.UpdateCloudGroup(group); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update group metadata"})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(group)
 }
 
-func parseGroupOwnerScope(value string) db.RoleBindingScope {
+// parseGroupOwnerScope converts a request scope string into a role binding scope.
+func parseGroupOwnerScope(value string) (roleBindingScopeResult db.RoleBindingScope) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "org":
 		return db.RoleBindingScopeOrg
@@ -312,48 +366,69 @@ func parseGroupOwnerScope(value string) db.RoleBindingScope {
 	}
 }
 
-func getCloudGroupByID(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// getCloudGroupByID returns a single cloud group with metadata.
+func getCloudGroupByID(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	var allowed bool
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var (
+		group *db.CloudGroup
+		found bool
+	)
 
-	group, found, err := db.GetCloudGroupByID(groupID)
+	group, found, err = db.GetCloudGroupByID(groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "group not found"})
 	}
+	var item fiber.Map
 
-	item, err := groupResponse(group)
+	item, err = groupResponse(group)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group metadata"})
 	}
 	return c.JSON(item)
 }
 
-func patchCloudGroup(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// patchCloudGroup updates mutable cloud group fields and sync settings.
+func patchCloudGroup(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	var allowed bool
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var (
+		group *db.CloudGroup
+		found bool
+	)
 
-	group, found, err := db.GetCloudGroupByID(groupID)
+	group, found, err = db.GetCloudGroupByID(groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group"})
 	}
@@ -365,23 +440,30 @@ func patchCloudGroup(c *fiber.Ctx) error {
 	}
 
 	var req groupUpdateRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group request"})
 	}
 
 	if req.Name != nil {
-		name := strings.TrimSpace(*req.Name)
+		var name string
+		name = strings.TrimSpace(*req.Name)
 		if name == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "group name is required"})
 		}
 		group.Name = name
 	}
 	if req.Slug != nil {
-		slug := strings.TrimSpace(*req.Slug)
+		var slug string
+		slug = strings.TrimSpace(*req.Slug)
 		if slug == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "group slug is required"})
 		}
-		if existing, existingFound, findErr := db.GetCloudGroupBySlug(slug); findErr != nil {
+		var (
+			existing      *db.CloudGroup
+			existingFound bool
+			findErr       error
+		)
+		if existing, existingFound, findErr = db.GetCloudGroupBySlug(slug); findErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate group slug"})
 		} else if existingFound && existing.ID != group.ID {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "group slug is already in use"})
@@ -401,11 +483,13 @@ func patchCloudGroup(c *fiber.Ctx) error {
 		group.ParentGroupID = req.ParentGroupID
 	}
 	if req.OwnerScopeType != nil || req.OwnerScopeID != nil {
-		ownerScopeType := group.OwnerScopeType
+		var ownerScopeType db.RoleBindingScope
+		ownerScopeType = group.OwnerScopeType
 		if req.OwnerScopeType != nil {
 			ownerScopeType = parseGroupOwnerScope(*req.OwnerScopeType)
 		}
-		ownerScopeID := group.OwnerScopeID
+		var ownerScopeID *int
+		ownerScopeID = group.OwnerScopeID
 		if req.OwnerScopeID != nil {
 			ownerScopeID = req.OwnerScopeID
 		}
@@ -414,7 +498,7 @@ func patchCloudGroup(c *fiber.Ctx) error {
 		} else if ownerScopeID == nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "owner scope id is required"})
 		}
-		allowed, err := currentUserCan(c, db.PermissionGroupManage, ownerScopeType, ownerScopeID)
+		allowed, err = currentUserCan(c, db.PermissionGroupManage, ownerScopeType, ownerScopeID)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		}
@@ -425,11 +509,13 @@ func patchCloudGroup(c *fiber.Ctx) error {
 		group.OwnerScopeID = ownerScopeID
 	}
 	if req.SyncSource != nil || req.SyncMembership != nil || req.ExternalID != nil {
-		syncSource := group.SyncSource
+		var syncSource string
+		syncSource = group.SyncSource
 		if req.SyncSource != nil {
 			syncSource = parseCloudGroupSyncSource(*req.SyncSource)
 		}
-		syncMembership := group.SyncMembership
+		var syncMembership bool
+		syncMembership = group.SyncMembership
 		if req.SyncMembership != nil {
 			syncMembership = *req.SyncMembership
 		}
@@ -454,30 +540,41 @@ func patchCloudGroup(c *fiber.Ctx) error {
 		}
 	}
 
-	if err := db.UpdateCloudGroup(group); err != nil {
+	if err = db.UpdateCloudGroup(group); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update group"})
 	}
-	item, err := groupResponse(group)
+	var item fiber.Map
+	item, err = groupResponse(group)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group metadata"})
 	}
 	return c.JSON(item)
 }
 
-func deleteCloudGroup(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// deleteCloudGroup archives a cloud group.
+func deleteCloudGroup(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	var allowed bool
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var (
+		group *db.CloudGroup
+		found bool
+	)
 
-	group, found, err := db.GetCloudGroupByID(groupID)
+	group, found, err = db.GetCloudGroupByID(groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group"})
 	}
@@ -485,34 +582,43 @@ func deleteCloudGroup(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "group not found"})
 	}
 	if group.ArchivedAt == nil {
-		if err := db.ArchiveCloudGroup(group); err != nil {
+		if err = db.ArchiveCloudGroup(group); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive group"})
 		}
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func getGroupMemberships(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// getGroupMemberships lists members for a cloud group.
+func getGroupMemberships(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	var allowed bool
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var memberships []*db.CloudGroupMembership
 
-	memberships, err := db.CloudGroupMembershipsForGroup(groupID)
+	memberships, err = db.CloudGroupMembershipsForGroup(groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load memberships"})
 	}
+	var items []fiber.Map
 
-	items := make([]fiber.Map, 0, len(memberships))
+	items = make([]fiber.Map, 0, len(memberships))
 	for _, membership := range memberships {
-		item := fiber.Map{
+		var item fiber.Map
+		item = fiber.Map{
 			"id":                    membership.ID,
 			"user_id":               membership.UserID,
 			"group_id":              membership.GroupID,
@@ -520,7 +626,12 @@ func getGroupMemberships(c *fiber.Ctx) error {
 			"membership_role_label": membershipRoleLabel(membership.MembershipRole),
 			"created_at":            membership.CreatedAt,
 		}
-		if user, found, userErr := db.GetUserByID(membership.UserID); userErr == nil && found {
+		var (
+			user    *db.User
+			found   bool
+			userErr error
+		)
+		if user, found, userErr = db.GetUserByID(membership.UserID); userErr == nil && found {
 			item["user"] = fiber.Map{
 				"id":           user.ID,
 				"username":     user.Username,
@@ -535,13 +646,19 @@ func getGroupMemberships(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
-func postCreateGroupMembership(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// postCreateGroupMembership adds a user to a cloud group.
+func postCreateGroupMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -550,41 +667,51 @@ func postCreateGroupMembership(c *fiber.Ctx) error {
 	}
 
 	var req groupMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
+	var userID int
 
-	userID, err := resolveUserID(req.UserID, req.UserRef)
+	userID, err = resolveUserID(req.UserID, req.UserRef)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	role := parseMembershipRole(req.MembershipRole)
+	var role db.MembershipRole
+	role = parseMembershipRole(req.MembershipRole)
 
-	if _, err := db.EnsureCloudGroupMembership(userID, groupID, role); err != nil {
+	if _, err = db.EnsureCloudGroupMembership(userID, groupID, role); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func patchGroupMembership(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// patchGroupMembership updates a cloud group membership role.
+func patchGroupMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var membership *db.CloudGroupMembership
 
-	membership, err := db.CloudGroupMemberships.Select(membershipID)
+	membership, err = db.CloudGroupMemberships.Select(membershipID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
@@ -593,27 +720,35 @@ func patchGroupMembership(c *fiber.Ctx) error {
 	}
 
 	var req groupMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
-	updated, err := db.UpdateCloudGroupMembershipRole(membershipID, parseMembershipRole(req.MembershipRole))
+	var updated *db.CloudGroupMembership
+	updated, err = db.UpdateCloudGroupMembershipRole(membershipID, parseMembershipRole(req.MembershipRole))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update membership"})
 	}
 	return c.JSON(updated)
 }
 
-func deleteGroupMembership(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// deleteGroupMembership removes a cloud group membership.
+func deleteGroupMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -621,86 +756,110 @@ func deleteGroupMembership(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
-	if err := db.RemoveCloudGroupMembership(membershipID); err != nil {
+	if err = db.RemoveCloudGroupMembership(membershipID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func getGroupRoleBindings(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// getGroupRoleBindings lists role bindings assigned to a cloud group.
+func getGroupRoleBindings(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	allowed, err := currentUserCanManageGroup(c, groupID)
+	var allowed bool
+	allowed, err = currentUserCanManageGroup(c, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var bindings []*db.RoleBinding
 
-	bindings, err := db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, groupID)
+	bindings, err = db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, groupID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role bindings"})
 	}
+	var items []fiber.Map
 
-	items, err := roleBindingResponse(bindings)
+	items, err = roleBindingResponse(bindings)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role binding roles"})
 	}
 	return c.JSON(items)
 }
 
-func postCreateGroupRoleBinding(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// postCreateGroupRoleBinding grants a role to a cloud group.
+func postCreateGroupRoleBinding(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
 
 	var req groupRoleBindingRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role binding request"})
 	}
+	var scopeType db.RoleBindingScope
 
-	scopeType := parseRoleBindingScope(req.ScopeType)
-	allowed, err := currentUserCanBindRolesForGroup(c, groupID, scopeType, req.ScopeID)
+	scopeType = parseRoleBindingScope(req.ScopeType)
+	var allowed bool
+	allowed, err = currentUserCanBindRolesForGroup(c, groupID, scopeType, req.ScopeID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var roleID int
 
-	roleID, err := resolveRoleID(req.RoleID, req.RoleName)
+	roleID, err = resolveRoleID(req.RoleID, req.RoleName)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if _, err := db.EnsureRoleBinding(roleID, db.RoleBindingSubjectGroup, groupID, scopeType, req.ScopeID); err != nil {
+	if _, err = db.EnsureRoleBinding(roleID, db.RoleBindingSubjectGroup, groupID, scopeType, req.ScopeID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func deleteGroupRoleBinding(c *fiber.Ctx) error {
-	groupID, err := strconv.Atoi(c.Params("id"))
+// deleteGroupRoleBinding removes a role binding from a cloud group.
+func deleteGroupRoleBinding(c *fiber.Ctx) (errResult error) {
+	var (
+		groupID int
+		err     error
+	)
+	groupID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid group id"})
 	}
-	bindingID, err := strconv.Atoi(c.Params("bindingID"))
+	var bindingID int
+	bindingID, err = strconv.Atoi(c.Params("bindingID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role binding id"})
 	}
+	var binding *db.RoleBinding
 
-	binding, err := db.RoleBindings.Select(bindingID)
+	binding, err = db.RoleBindings.Select(bindingID)
 	if err != nil || binding == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "role binding not found"})
 	}
 	if binding.SubjectType != db.RoleBindingSubjectGroup || binding.SubjectID != groupID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "role binding not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanBindRolesForGroup(c, groupID, binding.ScopeType, binding.ScopeID)
+	allowed, err = currentUserCanBindRolesForGroup(c, groupID, binding.ScopeType, binding.ScopeID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -708,22 +867,29 @@ func deleteGroupRoleBinding(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
-	if err := db.RemoveRoleBinding(bindingID); err != nil {
+	if err = db.RemoveRoleBinding(bindingID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove role binding"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func getProjectBySlug(c *fiber.Ctx) error {
-	project, found, err := db.GetProjectBySlug(c.Params("slug"))
+// getProjectBySlug returns a project by slug when the current user can view it.
+func getProjectBySlug(c *fiber.Ctx) (errResult error) {
+	var (
+		project *db.Project
+		found   bool
+		err     error
+	)
+	project, found, err = db.GetProjectBySlug(c.Params("slug"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanViewProject(c, project)
+	allowed, err = currentUserCanViewProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -734,69 +900,94 @@ func getProjectBySlug(c *fiber.Ctx) error {
 	return c.JSON(project)
 }
 
-func getProjectMemberships(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// getProjectMemberships lists project memberships with subject metadata.
+func getProjectMemberships(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanViewProject(c, project)
+	allowed, err = currentUserCanViewProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var memberships []*db.ProjectMembership
 
-	memberships, err := db.ProjectMembershipsForProject(projectID)
+	memberships, err = db.ProjectMembershipsForProject(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load memberships"})
 	}
+	var items []fiber.Map
 
-	items, err := projectMembershipResponse(memberships)
+	items, err = projectMembershipResponse(memberships)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subjects"})
 	}
 	return c.JSON(items)
 }
 
-func getProjectAssignableRoles(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// getProjectAssignableRoles lists roles the current user may assign on a project.
+func getProjectAssignableRoles(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.JSON([]fiber.Map{})
 	}
+	var roles []*db.Role
 
-	roles, err := db.Roles.SelectAll()
+	roles, err = db.Roles.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load roles"})
 	}
-	assignable := make([]*db.Role, 0, len(roles))
+	var assignable []*db.Role
+	assignable = make([]*db.Role, 0, len(roles))
 	for _, role := range roles {
-		allowed, allowErr := currentUserCanAssignRoleAtScope(c, role.ID, db.RoleBindingScopeProject, &project.ID)
+		var allowErr error
+		allowed, allowErr = currentUserCanAssignRoleAtScope(c, role.ID, db.RoleBindingScopeProject, &project.ID)
 		if allowErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		}
@@ -804,42 +995,59 @@ func getProjectAssignableRoles(c *fiber.Ctx) error {
 			assignable = append(assignable, role)
 		}
 	}
-	items, err := roleResponse(assignable)
+	var items []fiber.Map
+	items, err = roleResponse(assignable)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role metadata"})
 	}
 	return c.JSON(items)
 }
 
-func getProjectOwnedGroups(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// getProjectOwnedGroups lists cloud groups owned by a project.
+func getProjectOwnedGroups(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var groups []*db.CloudGroup
 
-	groups, err := db.CloudGroupsForOwner(db.RoleBindingScopeProject, &projectID)
+	groups, err = db.CloudGroupsForOwner(db.RoleBindingScopeProject, &projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load groups"})
 	}
-	items := make([]fiber.Map, 0, len(groups))
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(groups))
 	for _, group := range groups {
-		item, itemErr := groupResponse(group)
+		var (
+			item    fiber.Map
+			itemErr error
+		)
+		item, itemErr = groupResponse(group)
 		if itemErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group metadata"})
 		}
@@ -848,49 +1056,69 @@ func getProjectOwnedGroups(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
-func getOrganizationMemberships(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// getOrganizationMemberships lists organization memberships with subject metadata.
+func getOrganizationMemberships(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	memberships, err := db.OrganizationMembershipsForOrganization(org.ID)
+	var memberships []*db.OrganizationMembership
+	memberships, err = db.OrganizationMembershipsForOrganization(org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load memberships"})
 	}
-	items, err := organizationMembershipResponse(memberships)
+	var items []fiber.Map
+	items, err = organizationMembershipResponse(memberships)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subjects"})
 	}
 	return c.JSON(items)
 }
 
-func getOrganizationOwnedGroups(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// getOrganizationOwnedGroups lists cloud groups owned by an organization.
+func getOrganizationOwnedGroups(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var groups []*db.CloudGroup
 
-	groups, err := db.CloudGroupsForOwner(db.RoleBindingScopeOrg, &org.ID)
+	groups, err = db.CloudGroupsForOwner(db.RoleBindingScopeOrg, &org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load groups"})
 	}
-	items := make([]fiber.Map, 0, len(groups))
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(groups))
 	for _, group := range groups {
-		item, itemErr := groupResponse(group)
+		var (
+			item    fiber.Map
+			itemErr error
+		)
+		item, itemErr = groupResponse(group)
 		if itemErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group metadata"})
 		}
@@ -899,25 +1127,34 @@ func getOrganizationOwnedGroups(c *fiber.Ctx) error {
 	return c.JSON(items)
 }
 
-func getOrganizationAssignableRoles(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// getOrganizationAssignableRoles lists roles the current user may assign on an organization.
+func getOrganizationAssignableRoles(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.JSON([]fiber.Map{})
 	}
-	roles, err := db.Roles.SelectAll()
+	var roles []*db.Role
+	roles, err = db.Roles.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load roles"})
 	}
-	assignable := make([]*db.Role, 0, len(roles))
+	var assignable []*db.Role
+	assignable = make([]*db.Role, 0, len(roles))
 	for _, role := range roles {
-		allowed, allowErr := currentUserCanAssignRoleAtScope(c, role.ID, db.RoleBindingScopeOrg, &org.ID)
+		var allowErr error
+		allowed, allowErr = currentUserCanAssignRoleAtScope(c, role.ID, db.RoleBindingScopeOrg, &org.ID)
 		if allowErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		}
@@ -925,19 +1162,26 @@ func getOrganizationAssignableRoles(c *fiber.Ctx) error {
 			assignable = append(assignable, role)
 		}
 	}
-	items, err := roleResponse(assignable)
+	var items []fiber.Map
+	items, err = roleResponse(assignable)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role metadata"})
 	}
 	return c.JSON(items)
 }
 
-func postCreateOrganizationMembership(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// postCreateOrganizationMembership adds a subject to an organization with an access role.
+func postCreateOrganizationMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -945,39 +1189,43 @@ func postCreateOrganizationMembership(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 	var req projectMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
 	if req.RoleID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "role is required"})
 	}
-	if allowed, err := currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeOrg, &org.ID); err != nil {
+	if allowed, err = currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeOrg, &org.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	} else if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your organization access"})
 	}
+	var subjectType db.ProjectMemberSubject
 
-	subjectType := db.ProjectMemberSubjectUser
+	subjectType = db.ProjectMemberSubjectUser
 	if strings.EqualFold(req.SubjectType, "group") {
 		subjectType = db.ProjectMemberSubjectGroup
 	}
-	subjectID, err := resolveProjectMembershipSubject(subjectType, req.SubjectID, req.SubjectRef, currentUserIsSiteAdmin(c))
+	var subjectID int
+	subjectID, err = resolveProjectMembershipSubject(subjectType, req.SubjectID, req.SubjectRef, currentUserIsSiteAdmin(c))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if _, err := db.EnsureOrganizationMembership(org.ID, subjectType, subjectID, db.MembershipRoleMember); err != nil {
+	if _, err = db.EnsureOrganizationMembership(org.ID, subjectType, subjectID, db.MembershipRoleMember); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if err := db.EnsureOrganizationMemberRoleBinding(org.ID, subjectType, subjectID, req.RoleID); err != nil {
+	if err = db.EnsureOrganizationMemberRoleBinding(org.ID, subjectType, subjectID, req.RoleID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	memberships, err := db.OrganizationMembershipsForOrganization(org.ID)
+	var memberships []*db.OrganizationMembership
+	memberships, err = db.OrganizationMembershipsForOrganization(org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
 	for _, membership := range memberships {
 		if membership.SubjectType == subjectType && membership.SubjectID == subjectID {
-			items, err := organizationMembershipResponse([]*db.OrganizationMembership{membership})
+			var items []fiber.Map
+			items, err = organizationMembershipResponse([]*db.OrganizationMembership{membership})
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subject"})
 			}
@@ -987,23 +1235,31 @@ func postCreateOrganizationMembership(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 }
 
-func patchOrganizationMembership(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// patchOrganizationMembership updates an organization membership access role.
+func patchOrganizationMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	membership, err := db.OrganizationMemberships.Select(membershipID)
+	var membership *db.OrganizationMembership
+	membership, err = db.OrganizationMemberships.Select(membershipID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
@@ -1011,74 +1267,93 @@ func patchOrganizationMembership(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "membership not found"})
 	}
 	var req projectMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
 	if req.RoleID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "role is required"})
 	}
-	if allowed, err := currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeOrg, &org.ID); err != nil {
+	if allowed, err = currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeOrg, &org.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	} else if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your organization access"})
 	}
-	if err := db.EnsureOrganizationMemberRoleBinding(org.ID, membership.SubjectType, membership.SubjectID, req.RoleID); err != nil {
+	if err = db.EnsureOrganizationMemberRoleBinding(org.ID, membership.SubjectType, membership.SubjectID, req.RoleID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update membership access"})
 	}
-	items, err := organizationMembershipResponse([]*db.OrganizationMembership{membership})
+	var items []fiber.Map
+	items, err = organizationMembershipResponse([]*db.OrganizationMembership{membership})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
 	return c.JSON(items[0])
 }
 
-func deleteOrganizationMembership(c *fiber.Ctx) error {
-	org, err := organizationFromParam(c)
+// deleteOrganizationMembership removes an organization membership and its access grants.
+func deleteOrganizationMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		org *db.Organization
+		err error
+	)
+	org, err = organizationFromParam(c)
 	if err != nil {
 		return organizationParamError(c, err)
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
-	allowed, err := currentUserCanManageOrganization(c, org.ID)
+	var allowed bool
+	allowed, err = currentUserCanManageOrganization(c, org.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	membership, err := db.OrganizationMemberships.Select(membershipID)
+	var membership *db.OrganizationMembership
+	membership, err = db.OrganizationMemberships.Select(membershipID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
 	if membership == nil || membership.OrganizationID != org.ID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "membership not found"})
 	}
-	if err := db.RemoveOrganizationMemberAccessRoles(org.ID, membership.SubjectType, membership.SubjectID); err != nil {
+	if err = db.RemoveOrganizationMemberAccessRoles(org.ID, membership.SubjectType, membership.SubjectID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership access"})
 	}
-	if err := db.RemoveOrganizationMembership(membershipID); err != nil {
+	if err = db.RemoveOrganizationMembership(membershipID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func postCreateProjectMembership(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// postCreateProjectMembership adds a subject to a project with optional access.
+func postCreateProjectMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -1087,68 +1362,75 @@ func postCreateProjectMembership(c *fiber.Ctx) error {
 	}
 
 	var req projectMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
+	var subjectType db.ProjectMemberSubject
 
-	subjectType := db.ProjectMemberSubjectUser
+	subjectType = db.ProjectMemberSubjectUser
 	if strings.EqualFold(req.SubjectType, "group") {
 		subjectType = db.ProjectMemberSubjectGroup
 	}
+	var subjectID int
 
-	subjectID, err := resolveProjectMembershipSubject(subjectType, req.SubjectID, req.SubjectRef, currentUserIsSiteAdmin(c))
+	subjectID, err = resolveProjectMembershipSubject(subjectType, req.SubjectID, req.SubjectRef, currentUserIsSiteAdmin(c))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	if subjectType == db.ProjectMemberSubjectGroup {
-		group, found, err := db.GetCloudGroupByID(subjectID)
+		var group *db.CloudGroup
+		group, found, err = db.GetCloudGroupByID(subjectID)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load group"})
 		}
 		if found && group.OwnerScopeType == db.RoleBindingScopeGlobal && group.GroupType == db.GroupTypeProject {
 			group.OwnerScopeType = db.RoleBindingScopeProject
 			group.OwnerScopeID = &projectID
-			if err := db.UpdateCloudGroup(group); err != nil {
+			if err = db.UpdateCloudGroup(group); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to scope group"})
 			}
 		}
 	}
 
-	if _, err := db.EnsureProjectMembership(projectID, subjectType, subjectID); err != nil {
+	if _, err = db.EnsureProjectMembership(projectID, subjectType, subjectID); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	if req.RoleID > 0 {
-		if allowed, err := currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeProject, &projectID); err != nil {
+		if allowed, err = currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeProject, &projectID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		} else if !allowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your project access"})
 		}
-		if err := db.EnsureProjectMemberRoleBinding(projectID, subjectType, subjectID, req.RoleID); err != nil {
+		if err = db.EnsureProjectMemberRoleBinding(projectID, subjectType, subjectID, req.RoleID); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 	} else if strings.TrimSpace(req.ProjectRole) != "" {
-		role := parseProjectRole(req.ProjectRole)
-		roleID, err := projectRoleID(role)
+		var role db.ProjectRole
+		role = parseProjectRole(req.ProjectRole)
+		var roleID int
+		roleID, err = projectRoleID(role)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
-		if allowed, err := currentUserCanAssignRoleAtScope(c, roleID, db.RoleBindingScopeProject, &projectID); err != nil {
+		if allowed, err = currentUserCanAssignRoleAtScope(c, roleID, db.RoleBindingScopeProject, &projectID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		} else if !allowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your project access"})
 		}
-		if err := db.EnsureProjectMemberAccessRole(projectID, subjectType, subjectID, role); err != nil {
+		if err = db.EnsureProjectMemberAccessRole(projectID, subjectType, subjectID, role); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 	}
+	var memberships []*db.ProjectMembership
 
-	memberships, err := db.ProjectMembershipsForProject(projectID)
+	memberships, err = db.ProjectMembershipsForProject(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
 	for _, membership := range memberships {
 		if membership.SubjectType == subjectType && membership.SubjectID == subjectID {
-			items, err := projectMembershipResponse([]*db.ProjectMembership{membership})
+			var items []fiber.Map
+			items, err = projectMembershipResponse([]*db.ProjectMembership{membership})
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subject"})
 			}
@@ -1158,33 +1440,45 @@ func postCreateProjectMembership(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 }
 
-func patchProjectMembership(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// patchProjectMembership updates project membership access.
+func patchProjectMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var membership *db.ProjectMembership
 
-	membership, err := db.ProjectMemberships.Select(membershipID)
+	membership, err = db.ProjectMemberships.Select(membershipID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
@@ -1193,67 +1487,82 @@ func patchProjectMembership(c *fiber.Ctx) error {
 	}
 
 	var req projectMembershipRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership request"})
 	}
 	if req.RoleID > 0 {
-		if allowed, err := currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeProject, &projectID); err != nil {
+		if allowed, err = currentUserCanAssignRoleAtScope(c, req.RoleID, db.RoleBindingScopeProject, &projectID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		} else if !allowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your project access"})
 		}
-		if err := db.EnsureProjectMemberRoleBinding(projectID, membership.SubjectType, membership.SubjectID, req.RoleID); err != nil {
+		if err = db.EnsureProjectMemberRoleBinding(projectID, membership.SubjectType, membership.SubjectID, req.RoleID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update membership access"})
 		}
 	} else {
-		role := parseProjectRole(req.ProjectRole)
-		roleID, err := projectRoleID(role)
+		var role db.ProjectRole
+		role = parseProjectRole(req.ProjectRole)
+		var roleID int
+		roleID, err = projectRoleID(role)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
-		if allowed, err := currentUserCanAssignRoleAtScope(c, roleID, db.RoleBindingScopeProject, &projectID); err != nil {
+		if allowed, err = currentUserCanAssignRoleAtScope(c, roleID, db.RoleBindingScopeProject, &projectID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 		} else if !allowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "role grants permissions outside your project access"})
 		}
-		if err := db.EnsureProjectMemberAccessRole(projectID, membership.SubjectType, membership.SubjectID, role); err != nil {
+		if err = db.EnsureProjectMemberAccessRole(projectID, membership.SubjectType, membership.SubjectID, role); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update membership access"})
 		}
 	}
-	items, err := projectMembershipResponse([]*db.ProjectMembership{membership})
+	var items []fiber.Map
+	items, err = projectMembershipResponse([]*db.ProjectMembership{membership})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
 	return c.JSON(items[0])
 }
 
-func deleteProjectMembership(c *fiber.Ctx) error {
-	projectID, err := strconv.Atoi(c.Params("id"))
+// deleteProjectMembership removes project membership and project access grants.
+func deleteProjectMembership(c *fiber.Ctx) (errResult error) {
+	var (
+		projectID int
+		err       error
+	)
+	projectID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project id"})
 	}
-	membershipID, err := strconv.Atoi(c.Params("membershipID"))
+	var membershipID int
+	membershipID, err = strconv.Atoi(c.Params("membershipID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid membership id"})
 	}
+	var (
+		project *db.Project
+		found   bool
+	)
 
-	project, found, err := db.GetProjectByID(projectID)
+	project, found, err = db.GetProjectByID(projectID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
+	var membership *db.ProjectMembership
 
-	membership, err := db.ProjectMemberships.Select(membershipID)
+	membership, err = db.ProjectMemberships.Select(membershipID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
@@ -1261,25 +1570,32 @@ func deleteProjectMembership(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "membership not found"})
 	}
 
-	if err := db.RemoveProjectMemberAccessRoles(projectID, membership.SubjectType, membership.SubjectID); err != nil {
+	if err = db.RemoveProjectMemberAccessRoles(projectID, membership.SubjectType, membership.SubjectID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership access"})
 	}
-	if err := db.RemoveProjectMembership(membershipID); err != nil {
+	if err = db.RemoveProjectMembership(membershipID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func deleteProjectBySlug(c *fiber.Ctx) error {
-	project, found, err := db.GetProjectBySlug(c.Params("slug"))
+// deleteProjectBySlug deletes a project when the current user can manage it.
+func deleteProjectBySlug(c *fiber.Ctx) (errResult error) {
+	var (
+		project *db.Project
+		found   bool
+		err     error
+	)
+	project, found, err = db.GetProjectBySlug(c.Params("slug"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load project"})
 	}
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	var allowed bool
 
-	allowed, err := currentUserCanManageProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -1287,13 +1603,14 @@ func deleteProjectBySlug(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
-	if err := db.DeleteProject(project.ID); err != nil {
+	if err = db.DeleteProject(project.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete project"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func resolveProjectMembershipSubject(subjectType db.ProjectMemberSubject, subjectID int, subjectRef string, allowLDAPGroupSync bool) (int, error) {
+// resolveProjectMembershipSubject resolves a user or group reference for project membership.
+func resolveProjectMembershipSubject(subjectType db.ProjectMemberSubject, subjectID int, subjectRef string, allowLDAPGroupSync bool) (countResult int, errResult error) {
 	if subjectID > 0 {
 		return subjectID, nil
 	}
@@ -1304,7 +1621,12 @@ func resolveProjectMembershipSubject(subjectType db.ProjectMemberSubject, subjec
 	}
 
 	if subjectType == db.ProjectMemberSubjectGroup {
-		group, found, err := findCloudGroupByRef(subjectRef)
+		var (
+			group *db.CloudGroup
+			found bool
+			err   error
+		)
+		group, found, err = findCloudGroupByRef(subjectRef)
 		if err != nil {
 			return 0, err
 		}
@@ -1319,8 +1641,13 @@ func resolveProjectMembershipSubject(subjectType db.ProjectMemberSubject, subjec
 		}
 		return group.ID, nil
 	}
+	var (
+		user  *db.User
+		found bool
+		err   error
+	)
 
-	user, found, err := syncOrFindUser(subjectRef)
+	user, found, err = syncOrFindUser(subjectRef)
 	if err != nil {
 		return 0, err
 	}
@@ -1331,13 +1658,20 @@ func resolveProjectMembershipSubject(subjectType db.ProjectMemberSubject, subjec
 	return user.ID, nil
 }
 
-func syncOrFindCloudGroup(ref string) (*db.CloudGroup, bool, error) {
-	group, found, err := findCloudGroupByRef(ref)
+// syncOrFindCloudGroup finds a cloud group locally or imports it from LDAP.
+func syncOrFindCloudGroup(ref string) (cloudGroupResult *db.CloudGroup, okResult bool, errResult error) {
+	var (
+		group *db.CloudGroup
+		found bool
+		err   error
+	)
+	group, found, err = findCloudGroupByRef(ref)
 	if err != nil || found {
 		return group, found, err
 	}
+	var ldapGroup *auth.LDAPGroup
 
-	ldapGroup, found, err := auth.LookupGroup(ref)
+	ldapGroup, found, err = auth.LookupGroup(ref)
 	if err != nil || !found {
 		return nil, false, err
 	}
@@ -1350,24 +1684,32 @@ func syncOrFindCloudGroup(ref string) (*db.CloudGroup, bool, error) {
 		group.SyncSource = db.CloudGroupSyncSourceLDAP
 		group.ExternalID = ldapGroup.Name
 		group.SyncMembership = true
-		if err := db.UpdateCloudGroup(group); err != nil {
+		if err = db.UpdateCloudGroup(group); err != nil {
 			return nil, false, err
 		}
 	}
 	return group, true, nil
 }
 
-func findCloudGroupByRef(ref string) (*db.CloudGroup, bool, error) {
+// findCloudGroupByRef finds a cloud group by slug, name, or external id.
+func findCloudGroupByRef(ref string) (cloudGroupResult *db.CloudGroup, okResult bool, errResult error) {
 	ref = strings.TrimSpace(ref)
-	refSlug := slugForComparison(ref)
-	groups, err := db.ListCloudGroups()
+	var refSlug string
+	refSlug = slugForComparison(ref)
+	var (
+		groups []*db.CloudGroup
+		err    error
+	)
+	groups, err = db.ListCloudGroups()
 	if err != nil {
 		return nil, false, err
 	}
 	for _, group := range groups {
-		candidates := []string{group.Slug, group.Name, group.ExternalID}
+		var candidates []string
+		candidates = []string{group.Slug, group.Name, group.ExternalID}
 		for _, candidate := range candidates {
-			clean := strings.TrimSpace(candidate)
+			var clean string
+			clean = strings.TrimSpace(candidate)
 			if clean == "" {
 				continue
 			}
@@ -1379,13 +1721,20 @@ func findCloudGroupByRef(ref string) (*db.CloudGroup, bool, error) {
 	return nil, false, nil
 }
 
-func syncUserFromLDAP(ref string) (*db.User, bool, error) {
-	ldapUser, found, err := auth.LookupUser(ref)
+// syncUserFromLDAP imports a user from LDAP into the local database.
+func syncUserFromLDAP(ref string) (userResult *db.User, okResult bool, errResult error) {
+	var (
+		ldapUser *auth.LDAPUser
+		found    bool
+		err      error
+	)
+	ldapUser, found, err = auth.LookupUser(ref)
 	if err != nil || !found {
 		return nil, false, err
 	}
+	var user *db.User
 
-	user, _, err := db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username)
+	user, _, err = db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1393,51 +1742,68 @@ func syncUserFromLDAP(ref string) (*db.User, bool, error) {
 	return user, true, nil
 }
 
-func getRoles(c *fiber.Ctx) error {
-	allowed, err := requirePermission(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil)
+// getRoles lists roles available to role managers.
+func getRoles(c *fiber.Ctx) (errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = requirePermission(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || !allowed {
 		return err
 	}
+	var roles []*db.Role
 
-	roles, err := db.Roles.SelectAll()
+	roles, err = db.Roles.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load roles"})
 	}
-	items, err := roleResponse(roles)
+	var items []fiber.Map
+	items, err = roleResponse(roles)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role metadata"})
 	}
 	return c.JSON(items)
 }
 
-func getPermissions(c *fiber.Ctx) error {
+// getPermissions lists all known permissions for authenticated users.
+func getPermissions(c *fiber.Ctx) (errResult error) {
 	if currentDBUser(c) == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
 	}
-	permissions, err := db.Permissions.SelectAll()
+	var (
+		permissions []*db.Permission
+		err         error
+	)
+	permissions, err = db.Permissions.SelectAll()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load permissions"})
 	}
 	return c.JSON(permissions)
 }
 
-func postCreateRole(c *fiber.Ctx) error {
+// postCreateRole creates a role in a permitted owner scope.
+func postCreateRole(c *fiber.Ctx) (errResult error) {
 	var req roleCreateRequest
-	if err := c.BodyParser(&req); err != nil {
+	var err error
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role request"})
 	}
+	var scopeType db.RoleBindingScope
 
-	scopeType := parseRoleBindingScope(req.ScopeType)
+	scopeType = parseRoleBindingScope(req.ScopeType)
 	if strings.TrimSpace(req.ScopeType) == "" {
 		scopeType = db.RoleBindingScopeGlobal
 	}
-	scopeID := req.ScopeID
+	var scopeID *int
+	scopeID = req.ScopeID
 	if scopeType == db.RoleBindingScopeGlobal {
 		scopeID = nil
 	} else if scopeID == nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "role scope id is required"})
 	}
-	allowed, err := currentUserCanCreateRoleAtScope(c, scopeType, scopeID)
+	var allowed bool
+	allowed, err = currentUserCanCreateRoleAtScope(c, scopeType, scopeID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -1446,10 +1812,12 @@ func postCreateRole(c *fiber.Ctx) error {
 	}
 
 	var createdBy *int
-	if dbUser := currentDBUser(c); dbUser != nil {
+	var dbUser *db.User
+	if dbUser = currentDBUser(c); dbUser != nil {
 		createdBy = &dbUser.ID
 	}
-	role, err := db.CreateRole(db.RoleCreateInput{
+	var role *db.Role
+	role, err = db.CreateRole(db.RoleCreateInput{
 		Name:            req.Name,
 		Description:     req.Description,
 		OwnerScopeType:  scopeType,
@@ -1459,22 +1827,29 @@ func postCreateRole(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	items, err := roleResponse([]*db.Role{role})
+	var items []fiber.Map
+	items, err = roleResponse([]*db.Role{role})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role metadata"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(items[0])
 }
 
-func patchRole(c *fiber.Ctx) error {
-	role, err := roleFromParam(c)
+// patchRole updates mutable fields on a custom role.
+func patchRole(c *fiber.Ctx) (errResult error) {
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)
 	}
 	if role.IsSystemRole {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "system roles are managed by setup"})
 	}
-	allowed, err := currentUserCanManageRole(c, role)
+	var allowed bool
+	allowed, err = currentUserCanManageRole(c, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -1483,15 +1858,21 @@ func patchRole(c *fiber.Ctx) error {
 	}
 
 	var req roleUpdateRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role request"})
 	}
 	if req.Name != nil {
-		name := strings.TrimSpace(*req.Name)
+		var name string
+		name = strings.TrimSpace(*req.Name)
 		if name == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "role name is required"})
 		}
-		if existing, found, findErr := db.GetRoleByName(name); findErr != nil {
+		var (
+			existing *db.Role
+			found    bool
+			findErr  error
+		)
+		if existing, found, findErr = db.GetRoleByName(name); findErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate role name"})
 		} else if found && existing.ID != role.ID {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "role name is already in use"})
@@ -1502,32 +1883,40 @@ func patchRole(c *fiber.Ctx) error {
 		role.Description = strings.TrimSpace(*req.Description)
 	}
 
-	if err := db.UpdateRole(role); err != nil {
+	if err = db.UpdateRole(role); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update role"})
 	}
-	items, err := roleResponse([]*db.Role{role})
+	var items []fiber.Map
+	items, err = roleResponse([]*db.Role{role})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role metadata"})
 	}
 	return c.JSON(items[0])
 }
 
-func deleteRole(c *fiber.Ctx) error {
-	role, err := roleFromParam(c)
+// deleteRole deletes an unused custom role.
+func deleteRole(c *fiber.Ctx) (errResult error) {
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)
 	}
 	if role.IsSystemRole {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "system roles cannot be deleted"})
 	}
-	allowed, err := currentUserCanManageRole(c, role)
+	var allowed bool
+	allowed, err = currentUserCanManageRole(c, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	bindingCount, err := db.RoleBindingCountForRole(role.ID)
+	var bindingCount int
+	bindingCount, err = db.RoleBindingCountForRole(role.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to inspect role bindings"})
 	}
@@ -1535,40 +1924,53 @@ func deleteRole(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "role is still used by access grants"})
 	}
 
-	if err := db.DeleteRole(role.ID); err != nil {
+	if err = db.DeleteRole(role.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete role"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func getRolePermissions(c *fiber.Ctx) error {
-	role, err := roleFromParam(c)
+// getRolePermissions lists permissions granted to a role.
+func getRolePermissions(c *fiber.Ctx) (errResult error) {
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)
 	}
-	allowed, err := currentUserCanManageRole(c, role)
+	var allowed bool
+	allowed, err = currentUserCanManageRole(c, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	items, err := rolePermissionResponse(role.ID)
+	var items []fiber.Map
+	items, err = rolePermissionResponse(role.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role permissions"})
 	}
 	return c.JSON(items)
 }
 
-func postCreateRolePermission(c *fiber.Ctx) error {
-	role, err := roleFromParam(c)
+// postCreateRolePermission grants a permission to a custom role.
+func postCreateRolePermission(c *fiber.Ctx) (errResult error) {
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)
 	}
 	if role.IsSystemRole {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "system role permissions are managed by setup"})
 	}
-	allowed, err := currentUserCanManageRole(c, role)
+	var allowed bool
+	allowed, err = currentUserCanManageRole(c, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
@@ -1577,69 +1979,89 @@ func postCreateRolePermission(c *fiber.Ctx) error {
 	}
 
 	var req rolePermissionRequest
-	if err := c.BodyParser(&req); err != nil {
+	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid permission request"})
 	}
-	permissionID, err := resolvePermissionID(req.PermissionID, req.PermissionName)
+	var permissionID int
+	permissionID, err = resolvePermissionID(req.PermissionID, req.PermissionName)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	if allowed, err := currentUserCanGrantPermissionToRole(c, role, permissionID); err != nil {
+	if allowed, err = currentUserCanGrantPermissionToRole(c, role, permissionID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	} else if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission is outside your scoped access"})
 	}
-	if _, err := db.EnsureRolePermission(role.ID, permissionID); err != nil {
+	if _, err = db.EnsureRolePermission(role.ID, permissionID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to grant permission"})
 	}
-	items, err := rolePermissionResponse(role.ID)
+	var items []fiber.Map
+	items, err = rolePermissionResponse(role.ID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role permissions"})
 	}
 	for _, item := range items {
-		if itemPermissionID, ok := item["permission_id"].(int); ok && itemPermissionID == permissionID {
+		var (
+			itemPermissionID int
+			ok               bool
+		)
+		if itemPermissionID, ok = item["permission_id"].(int); ok && itemPermissionID == permissionID {
 			return c.Status(fiber.StatusCreated).JSON(item)
 		}
 	}
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role permission"})
 }
 
-func deleteRolePermission(c *fiber.Ctx) error {
-	role, err := roleFromParam(c)
+// deleteRolePermission revokes a permission from a custom role.
+func deleteRolePermission(c *fiber.Ctx) (errResult error) {
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = roleFromParam(c)
 	if err != nil {
 		return roleParamError(c, err)
 	}
 	if role.IsSystemRole {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "system role permissions are managed by setup"})
 	}
-	allowed, err := currentUserCanManageRole(c, role)
+	var allowed bool
+	allowed, err = currentUserCanManageRole(c, role)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	permissionID, err := strconv.Atoi(c.Params("permissionID"))
+	var permissionID int
+	permissionID, err = strconv.Atoi(c.Params("permissionID"))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid permission id"})
 	}
-	if err := db.RemoveRolePermission(role.ID, permissionID); err != nil {
+	if err = db.RemoveRolePermission(role.ID, permissionID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to revoke permission"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func groupResponse(group *db.CloudGroup) (fiber.Map, error) {
-	memberships, err := db.CloudGroupMembershipsForGroup(group.ID)
+// groupResponse serializes a cloud group with counts and parent metadata.
+func groupResponse(group *db.CloudGroup) (mapResult fiber.Map, errResult error) {
+	var (
+		memberships []*db.CloudGroupMembership
+		err         error
+	)
+	memberships, err = db.CloudGroupMembershipsForGroup(group.ID)
 	if err != nil {
 		return nil, err
 	}
-	roleBindings, err := db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, group.ID)
+	var roleBindings []*db.RoleBinding
+	roleBindings, err = db.RoleBindingsForSubject(db.RoleBindingSubjectGroup, group.ID)
 	if err != nil {
 		return nil, err
 	}
+	var item fiber.Map
 
-	item := fiber.Map{
+	item = fiber.Map{
 		"id":                 group.ID,
 		"uuid":               group.UUID,
 		"name":               group.Name,
@@ -1661,7 +2083,11 @@ func groupResponse(group *db.CloudGroup) (fiber.Map, error) {
 		"updated_at":         group.UpdatedAt,
 	}
 	if group.ParentGroupID != nil {
-		if parent, found, err := db.GetCloudGroupByID(*group.ParentGroupID); err != nil {
+		var (
+			parent *db.CloudGroup
+			found  bool
+		)
+		if parent, found, err = db.GetCloudGroupByID(*group.ParentGroupID); err != nil {
 			return nil, err
 		} else if found {
 			item["parent_group"] = fiber.Map{
@@ -1675,10 +2101,16 @@ func groupResponse(group *db.CloudGroup) (fiber.Map, error) {
 	return item, nil
 }
 
-func roleResponse(roles []*db.Role) ([]fiber.Map, error) {
-	items := make([]fiber.Map, 0, len(roles))
+// roleResponse serializes roles with permission counts.
+func roleResponse(roles []*db.Role) (itemsResult []fiber.Map, errResult error) {
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(roles))
 	for _, role := range roles {
-		rolePermissions, err := db.RolePermissionsForRole(role.ID)
+		var (
+			rolePermissions []*db.RolePermission
+			err             error
+		)
+		rolePermissions, err = db.RolePermissionsForRole(role.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -1698,14 +2130,21 @@ func roleResponse(roles []*db.Role) ([]fiber.Map, error) {
 	return items, nil
 }
 
-func rolePermissionResponse(roleID int) ([]fiber.Map, error) {
-	grants, err := db.RolePermissionsForRole(roleID)
+// rolePermissionResponse serializes permissions granted to a role.
+func rolePermissionResponse(roleID int) (itemsResult []fiber.Map, errResult error) {
+	var (
+		grants []*db.RolePermission
+		err    error
+	)
+	grants, err = db.RolePermissionsForRole(roleID)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]fiber.Map, 0, len(grants))
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(grants))
 	for _, grant := range grants {
-		permission, err := db.Permissions.Select(grant.PermissionID)
+		var permission *db.Permission
+		permission, err = db.Permissions.Select(grant.PermissionID)
 		if err != nil {
 			return nil, err
 		}
@@ -1726,14 +2165,21 @@ func rolePermissionResponse(roleID int) ([]fiber.Map, error) {
 	return items, nil
 }
 
-func roleBindingResponse(bindings []*db.RoleBinding) ([]fiber.Map, error) {
-	items := make([]fiber.Map, 0, len(bindings))
+// roleBindingResponse serializes role bindings with role and subject metadata.
+func roleBindingResponse(bindings []*db.RoleBinding) (itemsResult []fiber.Map, errResult error) {
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(bindings))
 	for _, binding := range bindings {
-		role, err := db.Roles.Select(binding.RoleID)
+		var (
+			role *db.Role
+			err  error
+		)
+		role, err = db.Roles.Select(binding.RoleID)
 		if err != nil {
 			return nil, err
 		}
-		item := fiber.Map{
+		var item fiber.Map
+		item = fiber.Map{
 			"id":                 binding.ID,
 			"role_id":            binding.RoleID,
 			"subject_type":       binding.SubjectType,
@@ -1751,7 +2197,8 @@ func roleBindingResponse(bindings []*db.RoleBinding) ([]fiber.Map, error) {
 				"description": role.Description,
 			}
 		}
-		subject, err := roleBindingSubjectResponse(binding.SubjectType, binding.SubjectID)
+		var subject fiber.Map
+		subject, err = roleBindingSubjectResponse(binding.SubjectType, binding.SubjectID)
 		if err != nil {
 			return nil, err
 		}
@@ -1763,9 +2210,15 @@ func roleBindingResponse(bindings []*db.RoleBinding) ([]fiber.Map, error) {
 	return items, nil
 }
 
-func roleBindingSubjectResponse(subjectType db.RoleBindingSubject, subjectID int) (fiber.Map, error) {
+// roleBindingSubjectResponse serializes the subject of a role binding.
+func roleBindingSubjectResponse(subjectType db.RoleBindingSubject, subjectID int) (mapResult fiber.Map, errResult error) {
 	if subjectType == db.RoleBindingSubjectGroup {
-		group, found, err := db.GetCloudGroupByID(subjectID)
+		var (
+			group *db.CloudGroup
+			found bool
+			err   error
+		)
+		group, found, err = db.GetCloudGroupByID(subjectID)
 		if err != nil || !found {
 			return nil, err
 		}
@@ -1777,8 +2230,13 @@ func roleBindingSubjectResponse(subjectType db.RoleBindingSubject, subjectID int
 			"meta":  group.Slug,
 		}, nil
 	}
+	var (
+		user  *db.User
+		found bool
+		err   error
+	)
 
-	user, found, err := db.GetUserByID(subjectID)
+	user, found, err = db.GetUserByID(subjectID)
 	if err != nil || !found {
 		return nil, err
 	}
@@ -1792,11 +2250,17 @@ func roleBindingSubjectResponse(subjectType db.RoleBindingSubject, subjectID int
 	}, nil
 }
 
-func resolveUserID(userID int, userRef string) (int, error) {
+// resolveUserID resolves a user id or reference into a local user id.
+func resolveUserID(userID int, userRef string) (countResult int, errResult error) {
 	if userID > 0 {
 		return userID, nil
 	}
-	user, found, err := syncOrFindUser(userRef)
+	var (
+		user  *db.User
+		found bool
+		err   error
+	)
+	user, found, err = syncOrFindUser(userRef)
 	if err != nil {
 		return 0, err
 	}
@@ -1806,12 +2270,17 @@ func resolveUserID(userID int, userRef string) (int, error) {
 	return user.ID, nil
 }
 
-func syncOrFindUser(ref string) (*db.User, bool, error) {
+// syncOrFindUser finds a local user or imports the user from LDAP.
+func syncOrFindUser(ref string) (userResult *db.User, okResult bool, errResult error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return nil, false, fiber.NewError(fiber.StatusBadRequest, "user is required")
 	}
-	users, err := db.ListUsers()
+	var (
+		users []*db.User
+		err   error
+	)
+	users, err = db.ListUsers()
 	if err != nil {
 		return nil, false, err
 	}
@@ -1823,7 +2292,8 @@ func syncOrFindUser(ref string) (*db.User, bool, error) {
 	return syncUserFromLDAP(ref)
 }
 
-func resolveRoleID(roleID int, roleName string) (int, error) {
+// resolveRoleID resolves a role id or name into a role id.
+func resolveRoleID(roleID int, roleName string) (countResult int, errResult error) {
 	if roleID > 0 {
 		return roleID, nil
 	}
@@ -1831,7 +2301,11 @@ func resolveRoleID(roleID int, roleName string) (int, error) {
 	if roleName == "" {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "role is required")
 	}
-	roles, err := db.Roles.SelectAll()
+	var (
+		roles []*db.Role
+		err   error
+	)
+	roles, err = db.Roles.SelectAll()
 	if err != nil {
 		return 0, err
 	}
@@ -1843,7 +2317,8 @@ func resolveRoleID(roleID int, roleName string) (int, error) {
 	return 0, fiber.NewError(fiber.StatusBadRequest, "role was not found")
 }
 
-func resolvePermissionID(permissionID int, permissionName string) (int, error) {
+// resolvePermissionID resolves a permission id or name into a permission id.
+func resolvePermissionID(permissionID int, permissionName string) (countResult int, errResult error) {
 	if permissionID > 0 {
 		return permissionID, nil
 	}
@@ -1851,7 +2326,12 @@ func resolvePermissionID(permissionID int, permissionName string) (int, error) {
 	if permissionName == "" {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "permission is required")
 	}
-	permission, found, err := db.GetPermissionByName(permissionName)
+	var (
+		permission *db.Permission
+		found      bool
+		err        error
+	)
+	permission, found, err = db.GetPermissionByName(permissionName)
 	if err != nil {
 		return 0, err
 	}
@@ -1861,12 +2341,18 @@ func resolvePermissionID(permissionID int, permissionName string) (int, error) {
 	return permission.ID, nil
 }
 
-func roleFromParam(c *fiber.Ctx) (*db.Role, error) {
-	roleID, err := strconv.Atoi(c.Params("id"))
+// roleFromParam loads a role from the route id parameter.
+func roleFromParam(c *fiber.Ctx) (roleResult *db.Role, errResult error) {
+	var (
+		roleID int
+		err    error
+	)
+	roleID, err = strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid role id")
 	}
-	role, err := db.Roles.Select(roleID)
+	var role *db.Role
+	role, err = db.Roles.Select(roleID)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to load role")
 	}
@@ -1876,28 +2362,36 @@ func roleFromParam(c *fiber.Ctx) (*db.Role, error) {
 	return role, nil
 }
 
-func roleParamError(c *fiber.Ctx, err error) error {
-	if fiberErr, ok := err.(*fiber.Error); ok {
+// roleParamError writes a JSON response for role lookup errors.
+func roleParamError(c *fiber.Ctx, err error) (errResult error) {
+	var (
+		fiberErr *fiber.Error
+		ok       bool
+	)
+	if fiberErr, ok = err.(*fiber.Error); ok {
 		return c.Status(fiberErr.Code).JSON(fiber.Map{"error": fiberErr.Message})
 	}
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load role"})
 }
 
-func parseCloudGroupSyncSource(value string) string {
+// parseCloudGroupSyncSource converts a request value into a cloud group sync source.
+func parseCloudGroupSyncSource(value string) (valueResult string) {
 	if strings.EqualFold(strings.TrimSpace(value), db.CloudGroupSyncSourceLDAP) {
 		return db.CloudGroupSyncSourceLDAP
 	}
 	return db.CloudGroupSyncSourceLocal
 }
 
-func cloudGroupSyncSource(group *db.CloudGroup) string {
+// cloudGroupSyncSource returns a normalized cloud group sync source.
+func cloudGroupSyncSource(group *db.CloudGroup) (valueResult string) {
 	if group != nil && group.SyncSource == db.CloudGroupSyncSourceLDAP {
 		return db.CloudGroupSyncSourceLDAP
 	}
 	return db.CloudGroupSyncSourceLocal
 }
 
-func parseGroupType(value string) db.GroupType {
+// parseGroupType converts a request value into a group type.
+func parseGroupType(value string) (groupTypeResult db.GroupType) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "admin":
 		return db.GroupTypeAdmin
@@ -1914,7 +2408,8 @@ func parseGroupType(value string) db.GroupType {
 	}
 }
 
-func groupTypeLabel(value db.GroupType) string {
+// groupTypeLabel returns the API label for a group type.
+func groupTypeLabel(value db.GroupType) (valueResult string) {
 	switch value {
 	case db.GroupTypeAdmin:
 		return "admin"
@@ -1931,7 +2426,8 @@ func groupTypeLabel(value db.GroupType) string {
 	}
 }
 
-func parseMembershipRole(value string) db.MembershipRole {
+// parseMembershipRole converts a request value into a group membership role.
+func parseMembershipRole(value string) (membershipRoleResult db.MembershipRole) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "manager":
 		return db.MembershipRoleManager
@@ -1942,7 +2438,8 @@ func parseMembershipRole(value string) db.MembershipRole {
 	}
 }
 
-func parseProjectRole(value string) db.ProjectRole {
+// parseProjectRole converts a request value into a project role.
+func parseProjectRole(value string) (projectRoleResult db.ProjectRole) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "operator":
 		return db.ProjectRoleOperator
@@ -1957,7 +2454,8 @@ func parseProjectRole(value string) db.ProjectRole {
 	}
 }
 
-func membershipRoleLabel(value db.MembershipRole) string {
+// membershipRoleLabel returns the API label for a membership role.
+func membershipRoleLabel(value db.MembershipRole) (valueResult string) {
 	switch value {
 	case db.MembershipRoleManager:
 		return "manager"
@@ -1968,14 +2466,16 @@ func membershipRoleLabel(value db.MembershipRole) string {
 	}
 }
 
-func roleBindingSubjectLabel(value db.RoleBindingSubject) string {
+// roleBindingSubjectLabel returns the API label for a role binding subject.
+func roleBindingSubjectLabel(value db.RoleBindingSubject) (valueResult string) {
 	if value == db.RoleBindingSubjectUser {
 		return "user"
 	}
 	return "group"
 }
 
-func parseRoleBindingScope(value string) db.RoleBindingScope {
+// parseRoleBindingScope converts a request value into a role binding scope.
+func parseRoleBindingScope(value string) (roleBindingScopeResult db.RoleBindingScope) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "org":
 		return db.RoleBindingScopeOrg
@@ -1990,7 +2490,8 @@ func parseRoleBindingScope(value string) db.RoleBindingScope {
 	}
 }
 
-func roleBindingScopeLabel(value db.RoleBindingScope) string {
+// roleBindingScopeLabel returns the API label for a role binding scope.
+func roleBindingScopeLabel(value db.RoleBindingScope) (valueResult string) {
 	switch value {
 	case db.RoleBindingScopeOrg:
 		return "org"
@@ -2005,21 +2506,30 @@ func roleBindingScopeLabel(value db.RoleBindingScope) string {
 	}
 }
 
-func projectMembershipResponse(memberships []*db.ProjectMembership) ([]fiber.Map, error) {
-	items := make([]fiber.Map, 0, len(memberships))
+// projectMembershipResponse serializes project memberships with subject and role metadata.
+func projectMembershipResponse(memberships []*db.ProjectMembership) (itemsResult []fiber.Map, errResult error) {
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(memberships))
 	for _, membership := range memberships {
-		projectRole, found, err := db.ProjectMemberAccessRole(membership.ProjectID, membership.SubjectType, membership.SubjectID)
+		var (
+			projectRole db.ProjectRole
+			found       bool
+			err         error
+		)
+		projectRole, found, err = db.ProjectMemberAccessRole(membership.ProjectID, membership.SubjectType, membership.SubjectID)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
 			projectRole = db.ProjectRoleViewer
 		}
-		assignedRole, err := projectMemberAssignedRole(membership.ProjectID, membership.SubjectType, membership.SubjectID)
+		var assignedRole *db.Role
+		assignedRole, err = projectMemberAssignedRole(membership.ProjectID, membership.SubjectType, membership.SubjectID)
 		if err != nil {
 			return nil, err
 		}
-		item := fiber.Map{
+		var item fiber.Map
+		item = fiber.Map{
 			"id":                 membership.ID,
 			"project_id":         membership.ProjectID,
 			"subject_type":       membership.SubjectType,
@@ -2034,7 +2544,8 @@ func projectMembershipResponse(memberships []*db.ProjectMembership) ([]fiber.Map
 		}
 
 		if membership.SubjectType == db.ProjectMemberSubjectGroup {
-			group, found, err := db.GetCloudGroupByID(membership.SubjectID)
+			var group *db.CloudGroup
+			group, found, err = db.GetCloudGroupByID(membership.SubjectID)
 			if err != nil {
 				return nil, err
 			}
@@ -2048,7 +2559,8 @@ func projectMembershipResponse(memberships []*db.ProjectMembership) ([]fiber.Map
 				}
 			}
 		} else {
-			user, found, err := db.GetUserByID(membership.SubjectID)
+			var user *db.User
+			user, found, err = db.GetUserByID(membership.SubjectID)
 			if err != nil {
 				return nil, err
 			}
@@ -2069,14 +2581,21 @@ func projectMembershipResponse(memberships []*db.ProjectMembership) ([]fiber.Map
 	return items, nil
 }
 
-func organizationMembershipResponse(memberships []*db.OrganizationMembership) ([]fiber.Map, error) {
-	items := make([]fiber.Map, 0, len(memberships))
+// organizationMembershipResponse serializes organization memberships with subject and role metadata.
+func organizationMembershipResponse(memberships []*db.OrganizationMembership) (itemsResult []fiber.Map, errResult error) {
+	var items []fiber.Map
+	items = make([]fiber.Map, 0, len(memberships))
 	for _, membership := range memberships {
-		assignedRole, err := organizationMemberAssignedRole(membership.OrganizationID, membership.SubjectType, membership.SubjectID)
+		var (
+			assignedRole *db.Role
+			err          error
+		)
+		assignedRole, err = organizationMemberAssignedRole(membership.OrganizationID, membership.SubjectType, membership.SubjectID)
 		if err != nil {
 			return nil, err
 		}
-		item := fiber.Map{
+		var item fiber.Map
+		item = fiber.Map{
 			"id":              membership.ID,
 			"organization_id": membership.OrganizationID,
 			"subject_type":    membership.SubjectType,
@@ -2088,7 +2607,11 @@ func organizationMembershipResponse(memberships []*db.OrganizationMembership) ([
 			item["access_role_name"] = assignedRole.Name
 		}
 		if membership.SubjectType == db.ProjectMemberSubjectGroup {
-			group, found, err := db.GetCloudGroupByID(membership.SubjectID)
+			var (
+				group *db.CloudGroup
+				found bool
+			)
+			group, found, err = db.GetCloudGroupByID(membership.SubjectID)
 			if err != nil {
 				return nil, err
 			}
@@ -2102,7 +2625,11 @@ func organizationMembershipResponse(memberships []*db.OrganizationMembership) ([
 				}
 			}
 		} else {
-			user, found, err := db.GetUserByID(membership.SubjectID)
+			var (
+				user  *db.User
+				found bool
+			)
+			user, found, err = db.GetUserByID(membership.SubjectID)
 			if err != nil {
 				return nil, err
 			}
@@ -2122,7 +2649,8 @@ func organizationMembershipResponse(memberships []*db.OrganizationMembership) ([
 	return items, nil
 }
 
-func projectRoleLabel(value db.ProjectRole) string {
+// projectRoleLabel returns the API label for a project role.
+func projectRoleLabel(value db.ProjectRole) (valueResult string) {
 	switch value {
 	case db.ProjectRoleOperator:
 		return "operator"
@@ -2137,8 +2665,14 @@ func projectRoleLabel(value db.ProjectRole) string {
 	}
 }
 
-func projectRoleID(role db.ProjectRole) (int, error) {
-	dbRole, found, err := db.GetRoleByName(db.ProjectRoleName(role))
+// projectRoleID resolves a built-in project role to its database role id.
+func projectRoleID(role db.ProjectRole) (countResult int, errResult error) {
+	var (
+		dbRole *db.Role
+		found  bool
+		err    error
+	)
+	dbRole, found, err = db.GetRoleByName(db.ProjectRoleName(role))
 	if err != nil {
 		return 0, err
 	}
@@ -2148,8 +2682,13 @@ func projectRoleID(role db.ProjectRole) (int, error) {
 	return dbRole.ID, nil
 }
 
-func projectMemberAssignedRole(projectID int, subjectType db.ProjectMemberSubject, subjectID int) (*db.Role, error) {
-	bindings, err := db.RoleBindingsForSubject(db.RoleBindingSubject(subjectType), subjectID)
+// projectMemberAssignedRole returns the role assigned to a project member.
+func projectMemberAssignedRole(projectID int, subjectType db.ProjectMemberSubject, subjectID int) (roleResult *db.Role, errResult error) {
+	var (
+		bindings []*db.RoleBinding
+		err      error
+	)
+	bindings, err = db.RoleBindingsForSubject(db.RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -2157,7 +2696,8 @@ func projectMemberAssignedRole(projectID int, subjectType db.ProjectMemberSubjec
 		if binding.ScopeType != db.RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID {
 			continue
 		}
-		role, err := db.Roles.Select(binding.RoleID)
+		var role *db.Role
+		role, err = db.Roles.Select(binding.RoleID)
 		if err != nil {
 			return nil, err
 		}
@@ -2168,8 +2708,13 @@ func projectMemberAssignedRole(projectID int, subjectType db.ProjectMemberSubjec
 	return nil, nil
 }
 
-func organizationMemberAssignedRole(orgID int, subjectType db.ProjectMemberSubject, subjectID int) (*db.Role, error) {
-	bindings, err := db.RoleBindingsForSubject(db.RoleBindingSubject(subjectType), subjectID)
+// organizationMemberAssignedRole returns the role assigned to an organization member.
+func organizationMemberAssignedRole(orgID int, subjectType db.ProjectMemberSubject, subjectID int) (roleResult *db.Role, errResult error) {
+	var (
+		bindings []*db.RoleBinding
+		err      error
+	)
+	bindings, err = db.RoleBindingsForSubject(db.RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -2177,7 +2722,8 @@ func organizationMemberAssignedRole(orgID int, subjectType db.ProjectMemberSubje
 		if binding.ScopeType != db.RoleBindingScopeOrg || binding.ScopeID == nil || *binding.ScopeID != orgID {
 			continue
 		}
-		role, err := db.Roles.Select(binding.RoleID)
+		var role *db.Role
+		role, err = db.Roles.Select(binding.RoleID)
 		if err != nil {
 			return nil, err
 		}
@@ -2188,22 +2734,29 @@ func organizationMemberAssignedRole(orgID int, subjectType db.ProjectMemberSubje
 	return nil, nil
 }
 
-func userLabel(user *db.User) string {
+// userLabel returns the best display label for a user.
+func userLabel(user *db.User) (valueResult string) {
 	if user.DisplayName != "" {
 		return user.DisplayName
 	}
 	return user.Username
 }
 
-func userMeta(user *db.User) string {
+// userMeta returns secondary display metadata for a user.
+func userMeta(user *db.User) (valueResult string) {
 	if user.Email != "" {
 		return user.Username + " · " + user.Email
 	}
 	return user.Username
 }
 
-func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (bool, error) {
-	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
+// currentUserCanViewProject reports whether the current user can view a project.
+func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (okResult bool, errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
 		return allowed, err
 	}
@@ -2215,30 +2768,38 @@ func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (bool, error) 
 	if err != nil || allowed {
 		return allowed, err
 	}
+	var dbUser *db.User
 
-	dbUser := currentDBUser(c)
+	dbUser = currentDBUser(c)
 	if dbUser == nil {
 		return false, nil
 	}
+	var groupIDs []int
 
-	groupIDs, err := db.CloudGroupIDsForUser(dbUser.ID)
+	groupIDs, err = db.CloudGroupIDsForUser(dbUser.ID)
 	if err != nil {
 		return false, err
 	}
+	var member bool
 
-	if member, err := db.SubjectInProjectOrAncestor(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil || member {
+	if member, err = db.SubjectInProjectOrAncestor(project.ID, db.ProjectMemberSubjectUser, dbUser.ID); err != nil || member {
 		return member, err
 	}
 	for _, groupID := range groupIDs {
-		if member, err := db.SubjectInProjectOrAncestor(project.ID, db.ProjectMemberSubjectGroup, groupID); err != nil || member {
+		if member, err = db.SubjectInProjectOrAncestor(project.ID, db.ProjectMemberSubjectGroup, groupID); err != nil || member {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func currentUserCanManageProject(c *fiber.Ctx, project *db.Project) (bool, error) {
-	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
+// currentUserCanManageProject reports whether the current user can manage a project.
+func currentUserCanManageProject(c *fiber.Ctx, project *db.Project) (okResult bool, errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
 		return allowed, err
 	}
@@ -2250,13 +2811,22 @@ func currentUserCanManageProject(c *fiber.Ctx, project *db.Project) (bool, error
 	return false, nil
 }
 
-func currentUserCanManageGroup(c *fiber.Ctx, groupID int) (bool, error) {
-	allowed, err := currentUserCan(c, db.PermissionGroupManage, db.RoleBindingScopeGroup, &groupID)
+// currentUserCanManageGroup reports whether the current user can manage a cloud group.
+func currentUserCanManageGroup(c *fiber.Ctx, groupID int) (okResult bool, errResult error) {
+	var (
+		allowed bool
+		err     error
+	)
+	allowed, err = currentUserCan(c, db.PermissionGroupManage, db.RoleBindingScopeGroup, &groupID)
 	if err != nil || allowed {
 		return allowed, err
 	}
+	var (
+		group *db.CloudGroup
+		found bool
+	)
 
-	group, found, err := db.GetCloudGroupByID(groupID)
+	group, found, err = db.GetCloudGroupByID(groupID)
 	if err != nil || !found {
 		return false, err
 	}
@@ -2266,13 +2836,15 @@ func currentUserCanManageGroup(c *fiber.Ctx, groupID int) (bool, error) {
 			return allowed, err
 		}
 	}
+	var dbUser *db.User
 
-	dbUser := currentDBUser(c)
+	dbUser = currentDBUser(c)
 	if dbUser == nil {
 		return false, nil
 	}
+	var membership *db.CloudGroupMembership
 
-	membership, found, err := db.CloudGroupMembershipForUserAndGroup(dbUser.ID, groupID)
+	membership, found, err = db.CloudGroupMembershipForUserAndGroup(dbUser.ID, groupID)
 	if err != nil || !found {
 		return false, err
 	}
@@ -2280,7 +2852,8 @@ func currentUserCanManageGroup(c *fiber.Ctx, groupID int) (bool, error) {
 	return membership.MembershipRole == db.MembershipRoleManager || membership.MembershipRole == db.MembershipRoleOwner, nil
 }
 
-func currentUserCanBindRolesForGroup(c *fiber.Ctx, groupID int, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
+// currentUserCanBindRolesForGroup reports whether the current user may bind roles for a group.
+func currentUserCanBindRolesForGroup(c *fiber.Ctx, groupID int, scopeType db.RoleBindingScope, scopeID *int) (okResult bool, errResult error) {
 	if currentUserIsSiteAdmin(c) {
 		return true, nil
 	}
@@ -2288,24 +2861,34 @@ func currentUserCanBindRolesForGroup(c *fiber.Ctx, groupID int, scopeType db.Rol
 	if scopeType != db.RoleBindingScopeGroup || scopeID == nil || *scopeID != groupID {
 		return false, nil
 	}
+	var (
+		allowed bool
+		err     error
+	)
 
-	allowed, err := currentUserCan(c, db.PermissionRoleManage, db.RoleBindingScopeGroup, &groupID)
+	allowed, err = currentUserCan(c, db.PermissionRoleManage, db.RoleBindingScopeGroup, &groupID)
 	if err != nil || allowed {
 		return allowed, err
 	}
+	var dbUser *db.User
 
-	dbUser := currentDBUser(c)
+	dbUser = currentDBUser(c)
 	if dbUser == nil {
 		return false, nil
 	}
-	membership, found, err := db.CloudGroupMembershipForUserAndGroup(dbUser.ID, groupID)
+	var (
+		membership *db.CloudGroupMembership
+		found      bool
+	)
+	membership, found, err = db.CloudGroupMembershipForUserAndGroup(dbUser.ID, groupID)
 	if err != nil || !found {
 		return false, err
 	}
 	return membership.MembershipRole == db.MembershipRoleOwner, nil
 }
 
-func currentUserCanCreateRoleAtScope(c *fiber.Ctx, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
+// currentUserCanCreateRoleAtScope reports whether the current user may create roles in a scope.
+func currentUserCanCreateRoleAtScope(c *fiber.Ctx, scopeType db.RoleBindingScope, scopeID *int) (okResult bool, errResult error) {
 	if currentUserIsSiteAdmin(c) {
 		return true, nil
 	}
@@ -2321,7 +2904,12 @@ func currentUserCanCreateRoleAtScope(c *fiber.Ctx, scopeType db.RoleBindingScope
 		if scopeID == nil {
 			return false, nil
 		}
-		project, found, err := db.GetProjectByID(*scopeID)
+		var (
+			project *db.Project
+			found   bool
+			err     error
+		)
+		project, found, err = db.GetProjectByID(*scopeID)
 		if err != nil || !found {
 			return false, err
 		}
@@ -2331,7 +2919,8 @@ func currentUserCanCreateRoleAtScope(c *fiber.Ctx, scopeType db.RoleBindingScope
 	}
 }
 
-func currentUserCanManageRole(c *fiber.Ctx, role *db.Role) (bool, error) {
+// currentUserCanManageRole reports whether the current user may update a role.
+func currentUserCanManageRole(c *fiber.Ctx, role *db.Role) (okResult bool, errResult error) {
 	if currentUserIsSiteAdmin(c) {
 		return true, nil
 	}
@@ -2341,38 +2930,54 @@ func currentUserCanManageRole(c *fiber.Ctx, role *db.Role) (bool, error) {
 	return currentUserCanCreateRoleAtScope(c, role.OwnerScopeType, role.OwnerScopeID)
 }
 
-func currentUserCanGrantPermissionToRole(c *fiber.Ctx, role *db.Role, permissionID int) (bool, error) {
+// currentUserCanGrantPermissionToRole reports whether the current user may grant a permission to a role.
+func currentUserCanGrantPermissionToRole(c *fiber.Ctx, role *db.Role, permissionID int) (okResult bool, errResult error) {
 	if currentUserIsSiteAdmin(c) {
 		return true, nil
 	}
-	permission, err := db.Permissions.Select(permissionID)
+	var (
+		permission *db.Permission
+		err        error
+	)
+	permission, err = db.Permissions.Select(permissionID)
 	if err != nil || permission == nil {
 		return false, err
 	}
-	key, ok := db.PermissionKeyFromName(permission.Name)
+	var (
+		key db.PermissionKey
+		ok  bool
+	)
+	key, ok = db.PermissionKeyFromName(permission.Name)
 	if !ok {
 		return false, nil
 	}
 	return currentUserCan(c, key, role.OwnerScopeType, role.OwnerScopeID)
 }
 
-func currentUserCanAssignRoleAtScope(c *fiber.Ctx, roleID int, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
+// currentUserCanAssignRoleAtScope reports whether the current user may assign a role at a scope.
+func currentUserCanAssignRoleAtScope(c *fiber.Ctx, roleID int, scopeType db.RoleBindingScope, scopeID *int) (okResult bool, errResult error) {
 	if currentUserIsSiteAdmin(c) {
 		return true, nil
 	}
-	role, err := db.Roles.Select(roleID)
+	var (
+		role *db.Role
+		err  error
+	)
+	role, err = db.Roles.Select(roleID)
 	if err != nil || role == nil {
 		return false, err
 	}
 	if !roleOwnerAllowsScope(role, scopeType, scopeID) {
 		return false, nil
 	}
-	keys, err := db.PermissionKeysForRole(roleID)
+	var keys []db.PermissionKey
+	keys, err = db.PermissionKeysForRole(roleID)
 	if err != nil {
 		return false, err
 	}
 	for _, key := range keys {
-		allowed, err := currentUserCan(c, key, scopeType, scopeID)
+		var allowed bool
+		allowed, err = currentUserCan(c, key, scopeType, scopeID)
 		if err != nil || !allowed {
 			return allowed, err
 		}
@@ -2380,7 +2985,8 @@ func currentUserCanAssignRoleAtScope(c *fiber.Ctx, roleID int, scopeType db.Role
 	return true, nil
 }
 
-func roleOwnerAllowsScope(role *db.Role, scopeType db.RoleBindingScope, scopeID *int) bool {
+// roleOwnerAllowsScope reports whether a role's owner scope permits use at another scope.
+func roleOwnerAllowsScope(role *db.Role, scopeType db.RoleBindingScope, scopeID *int) (okResult bool) {
 	if role.OwnerScopeType == db.RoleBindingScopeGlobal {
 		return true
 	}

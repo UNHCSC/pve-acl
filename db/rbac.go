@@ -7,44 +7,61 @@ import (
 	"time"
 
 	"github.com/UNHCSC/organesson/authz"
+	"github.com/casbin/casbin/v2"
 	"github.com/z46-dev/gomysql"
 )
 
-type PermissionCheck struct {
-	UserID     int
-	GroupIDs   []int
-	Permission PermissionKey
-	ScopeType  RoleBindingScope
-	ScopeID    *int
-}
+type (
+	PermissionCheck struct {
+		UserID     int
+		GroupIDs   []int
+		Permission PermissionKey
+		ScopeType  RoleBindingScope
+		ScopeID    *int
+	}
 
-type RoleCreateInput struct {
-	Name            string
-	Description     string
-	IsSystemRole    bool
-	OwnerScopeType  RoleBindingScope
-	OwnerScopeID    *int
-	CreatedByUserID *int
-}
+	RoleCreateInput struct {
+		Name            string
+		Description     string
+		IsSystemRole    bool
+		OwnerScopeType  RoleBindingScope
+		OwnerScopeID    *int
+		CreatedByUserID *int
+	}
+)
 
-func HasPermission(check PermissionCheck) (bool, error) {
-	permission, found, err := findPermissionByName(check.Permission.String())
+// HasPermission checks whether a user has a permission in a scope.
+func HasPermission(check PermissionCheck) (okResult bool, errResult error) {
+	var (
+		permission *Permission
+		found      bool
+		err        error
+	)
+
+	permission, found, err = findPermissionByName(check.Permission.String())
 	if err != nil || !found {
 		return false, err
 	}
+	var enforcer *casbin.Enforcer
 
-	enforcer, err := authz.NewScopedEnforcer(scopeDomainMatches)
+	enforcer, err = authz.NewScopedEnforcer(scopeDomainMatches)
 	if err != nil {
 		return false, err
 	}
+	var bindings []*RoleBinding
 
-	bindings, err := roleBindingsForSubject(RoleBindingSubjectUser, check.UserID)
+	bindings, err = roleBindingsForSubject(RoleBindingSubjectUser, check.UserID)
 	if err != nil {
 		return false, err
 	}
 
 	for _, groupID := range check.GroupIDs {
-		groupBindings, groupErr := roleBindingsForSubject(RoleBindingSubjectGroup, groupID)
+		var (
+			groupBindings []*RoleBinding
+			groupErr      error
+		)
+
+		groupBindings, groupErr = roleBindingsForSubject(RoleBindingSubjectGroup, groupID)
 		if groupErr != nil {
 			return false, groupErr
 		}
@@ -52,47 +69,70 @@ func HasPermission(check PermissionCheck) (bool, error) {
 	}
 
 	for _, binding := range bindings {
-		domain := scopeDomain(binding.ScopeType, binding.ScopeID)
-		if _, err := enforcer.AddGroupingPolicy(userPrincipal(check.UserID), rolePrincipal(binding.RoleID), domain); err != nil {
-			return false, err
+		var domain string
+
+		domain = scopeDomain(binding.ScopeType, binding.ScopeID)
+		{
+			var err error
+
+			if _, err = enforcer.AddGroupingPolicy(userPrincipal(check.UserID), rolePrincipal(binding.RoleID), domain); err != nil {
+				return false, err
+			}
 		}
-		grants, err := RolePermissionsForRole(binding.RoleID)
+		var (
+			grants []*RolePermission
+			err    error
+		)
+
+		grants, err = RolePermissionsForRole(binding.RoleID)
 		if err != nil {
 			return false, err
 		}
 		for _, grant := range grants {
-			grantedPermission, err := Permissions.Select(grant.PermissionID)
+			var (
+				grantedPermission *Permission
+				err               error
+			)
+
+			grantedPermission, err = Permissions.Select(grant.PermissionID)
 			if err != nil {
 				return false, err
 			}
 			if grantedPermission == nil {
 				continue
 			}
-			if _, err := enforcer.AddPolicy(rolePrincipal(binding.RoleID), domain, grantedPermission.Name); err != nil {
-				return false, err
+			{
+				var err error
+
+				if _, err = enforcer.AddPolicy(rolePrincipal(binding.RoleID), domain, grantedPermission.Name); err != nil {
+					return false, err
+				}
 			}
 		}
 	}
+	var allowed bool
 
-	allowed, err := enforcer.Enforce(userPrincipal(check.UserID), scopeDomain(check.ScopeType, check.ScopeID), permission.Name)
+	allowed, err = enforcer.Enforce(userPrincipal(check.UserID), scopeDomain(check.ScopeType, check.ScopeID), permission.Name)
 	if err != nil {
 		return false, err
 	}
 	return allowed, nil
 }
 
-func roleBindingsForSubject(subjectType RoleBindingSubject, subjectID int) ([]*RoleBinding, error) {
+func roleBindingsForSubject(subjectType RoleBindingSubject, subjectID int) (itemsResult []*RoleBinding, errResult error) {
 	return RoleBindings.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
 		And().
 		KeyCmp(RoleBindings.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID))
 }
 
-func RoleBindingsForSubject(subjectType RoleBindingSubject, subjectID int) ([]*RoleBinding, error) {
+// RoleBindingsForSubject returns role bindings for a subject.
+func RoleBindingsForSubject(subjectType RoleBindingSubject, subjectID int) (itemsResult []*RoleBinding, errResult error) {
 	return roleBindingsForSubject(subjectType, subjectID)
 }
 
-func EnsureRole(name, description string, isSystemRole bool) (*Role, bool, error) {
+// EnsureRole ensures role exists.
+func EnsureRole(name, description string, isSystemRole bool) (roleResult *Role, okResult bool, errResult error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	if name == "" {
@@ -101,21 +141,33 @@ func EnsureRole(name, description string, isSystemRole bool) (*Role, bool, error
 	return ensureRole(name, description, isSystemRole, time.Now().UTC())
 }
 
-func CreateRole(input RoleCreateInput) (*Role, error) {
+// CreateRole creates a role from input.
+func CreateRole(input RoleCreateInput) (roleResult *Role, errResult error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {
 		return nil, fmt.Errorf("role name is required")
 	}
-	if existing, found, err := findRoleByName(input.Name); err != nil || found {
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("role name %q already exists", existing.Name)
-	}
+	{
+		var (
+			existing *Role
+			found    bool
+			err      error
+		)
 
-	now := time.Now().UTC()
-	role := &Role{
+		if existing, found, err = findRoleByName(input.Name); err != nil || found {
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("role name %q already exists", existing.Name)
+		}
+	}
+	var now time.Time
+
+	now = time.Now().UTC()
+	var role *Role
+
+	role = &Role{
 		Name:            input.Name,
 		Description:     input.Description,
 		IsSystemRole:    input.IsSystemRole,
@@ -128,73 +180,114 @@ func CreateRole(input RoleCreateInput) (*Role, error) {
 	if role.OwnerScopeType == RoleBindingScopeGlobal {
 		role.OwnerScopeID = nil
 	}
-	if err := Roles.Insert(role); err != nil {
-		return nil, err
+	{
+		var err error
+
+		if err = Roles.Insert(role); err != nil {
+			return nil, err
+		}
 	}
 	return role, nil
 }
 
-func UpdateRole(role *Role) error {
+// UpdateRole updates a role.
+func UpdateRole(role *Role) (errResult error) {
 	role.Name = strings.TrimSpace(role.Name)
 	role.Description = strings.TrimSpace(role.Description)
 	role.UpdatedAt = time.Now().UTC()
 	return Roles.Update(role)
 }
 
-func DeleteRole(roleID int) error {
-	if _, err := RolePermissions.DeleteWithFilter(gomysql.NewFilter().
-		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID)); err != nil {
-		return err
+// DeleteRole deletes a role and its permission grants.
+func DeleteRole(roleID int) (errResult error) {
+	{
+		var err error
+
+		if _, err = RolePermissions.DeleteWithFilter(gomysql.NewFilter().
+			KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID)); err != nil {
+			return err
+		}
 	}
 	return Roles.Delete(roleID)
 }
 
-func RoleBindingCountForRole(roleID int) (int, error) {
-	count, err := RoleBindings.CountWithFilter(gomysql.NewFilter().
+// RoleBindingCountForRole returns how many bindings reference a role.
+func RoleBindingCountForRole(roleID int) (countResult int, errResult error) {
+	var (
+		count int64
+		err   error
+	)
+
+	count, err = RoleBindings.CountWithFilter(gomysql.NewFilter().
 		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gomysql.OpEqual, roleID))
 	return int(count), err
 }
 
-func GetRoleByName(name string) (*Role, bool, error) {
+// GetRoleByName returns role by name.
+func GetRoleByName(name string) (roleResult *Role, okResult bool, errResult error) {
 	return findRoleByName(strings.TrimSpace(name))
 }
 
-func GetPermissionByName(name string) (*Permission, bool, error) {
+// GetPermissionByName returns permission by name.
+func GetPermissionByName(name string) (permissionResult *Permission, okResult bool, errResult error) {
 	return findPermissionByName(strings.TrimSpace(name))
 }
 
-func EnsureRolePermission(roleID, permissionID int) (bool, error) {
+// EnsureRolePermission ensures role permission exists.
+func EnsureRolePermission(roleID, permissionID int) (okResult bool, errResult error) {
 	return ensureRolePermission(roleID, permissionID)
 }
 
-func RemoveRolePermission(roleID, permissionID int) error {
-	_, err := RolePermissions.DeleteWithFilter(gomysql.NewFilter().
+// RemoveRolePermission removes role permission.
+func RemoveRolePermission(roleID, permissionID int) (errResult error) {
+	var err error
+
+	_, err = RolePermissions.DeleteWithFilter(gomysql.NewFilter().
 		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
 		And().
 		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gomysql.OpEqual, permissionID))
 	return err
 }
 
-func RolePermissionsForRole(roleID int) ([]*RolePermission, error) {
+// RolePermissionsForRole returns permission grants for a role.
+func RolePermissionsForRole(roleID int) (itemsResult []*RolePermission, errResult error) {
 	return RolePermissions.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID))
 }
 
-func PermissionKeysForRole(roleID int) ([]PermissionKey, error) {
-	grants, err := RolePermissionsForRole(roleID)
+// PermissionKeysForRole returns permission keys granted to a role.
+func PermissionKeysForRole(roleID int) (itemsResult []PermissionKey, errResult error) {
+	var (
+		grants []*RolePermission
+		err    error
+	)
+
+	grants, err = RolePermissionsForRole(roleID)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([]PermissionKey, 0, len(grants))
+	var keys []PermissionKey
+
+	keys = make([]PermissionKey, 0, len(grants))
 	for _, grant := range grants {
-		permission, err := Permissions.Select(grant.PermissionID)
+		var (
+			permission *Permission
+			err        error
+		)
+
+		permission, err = Permissions.Select(grant.PermissionID)
 		if err != nil {
 			return nil, err
 		}
 		if permission == nil {
 			continue
 		}
-		key, ok := PermissionKeyFromName(permission.Name)
+		var (
+			key PermissionKey
+			ok  bool
+		)
+
+		key, ok = PermissionKeyFromName(permission.Name)
 		if !ok {
 			continue
 		}
@@ -203,22 +296,35 @@ func PermissionKeysForRole(roleID int) ([]PermissionKey, error) {
 	return keys, nil
 }
 
-func EnsureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int) (bool, error) {
+// EnsureRoleBinding ensures role binding exists.
+func EnsureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int) (okResult bool, errResult error) {
 	return ensureRoleBinding(roleID, subjectType, subjectID, scopeType, scopeID, time.Now().UTC())
 }
 
-func RemoveRoleBinding(roleBindingID int) error {
+// RemoveRoleBinding removes role binding.
+func RemoveRoleBinding(roleBindingID int) (errResult error) {
 	return RoleBindings.Delete(roleBindingID)
 }
 
-func RoleBindingsForUserAndGroups(userID int, groupIDs []int) ([]*RoleBinding, error) {
-	bindings, err := roleBindingsForSubject(RoleBindingSubjectUser, userID)
+// RoleBindingsForUserAndGroups returns role bindings for a user and their groups.
+func RoleBindingsForUserAndGroups(userID int, groupIDs []int) (itemsResult []*RoleBinding, errResult error) {
+	var (
+		bindings []*RoleBinding
+		err      error
+	)
+
+	bindings, err = roleBindingsForSubject(RoleBindingSubjectUser, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, groupID := range groupIDs {
-		groupBindings, groupErr := roleBindingsForSubject(RoleBindingSubjectGroup, groupID)
+		var (
+			groupBindings []*RoleBinding
+			groupErr      error
+		)
+
+		groupBindings, groupErr = roleBindingsForSubject(RoleBindingSubjectGroup, groupID)
 		if groupErr != nil {
 			return nil, groupErr
 		}
@@ -228,17 +334,26 @@ func RoleBindingsForUserAndGroups(userID int, groupIDs []int) ([]*RoleBinding, e
 	return bindings, nil
 }
 
-func RolesForBindings(bindings []*RoleBinding) ([]*Role, error) {
-	seen := make(map[int]bool)
-	roles := make([]*Role, 0, len(bindings))
+// RolesForBindings returns distinct roles referenced by bindings.
+func RolesForBindings(bindings []*RoleBinding) (itemsResult []*Role, errResult error) {
+	var seen map[int]bool
+
+	seen = make(map[int]bool)
+	var roles []*Role
+
+	roles = make([]*Role, 0, len(bindings))
 
 	for _, binding := range bindings {
 		if seen[binding.RoleID] {
 			continue
 		}
 		seen[binding.RoleID] = true
+		var (
+			role *Role
+			err  error
+		)
 
-		role, err := Roles.Select(binding.RoleID)
+		role, err = Roles.Select(binding.RoleID)
 		if err != nil {
 			return nil, err
 		}
@@ -248,18 +363,23 @@ func RolesForBindings(bindings []*RoleBinding) ([]*Role, error) {
 	return roles, nil
 }
 
-func projectBindingMatchesResource(bindingScopeID *int, requestedScopeID *int) bool {
+func projectBindingMatchesResource(bindingScopeID *int, requestedScopeID *int) (okResult bool) {
 	if bindingScopeID == nil || requestedScopeID == nil {
 		return false
 	}
-	resource, err := Resources.Select(*requestedScopeID)
+	var (
+		resource *Resource
+		err      error
+	)
+
+	resource, err = Resources.Select(*requestedScopeID)
 	if err != nil || resource == nil {
 		return false
 	}
 	return resource.ProjectID == *bindingScopeID
 }
 
-func scopeDomain(scopeType RoleBindingScope, scopeID *int) string {
+func scopeDomain(scopeType RoleBindingScope, scopeID *int) (valueResult string) {
 	if scopeType == RoleBindingScopeGlobal {
 		return "global"
 	}
@@ -269,19 +389,29 @@ func scopeDomain(scopeType RoleBindingScope, scopeID *int) string {
 	return roleBindingScopeName(scopeType) + ":" + strconv.Itoa(*scopeID)
 }
 
-func scopeDomainMatches(policyDomain, requestDomain string) bool {
+func scopeDomainMatches(policyDomain, requestDomain string) (okResult bool) {
 	if policyDomain == "global" {
 		return true
 	}
 	if policyDomain == requestDomain {
 		return true
 	}
+	var (
+		policyType RoleBindingScope
+		policyID   int
+		ok         bool
+	)
 
-	policyType, policyID, ok := parseScopeDomain(policyDomain)
+	policyType, policyID, ok = parseScopeDomain(policyDomain)
 	if !ok {
 		return false
 	}
-	requestType, requestID, ok := parseScopeDomain(requestDomain)
+	var (
+		requestType RoleBindingScope
+		requestID   int
+	)
+
+	requestType, requestID, ok = parseScopeDomain(requestDomain)
 	if !ok {
 		return false
 	}
@@ -317,12 +447,23 @@ func scopeDomainMatches(policyDomain, requestDomain string) bool {
 	return false
 }
 
-func parseScopeDomain(value string) (RoleBindingScope, int, bool) {
-	scopeName, rawID, found := strings.Cut(value, ":")
+func parseScopeDomain(value string) (roleBindingScopeResult RoleBindingScope, countResult int, okResult bool) {
+	var (
+		scopeName string
+		rawID     string
+		found     bool
+	)
+
+	scopeName, rawID, found = strings.Cut(value, ":")
 	if !found || rawID == "" {
 		return RoleBindingScopeGlobal, 0, false
 	}
-	scopeID, err := strconv.Atoi(rawID)
+	var (
+		scopeID int
+		err     error
+	)
+
+	scopeID, err = strconv.Atoi(rawID)
 	if err != nil {
 		return RoleBindingScopeGlobal, 0, false
 	}
@@ -340,7 +481,7 @@ func parseScopeDomain(value string) (RoleBindingScope, int, bool) {
 	}
 }
 
-func roleBindingScopeName(value RoleBindingScope) string {
+func roleBindingScopeName(value RoleBindingScope) (valueResult string) {
 	switch value {
 	case RoleBindingScopeOrg:
 		return "org"
@@ -355,10 +496,10 @@ func roleBindingScopeName(value RoleBindingScope) string {
 	}
 }
 
-func userPrincipal(userID int) string {
+func userPrincipal(userID int) (valueResult string) {
 	return "user:" + strconv.Itoa(userID)
 }
 
-func rolePrincipal(roleID int) string {
+func rolePrincipal(roleID int) (valueResult string) {
 	return "role:" + strconv.Itoa(roleID)
 }

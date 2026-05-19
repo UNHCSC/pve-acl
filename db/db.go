@@ -50,6 +50,7 @@ var (
 	Secrets                        *gomysql.RegisteredStruct[Secret]
 )
 
+// Init initializes this package.
 func Init(parentLog *golog.Logger) (err error) {
 	dbLog = parentLog.SpawnChild().Prefix("[DB]", golog.BoldGreen)
 

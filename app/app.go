@@ -12,6 +12,7 @@ import (
 
 var appLog *golog.Logger = golog.New().Prefix("[Please call app.InitAndListen() with the main logger]", golog.BoldRed)
 
+// InitAndListen builds the Fiber app, registers pages and API routes, and initializes session signing.
 func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	appLog = parentLog.SpawnChild().Prefix("[APP]", golog.BoldPurple)
 
@@ -166,14 +167,20 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	return
 }
 
-func clientPath(part string) string {
-	path := filepath.Join("client", part)
-	if _, err := os.Stat(path); err == nil {
+// clientPath resolves client assets from either the repo root or package working directory.
+func clientPath(part string) (valueResult string) {
+	var (
+		path string = filepath.Join("client", part)
+		err  error
+	)
+
+	if _, err = os.Stat(path); err == nil {
 		return path
 	}
 	return filepath.Join("..", "client", part)
 }
 
+// _noop is a placeholder handler for routes that are not implemented yet.
 func _noop(*fiber.Ctx) (err error) {
 	return
 }

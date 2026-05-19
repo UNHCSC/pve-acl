@@ -7,38 +7,84 @@ import (
 
 func TestRevisionAccessControlScenario(t *testing.T) {
 	initTestDB(t)
-	now := time.Now().UTC()
+	var now time.Time
 
-	lab := mustCreateScenarioOrganization(t, "Lab", "lab", nil)
-	if _, err := CreateOrganization(OrganizationCreateInput{Name: "Shadow Root", Slug: "shadow-root"}); err == nil {
-		t.Fatal("expected creating a second root organization to be rejected")
-	} else {
-		t.Logf("DENY  | system  | org.create      | Shadow Root              | exactly one root org is allowed: %v", err)
+	now = time.Now().UTC()
+	var lab *Organization
+
+	lab = mustCreateScenarioOrganization(t, "Lab", "lab", nil)
+	{
+		var err error
+
+		if _, err = CreateOrganization(OrganizationCreateInput{Name: "Shadow Root", Slug: "shadow-root"}); err == nil {
+			t.Fatal("expected creating a second root organization to be rejected")
+		} else {
+			t.Logf("DENY  | system  | org.create      | Shadow Root              | exactly one root org is allowed: %v", err)
+		}
 	}
+	var courses *Organization
 
-	courses := mustCreateScenarioOrganization(t, "Courses", "courses", &lab.ID)
-	club := mustCreateScenarioOrganization(t, "Club", "club", &lab.ID)
-	it666 := mustCreateScenarioProject(t, "IT666", "it666", courses.ID)
-	cs527 := mustCreateScenarioProject(t, "CS527", "cs527", courses.ID)
-	neccdc := mustCreateScenarioProject(t, "NECCDC Training", "neccdc-training", club.ID)
-	research := mustCreateScenarioProject(t, "Evan's Research", "evans-research", lab.ID)
+	courses = mustCreateScenarioOrganization(t, "Courses", "courses", &lab.ID)
+	var club *Organization
 
-	alice := mustCreateScenarioUser(t, "alice", "Alice")
-	bob := mustCreateScenarioUser(t, "bob", "Bob")
-	charlie := mustCreateScenarioUser(t, "charlie", "Charlie")
-	diana := mustCreateScenarioUser(t, "diana", "Diana")
-	evan := mustCreateScenarioUser(t, "evan", "Evan")
-	gloria := mustCreateScenarioUser(t, "gloria", "Gloria")
-	hannah := mustCreateScenarioUser(t, "hannah", "Hannah")
+	club = mustCreateScenarioOrganization(t, "Club", "club", &lab.ID)
+	var it666 *Project
 
-	admins := mustCreateScenarioCloudGroup(t, "Admins", "admins", GroupTypeAdmin, RoleBindingScopeGlobal, nil, CloudGroupSyncSourceLDAP, true, now)
-	coursesInstructors := mustCreateScenarioCloudGroup(t, "Courses Instructors", "courses-instructors", GroupTypeCustom, RoleBindingScopeOrg, &courses.ID, CloudGroupSyncSourceLocal, false, now)
-	coursesStudents := mustCreateScenarioCloudGroup(t, "Courses Students", "courses-students", GroupTypeStudentGroup, RoleBindingScopeOrg, &courses.ID, CloudGroupSyncSourceLocal, false, now)
-	clubMembers := mustCreateScenarioCloudGroup(t, "Club Members", "club-members", GroupTypeClub, RoleBindingScopeOrg, &club.ID, CloudGroupSyncSourceLocal, false, now)
-	it666Instructors := mustCreateScenarioCloudGroup(t, "IT666 Instructors", "it666-instructors", GroupTypeCustom, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
-	it666Students := mustCreateScenarioCloudGroup(t, "IT666 Students", "it666-students", GroupTypeStudentGroup, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
-	it666TAs := mustCreateScenarioCloudGroup(t, "IT666 TAs", "it666-tas", GroupTypeCustom, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
-	it666Group01 := mustCreateScenarioCloudGroup(t, "IT666 Group 01", "it666-group-01", GroupTypeProject, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
+	it666 = mustCreateScenarioProject(t, "IT666", "it666", courses.ID)
+	var cs527 *Project
+
+	cs527 = mustCreateScenarioProject(t, "CS527", "cs527", courses.ID)
+	var neccdc *Project
+
+	neccdc = mustCreateScenarioProject(t, "NECCDC Training", "neccdc-training", club.ID)
+	var research *Project
+
+	research = mustCreateScenarioProject(t, "Evan's Research", "evans-research", lab.ID)
+	var alice *User
+
+	alice = mustCreateScenarioUser(t, "alice", "Alice")
+	var bob *User
+
+	bob = mustCreateScenarioUser(t, "bob", "Bob")
+	var charlie *User
+
+	charlie = mustCreateScenarioUser(t, "charlie", "Charlie")
+	var diana *User
+
+	diana = mustCreateScenarioUser(t, "diana", "Diana")
+	var evan *User
+
+	evan = mustCreateScenarioUser(t, "evan", "Evan")
+	var gloria *User
+
+	gloria = mustCreateScenarioUser(t, "gloria", "Gloria")
+	var hannah *User
+
+	hannah = mustCreateScenarioUser(t, "hannah", "Hannah")
+	var admins *CloudGroup
+
+	admins = mustCreateScenarioCloudGroup(t, "Admins", "admins", GroupTypeAdmin, RoleBindingScopeGlobal, nil, CloudGroupSyncSourceLDAP, true, now)
+	var coursesInstructors *CloudGroup
+
+	coursesInstructors = mustCreateScenarioCloudGroup(t, "Courses Instructors", "courses-instructors", GroupTypeCustom, RoleBindingScopeOrg, &courses.ID, CloudGroupSyncSourceLocal, false, now)
+	var coursesStudents *CloudGroup
+
+	coursesStudents = mustCreateScenarioCloudGroup(t, "Courses Students", "courses-students", GroupTypeStudentGroup, RoleBindingScopeOrg, &courses.ID, CloudGroupSyncSourceLocal, false, now)
+	var clubMembers *CloudGroup
+
+	clubMembers = mustCreateScenarioCloudGroup(t, "Club Members", "club-members", GroupTypeClub, RoleBindingScopeOrg, &club.ID, CloudGroupSyncSourceLocal, false, now)
+	var it666Instructors *CloudGroup
+
+	it666Instructors = mustCreateScenarioCloudGroup(t, "IT666 Instructors", "it666-instructors", GroupTypeCustom, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
+	var it666Students *CloudGroup
+
+	it666Students = mustCreateScenarioCloudGroup(t, "IT666 Students", "it666-students", GroupTypeStudentGroup, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
+	var it666TAs *CloudGroup
+
+	it666TAs = mustCreateScenarioCloudGroup(t, "IT666 TAs", "it666-tas", GroupTypeCustom, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
+	var it666Group01 *CloudGroup
+
+	it666Group01 = mustCreateScenarioCloudGroup(t, "IT666 Group 01", "it666-group-01", GroupTypeProject, RoleBindingScopeProject, &it666.ID, CloudGroupSyncSourceLocal, false, now)
 
 	mustAddScenarioGroupMember(t, alice, admins)
 	mustAddScenarioGroupMember(t, evan, admins)
@@ -55,9 +101,12 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 	mustAddScenarioGroupMember(t, evan, it666TAs)
 	mustAddScenarioGroupMember(t, charlie, it666Group01)
 	mustAddScenarioGroupMember(t, diana, it666Group01)
+	var adminRole *Role
 
-	adminRole := mustCreateScenarioRole(t, "Admin", "System administrator", true, RoleBindingScopeGlobal, nil, CorePermissions...)
-	coursesInstructorRole := mustCreateScenarioRole(t, "Courses Instructor", "Manage course projects and resources", false, RoleBindingScopeOrg, &courses.ID,
+	adminRole = mustCreateScenarioRole(t, "Admin", "System administrator", true, RoleBindingScopeGlobal, nil, CorePermissions...)
+	var coursesInstructorRole *Role
+
+	coursesInstructorRole = mustCreateScenarioRole(t, "Courses Instructor", "Manage course projects and resources", false, RoleBindingScopeOrg, &courses.ID,
 		PermissionProjectManage,
 		PermissionGroupManage,
 		PermissionRoleManage,
@@ -65,9 +114,15 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 		PermissionVMRead,
 		PermissionVMConsole,
 	)
-	coursesStudentRole := mustCreateScenarioRole(t, "Courses Student", "View course resources", false, RoleBindingScopeOrg, &courses.ID, PermissionVMRead)
-	clubMemberRole := mustCreateScenarioRole(t, "Club Member", "Use club training resources", false, RoleBindingScopeOrg, &club.ID, PermissionVMRead)
-	it666InstructorRole := mustCreateScenarioRole(t, "IT666 Project Instructor", "Manage IT666 memberships, groups, roles, and resources", false, RoleBindingScopeProject, &it666.ID,
+	var coursesStudentRole *Role
+
+	coursesStudentRole = mustCreateScenarioRole(t, "Courses Student", "View course resources", false, RoleBindingScopeOrg, &courses.ID, PermissionVMRead)
+	var clubMemberRole *Role
+
+	clubMemberRole = mustCreateScenarioRole(t, "Club Member", "Use club training resources", false, RoleBindingScopeOrg, &club.ID, PermissionVMRead)
+	var it666InstructorRole *Role
+
+	it666InstructorRole = mustCreateScenarioRole(t, "IT666 Project Instructor", "Manage IT666 memberships, groups, roles, and resources", false, RoleBindingScopeProject, &it666.ID,
 		PermissionProjectManage,
 		PermissionGroupManage,
 		PermissionRoleManage,
@@ -78,7 +133,9 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 		PermissionVMReboot,
 		PermissionVMConsole,
 	)
-	it666TARole := mustCreateScenarioRole(t, "IT666 Project TA", "Create and operate IT666 student resources", false, RoleBindingScopeProject, &it666.ID,
+	var it666TARole *Role
+
+	it666TARole = mustCreateScenarioRole(t, "IT666 Project TA", "Create and operate IT666 student resources", false, RoleBindingScopeProject, &it666.ID,
 		PermissionVMCreate,
 		PermissionVMRead,
 		PermissionVMStart,
@@ -86,15 +143,21 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 		PermissionVMReboot,
 		PermissionVMConsole,
 	)
-	it666StudentRole := mustCreateScenarioRole(t, "IT666 Project Student", "View IT666 and use assigned assets", false, RoleBindingScopeProject, &it666.ID, PermissionVMRead)
-	it666VMUserRole := mustCreateScenarioRole(t, "IT666 VM User", "Operate specifically assigned IT666 VMs", false, RoleBindingScopeProject, &it666.ID,
+	var it666StudentRole *Role
+
+	it666StudentRole = mustCreateScenarioRole(t, "IT666 Project Student", "View IT666 and use assigned assets", false, RoleBindingScopeProject, &it666.ID, PermissionVMRead)
+	var it666VMUserRole *Role
+
+	it666VMUserRole = mustCreateScenarioRole(t, "IT666 VM User", "Operate specifically assigned IT666 VMs", false, RoleBindingScopeProject, &it666.ID,
 		PermissionVMRead,
 		PermissionVMStart,
 		PermissionVMStop,
 		PermissionVMReboot,
 		PermissionVMConsole,
 	)
-	researchOwnerRole := mustCreateScenarioRole(t, "Research Project Owner", "Own Evan's research project", false, RoleBindingScopeProject, &research.ID,
+	var researchOwnerRole *Role
+
+	researchOwnerRole = mustCreateScenarioRole(t, "Research Project Owner", "Own Evan's research project", false, RoleBindingScopeProject, &research.ID,
 		PermissionProjectManage,
 		PermissionVMRead,
 	)
@@ -108,13 +171,24 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 	mustGrantScenarioProjectRole(t, it666, it666Students, it666StudentRole)
 	mustGrantScenarioProjectRole(t, it666, it666Group01, it666StudentRole)
 	mustGrantScenarioUserProjectRole(t, research, evan, researchOwnerRole)
+	var studentVMs *AssetGroup
 
-	studentVMs := mustCreateScenarioAssetGroup(t, it666.ID, "IT666 Student VMs", "it666-student-vms")
-	group01VMs := mustCreateScenarioAssetGroup(t, it666.ID, "IT666 Group 01 VMs", "it666-group-01-vms")
-	charlieVM := insertTestResource(t, it666.ID, "it666-charlie-01", now)
-	dianaVM := insertTestResource(t, it666.ID, "it666-diana-01", now)
-	gloriaVM := insertTestResource(t, it666.ID, "it666-gloria-01", now)
-	routerVM := insertTestResource(t, it666.ID, "it666-g01-router", now)
+	studentVMs = mustCreateScenarioAssetGroup(t, it666.ID, "IT666 Student VMs", "it666-student-vms")
+	var group01VMs *AssetGroup
+
+	group01VMs = mustCreateScenarioAssetGroup(t, it666.ID, "IT666 Group 01 VMs", "it666-group-01-vms")
+	var charlieVM *Resource
+
+	charlieVM = insertTestResource(t, it666.ID, "it666-charlie-01", now)
+	var dianaVM *Resource
+
+	dianaVM = insertTestResource(t, it666.ID, "it666-diana-01", now)
+	var gloriaVM *Resource
+
+	gloriaVM = insertTestResource(t, it666.ID, "it666-gloria-01", now)
+	var routerVM *Resource
+
+	routerVM = insertTestResource(t, it666.ID, "it666-g01-router", now)
 
 	mustAttachScenarioResource(t, studentVMs, charlieVM)
 	mustAttachScenarioResource(t, studentVMs, dianaVM)
@@ -125,8 +199,9 @@ func TestRevisionAccessControlScenario(t *testing.T) {
 	mustAssignScenarioResource(t, it666, dianaVM, RoleBindingSubjectUser, diana.ID, it666VMUserRole)
 	mustAssignScenarioResource(t, it666, gloriaVM, RoleBindingSubjectUser, gloria.ID, it666VMUserRole)
 	mustAssignScenarioAssetGroup(t, it666, group01VMs, RoleBindingSubjectGroup, it666Group01.ID, it666VMUserRole)
+	var workstationVM *Resource
 
-	workstationVM := insertTestResource(t, it666.ID, "it666-g01-workstation", now)
+	workstationVM = insertTestResource(t, it666.ID, "it666-g01-workstation", now)
 	mustAttachScenarioResource(t, group01VMs, workstationVM)
 
 	logRevisionScenarioMap(t, lab, courses, club, it666, cs527, neccdc, research)
@@ -349,12 +424,18 @@ type scenarioPermissionExpectation struct {
 
 func assertScenarioPermission(t *testing.T, expectation scenarioPermissionExpectation) {
 	t.Helper()
+	var (
+		groupIDs []int
+		err      error
+	)
 
-	groupIDs, err := CloudGroupIDsForUser(expectation.User.ID)
+	groupIDs, err = CloudGroupIDsForUser(expectation.User.ID)
 	if err != nil {
 		t.Fatalf("CloudGroupIDsForUser(%s) returned error: %v", expectation.Actor, err)
 	}
-	got, err := HasPermission(PermissionCheck{
+	var got bool
+
+	got, err = HasPermission(PermissionCheck{
 		UserID:     expectation.User.ID,
 		GroupIDs:   groupIDs,
 		Permission: expectation.Permission,
@@ -364,9 +445,12 @@ func assertScenarioPermission(t *testing.T, expectation scenarioPermissionExpect
 	if err != nil {
 		t.Fatalf("HasPermission(%s, %s, %s) returned error: %v", expectation.Actor, expectation.Permission.String(), expectation.Target, err)
 	}
+	var wantLabel string
 
-	wantLabel := scenarioAccessLabel(expectation.Want)
-	gotLabel := scenarioAccessLabel(got)
+	wantLabel = scenarioAccessLabel(expectation.Want)
+	var gotLabel string
+
+	gotLabel = scenarioAccessLabel(got)
 	t.Logf("%-5s | %-5s | %-7s | %-14s | %-24s | %s", wantLabel, gotLabel, expectation.Actor, expectation.Permission.String(), expectation.Target, expectation.Explanation)
 	if got != expectation.Want {
 		t.Fatalf("%s %s on %s: expected %t, got %t", expectation.Actor, expectation.Permission.String(), expectation.Target, expectation.Want, got)
@@ -397,26 +481,36 @@ Lab (root org)
 
 func logScenarioMembership(t *testing.T, actor string, user *User, group *CloudGroup, reason string) {
 	t.Helper()
+	{
+		var (
+			found bool
+			err   error
+		)
 
-	if _, found, err := CloudGroupMembershipForUserAndGroup(user.ID, group.ID); err != nil {
-		t.Fatalf("CloudGroupMembershipForUserAndGroup(%s, %s) returned error: %v", actor, group.Name, err)
-	} else if !found {
-		t.Fatalf("expected %s to belong to %s", actor, group.Name)
+		if _, found, err = CloudGroupMembershipForUserAndGroup(user.ID, group.ID); err != nil {
+			t.Fatalf("CloudGroupMembershipForUserAndGroup(%s, %s) returned error: %v", actor, group.Name, err)
+		} else if !found {
+			t.Fatalf("expected %s to belong to %s", actor, group.Name)
+		}
 	}
 	t.Logf("MEMBR | %-7s | %-22s | %s", actor, group.Name, reason)
 }
 
-func scenarioAccessLabel(allowed bool) string {
+func scenarioAccessLabel(allowed bool) (valueResult string) {
 	if allowed {
 		return "ALLOW"
 	}
 	return "DENY"
 }
 
-func mustCreateScenarioOrganization(t *testing.T, name, slug string, parentID *int) *Organization {
+func mustCreateScenarioOrganization(t *testing.T, name, slug string, parentID *int) (organizationResult *Organization) {
 	t.Helper()
+	var (
+		org *Organization
+		err error
+	)
 
-	org, err := CreateOrganization(OrganizationCreateInput{
+	org, err = CreateOrganization(OrganizationCreateInput{
 		Name:        name,
 		Slug:        slug,
 		ParentOrgID: parentID,
@@ -427,10 +521,14 @@ func mustCreateScenarioOrganization(t *testing.T, name, slug string, parentID *i
 	return org
 }
 
-func mustCreateScenarioProject(t *testing.T, name, slug string, orgID int) *Project {
+func mustCreateScenarioProject(t *testing.T, name, slug string, orgID int) (projectResult *Project) {
 	t.Helper()
+	var (
+		project *Project
+		err     error
+	)
 
-	project, err := CreateProject(ProjectCreateInput{
+	project, err = CreateProject(ProjectCreateInput{
 		Name:           name,
 		Slug:           slug,
 		OrganizationID: orgID,
@@ -442,23 +540,29 @@ func mustCreateScenarioProject(t *testing.T, name, slug string, orgID int) *Proj
 	return project
 }
 
-func mustCreateScenarioUser(t *testing.T, username, displayName string) *User {
+func mustCreateScenarioUser(t *testing.T, username, displayName string) (userResult *User) {
 	t.Helper()
+	var (
+		user *User
+		err  error
+	)
 
-	user, _, err := EnsureUser(username, displayName, username+"@example.test", "test", username)
+	user, _, err = EnsureUser(username, displayName, username+"@example.test", "test", username)
 	if err != nil {
 		t.Fatalf("EnsureUser(%s) returned error: %v", username, err)
 	}
 	return user
 }
 
-func mustCreateScenarioCloudGroup(t *testing.T, name, slug string, groupType GroupType, ownerScopeType RoleBindingScope, ownerScopeID *int, syncSource string, syncMembership bool, now time.Time) *CloudGroup {
+func mustCreateScenarioCloudGroup(t *testing.T, name, slug string, groupType GroupType, ownerScopeType RoleBindingScope, ownerScopeID *int, syncSource string, syncMembership bool, now time.Time) (cloudGroupResult *CloudGroup) {
 	t.Helper()
 
 	if syncSource == "" {
 		syncSource = CloudGroupSyncSourceLocal
 	}
-	group := &CloudGroup{
+	var group *CloudGroup
+
+	group = &CloudGroup{
 		UUID:           slug + "-scenario-uuid",
 		Name:           name,
 		Slug:           slug,
@@ -473,24 +577,35 @@ func mustCreateScenarioCloudGroup(t *testing.T, name, slug string, groupType Gro
 	if group.OwnerScopeType == RoleBindingScopeGlobal {
 		group.OwnerScopeID = nil
 	}
-	if err := CloudGroups.Insert(group); err != nil {
-		t.Fatalf("insert scenario cloud group %s: %v", name, err)
+	{
+		var err error
+
+		if err = CloudGroups.Insert(group); err != nil {
+			t.Fatalf("insert scenario cloud group %s: %v", name, err)
+		}
 	}
 	return group
 }
 
 func mustAddScenarioGroupMember(t *testing.T, user *User, group *CloudGroup) {
 	t.Helper()
+	{
+		var err error
 
-	if _, err := EnsureCloudGroupMembership(user.ID, group.ID, MembershipRoleMember); err != nil {
-		t.Fatalf("EnsureCloudGroupMembership(%s, %s) returned error: %v", user.Username, group.Name, err)
+		if _, err = EnsureCloudGroupMembership(user.ID, group.ID, MembershipRoleMember); err != nil {
+			t.Fatalf("EnsureCloudGroupMembership(%s, %s) returned error: %v", user.Username, group.Name, err)
+		}
 	}
 }
 
-func mustCreateScenarioRole(t *testing.T, name, description string, isSystemRole bool, ownerScopeType RoleBindingScope, ownerScopeID *int, permissions ...PermissionKey) *Role {
+func mustCreateScenarioRole(t *testing.T, name, description string, isSystemRole bool, ownerScopeType RoleBindingScope, ownerScopeID *int, permissions ...PermissionKey) (roleResult *Role) {
 	t.Helper()
+	var (
+		role *Role
+		err  error
+	)
 
-	role, err := CreateRole(RoleCreateInput{
+	role, err = CreateRole(RoleCreateInput{
 		Name:           name,
 		Description:    description,
 		IsSystemRole:   isSystemRole,
@@ -501,12 +616,21 @@ func mustCreateScenarioRole(t *testing.T, name, description string, isSystemRole
 		t.Fatalf("CreateRole(%s) returned error: %v", name, err)
 	}
 	for _, key := range permissions {
-		permission, _, err := ensurePermission(key.String())
+		var (
+			permission *Permission
+			err        error
+		)
+
+		permission, _, err = ensurePermission(key.String())
 		if err != nil {
 			t.Fatalf("ensurePermission(%s) returned error: %v", key.String(), err)
 		}
-		if _, err := EnsureRolePermission(role.ID, permission.ID); err != nil {
-			t.Fatalf("EnsureRolePermission(%s, %s) returned error: %v", role.Name, key.String(), err)
+		{
+			var err error
+
+			if _, err = EnsureRolePermission(role.ID, permission.ID); err != nil {
+				t.Fatalf("EnsureRolePermission(%s, %s) returned error: %v", role.Name, key.String(), err)
+			}
 		}
 	}
 	return role
@@ -514,41 +638,66 @@ func mustCreateScenarioRole(t *testing.T, name, description string, isSystemRole
 
 func mustGrantScenarioOrgRole(t *testing.T, org *Organization, group *CloudGroup, role *Role) {
 	t.Helper()
+	{
+		var err error
 
-	if _, err := EnsureOrganizationMembership(org.ID, ProjectMemberSubjectGroup, group.ID, MembershipRoleMember); err != nil {
-		t.Fatalf("EnsureOrganizationMembership(%s, %s) returned error: %v", org.Name, group.Name, err)
+		if _, err = EnsureOrganizationMembership(org.ID, ProjectMemberSubjectGroup, group.ID, MembershipRoleMember); err != nil {
+			t.Fatalf("EnsureOrganizationMembership(%s, %s) returned error: %v", org.Name, group.Name, err)
+		}
 	}
-	if err := EnsureOrganizationMemberRoleBinding(org.ID, ProjectMemberSubjectGroup, group.ID, role.ID); err != nil {
-		t.Fatalf("EnsureOrganizationMemberRoleBinding(%s, %s, %s) returned error: %v", org.Name, group.Name, role.Name, err)
+	{
+		var err error
+
+		if err = EnsureOrganizationMemberRoleBinding(org.ID, ProjectMemberSubjectGroup, group.ID, role.ID); err != nil {
+			t.Fatalf("EnsureOrganizationMemberRoleBinding(%s, %s, %s) returned error: %v", org.Name, group.Name, role.Name, err)
+		}
 	}
 }
 
 func mustGrantScenarioProjectRole(t *testing.T, project *Project, group *CloudGroup, role *Role) {
 	t.Helper()
+	{
+		var err error
 
-	if _, err := EnsureProjectMembership(project.ID, ProjectMemberSubjectGroup, group.ID); err != nil {
-		t.Fatalf("EnsureProjectMembership(%s, %s) returned error: %v", project.Name, group.Name, err)
+		if _, err = EnsureProjectMembership(project.ID, ProjectMemberSubjectGroup, group.ID); err != nil {
+			t.Fatalf("EnsureProjectMembership(%s, %s) returned error: %v", project.Name, group.Name, err)
+		}
 	}
-	if err := EnsureProjectMemberRoleBinding(project.ID, ProjectMemberSubjectGroup, group.ID, role.ID); err != nil {
-		t.Fatalf("EnsureProjectMemberRoleBinding(%s, %s, %s) returned error: %v", project.Name, group.Name, role.Name, err)
+	{
+		var err error
+
+		if err = EnsureProjectMemberRoleBinding(project.ID, ProjectMemberSubjectGroup, group.ID, role.ID); err != nil {
+			t.Fatalf("EnsureProjectMemberRoleBinding(%s, %s, %s) returned error: %v", project.Name, group.Name, role.Name, err)
+		}
 	}
 }
 
 func mustGrantScenarioUserProjectRole(t *testing.T, project *Project, user *User, role *Role) {
 	t.Helper()
+	{
+		var err error
 
-	if _, err := EnsureProjectMembership(project.ID, ProjectMemberSubjectUser, user.ID); err != nil {
-		t.Fatalf("EnsureProjectMembership(%s, %s) returned error: %v", project.Name, user.Username, err)
+		if _, err = EnsureProjectMembership(project.ID, ProjectMemberSubjectUser, user.ID); err != nil {
+			t.Fatalf("EnsureProjectMembership(%s, %s) returned error: %v", project.Name, user.Username, err)
+		}
 	}
-	if err := EnsureProjectMemberRoleBinding(project.ID, ProjectMemberSubjectUser, user.ID, role.ID); err != nil {
-		t.Fatalf("EnsureProjectMemberRoleBinding(%s, %s, %s) returned error: %v", project.Name, user.Username, role.Name, err)
+	{
+		var err error
+
+		if err = EnsureProjectMemberRoleBinding(project.ID, ProjectMemberSubjectUser, user.ID, role.ID); err != nil {
+			t.Fatalf("EnsureProjectMemberRoleBinding(%s, %s, %s) returned error: %v", project.Name, user.Username, role.Name, err)
+		}
 	}
 }
 
-func mustCreateScenarioAssetGroup(t *testing.T, projectID int, name, slug string) *AssetGroup {
+func mustCreateScenarioAssetGroup(t *testing.T, projectID int, name, slug string) (assetGroupResult *AssetGroup) {
 	t.Helper()
+	var (
+		group *AssetGroup
+		err   error
+	)
 
-	group, err := CreateAssetGroup(AssetGroupCreateInput{
+	group, err = CreateAssetGroup(AssetGroupCreateInput{
 		ProjectID: projectID,
 		Name:      name,
 		Slug:      slug,
@@ -561,46 +710,61 @@ func mustCreateScenarioAssetGroup(t *testing.T, projectID int, name, slug string
 
 func mustAttachScenarioResource(t *testing.T, group *AssetGroup, resource *Resource) {
 	t.Helper()
+	{
+		var err error
 
-	if _, err := EnsureAssetGroupResource(group.ID, resource.ID); err != nil {
-		t.Fatalf("EnsureAssetGroupResource(%s, %s) returned error: %v", group.Name, resource.Name, err)
+		if _, err = EnsureAssetGroupResource(group.ID, resource.ID); err != nil {
+			t.Fatalf("EnsureAssetGroupResource(%s, %s) returned error: %v", group.Name, resource.Name, err)
+		}
 	}
 }
 
 func mustAssignScenarioResource(t *testing.T, project *Project, resource *Resource, subjectType RoleBindingSubject, subjectID int, role *Role) {
 	t.Helper()
+	var resourceID int
 
-	resourceID := resource.ID
-	if _, _, err := EnsureAssetAssignment(AssetAssignmentInput{
-		ProjectID:   project.ID,
-		ResourceID:  &resourceID,
-		SubjectType: subjectType,
-		SubjectID:   subjectID,
-		RoleID:      role.ID,
-	}); err != nil {
-		t.Fatalf("EnsureAssetAssignment(%s, %s) returned error: %v", resource.Name, role.Name, err)
+	resourceID = resource.ID
+	{
+		var err error
+
+		if _, _, err = EnsureAssetAssignment(AssetAssignmentInput{
+			ProjectID:   project.ID,
+			ResourceID:  &resourceID,
+			SubjectType: subjectType,
+			SubjectID:   subjectID,
+			RoleID:      role.ID,
+		}); err != nil {
+			t.Fatalf("EnsureAssetAssignment(%s, %s) returned error: %v", resource.Name, role.Name, err)
+		}
 	}
 }
 
 func mustAssignScenarioAssetGroup(t *testing.T, project *Project, group *AssetGroup, subjectType RoleBindingSubject, subjectID int, role *Role) {
 	t.Helper()
+	var assetGroupID int
 
-	assetGroupID := group.ID
-	if _, _, err := EnsureAssetAssignment(AssetAssignmentInput{
-		ProjectID:    project.ID,
-		AssetGroupID: &assetGroupID,
-		SubjectType:  subjectType,
-		SubjectID:    subjectID,
-		RoleID:       role.ID,
-	}); err != nil {
-		t.Fatalf("EnsureAssetAssignment(%s, %s) returned error: %v", group.Name, role.Name, err)
+	assetGroupID = group.ID
+	{
+		var err error
+
+		if _, _, err = EnsureAssetAssignment(AssetAssignmentInput{
+			ProjectID:    project.ID,
+			AssetGroupID: &assetGroupID,
+			SubjectType:  subjectType,
+			SubjectID:    subjectID,
+			RoleID:       role.ID,
+		}); err != nil {
+			t.Fatalf("EnsureAssetAssignment(%s, %s) returned error: %v", group.Name, role.Name, err)
+		}
 	}
 }
 
-func scenarioCopyIntPointer(value *int) *int {
+func scenarioCopyIntPointer(value *int) (intResult *int) {
 	if value == nil {
 		return nil
 	}
-	copy := *value
+	var copy int
+
+	copy = *value
 	return &copy
 }

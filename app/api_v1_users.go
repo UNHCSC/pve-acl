@@ -8,16 +8,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func getCurrentUser(c *fiber.Ctx) error {
-	authUser := currentUser(c)
-	dbUser := currentDBUser(c)
+// getCurrentUser returns profile and permission details for the current user.
+func getCurrentUser(c *fiber.Ctx) (err error) {
+	var (
+		authUser *auth.AuthUser = currentUser(c)
+		dbUser   *db.User       = currentDBUser(c)
+	)
+
 	if authUser == nil || dbUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "authentication required",
 		})
+		return
 	}
 
-	return c.JSON(fiber.Map{
+	err = c.JSON(fiber.Map{
 		"id":          dbUser.ID,
 		"username":    dbUser.Username,
 		"displayName": dbUser.DisplayName,
@@ -26,86 +31,109 @@ func getCurrentUser(c *fiber.Ctx) error {
 		"permissions": authUser.Permissions().String(),
 		"isSiteAdmin": currentUserIsSiteAdmin(c),
 	})
+	return
 }
 
-func getCurrentUserAccess(c *fiber.Ctx) error {
-	dbUser := currentDBUser(c)
+// getCurrentUserAccess returns group, role, and binding data for the current user.
+func getCurrentUserAccess(c *fiber.Ctx) (err error) {
+	var (
+		dbUser       *db.User = currentDBUser(c)
+		groups       []*db.CloudGroup
+		groupIDs     []int
+		roleBindings []*db.RoleBinding
+		roles        []*db.Role
+	)
+
 	if dbUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "authentication required",
 		})
+		return
 	}
 
-	groups, err := db.CloudGroupsForUser(dbUser.ID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if groups, err = db.CloudGroupsForUser(dbUser.ID); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load current groups",
 		})
+		return
 	}
 
-	groupIDs := make([]int, len(groups))
-	for i, group := range groups {
-		groupIDs[i] = group.ID
+	groupIDs = make([]int, len(groups))
+	for index, group := range groups {
+		groupIDs[index] = group.ID
 	}
 
-	roleBindings, err := db.RoleBindingsForUserAndGroups(dbUser.ID, groupIDs)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if roleBindings, err = db.RoleBindingsForUserAndGroups(dbUser.ID, groupIDs); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load current role bindings",
 		})
+		return
 	}
 
-	roles, err := db.RolesForBindings(roleBindings)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if roles, err = db.RolesForBindings(roleBindings); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load current roles",
 		})
+		return
 	}
 
-	return c.JSON(fiber.Map{
+	err = c.JSON(fiber.Map{
 		"groups":       groups,
 		"roles":        roles,
 		"roleBindings": roleBindings,
 		"isSiteAdmin":  currentUserIsSiteAdmin(c),
 	})
+	return
 }
 
-func getResolveUser(c *fiber.Ctx) error {
-	query := strings.TrimSpace(c.Query("query"))
+// getResolveUser resolves a local or LDAP user by username, email, or display name.
+func getResolveUser(c *fiber.Ctx) (err error) {
+	var (
+		query    string = strings.TrimSpace(c.Query("query"))
+		dbUser   *db.User
+		allowed  bool
+		users    []*db.User
+		ldapUser *auth.LDAPUser
+		found    bool
+		user     *db.User
+	)
+
 	if query == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query is required"})
+		err = c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query is required"})
+		return
 	}
 
-	dbUser := currentDBUser(c)
-	if dbUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
+	if dbUser = currentDBUser(c); dbUser == nil {
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
+		return
 	}
 	if !strings.EqualFold(query, dbUser.Username) && !strings.EqualFold(query, dbUser.Email) && !strings.EqualFold(query, dbUser.DisplayName) {
-		allowed, err := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
-		if err != nil || !allowed {
-			return err
+		if allowed, err = requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil); err != nil || !allowed {
+			return
 		}
 	}
 
-	users, err := db.ListUsers()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load users"})
+	if users, err = db.ListUsers(); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load users"})
+		return
 	}
 	for _, user := range users {
 		if strings.EqualFold(user.Username, query) || strings.EqualFold(user.Email, query) || strings.EqualFold(user.DisplayName, query) {
-			return c.JSON(fiber.Map{"user": user, "source": "local"})
+			err = c.JSON(fiber.Map{"user": user, "source": "local"})
+			return
 		}
 	}
 
-	ldapUser, found, err := auth.LookupUser(query)
-	if err != nil || !found {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user was not found in local users or IPA"})
+	if ldapUser, found, err = auth.LookupUser(query); err != nil || !found {
+		err = c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user was not found in local users or IPA"})
+		return
 	}
 
-	user, _, err := db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to sync IPA user"})
+	if user, _, err = db.EnsureUser(ldapUser.Username, ldapUser.DisplayName, ldapUser.Email, "ldap", ldapUser.Username); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to sync IPA user"})
+		return
 	}
 
-	return c.JSON(fiber.Map{"user": user, "source": "ipa"})
+	err = c.JSON(fiber.Map{"user": user, "source": "ipa"})
+	return
 }

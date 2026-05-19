@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// getHome renders the public home page.
 func getHome(c *fiber.Ctx) (err error) {
 	err = c.Render("home", fiber.Map{
 		"Title":         "Organesson Cloud",
@@ -17,6 +18,7 @@ func getHome(c *fiber.Ctx) (err error) {
 	return
 }
 
+// getDashboard renders the authenticated dashboard shell.
 func getDashboard(c *fiber.Ctx) (err error) {
 	err = c.Render("dashboard", fiber.Map{
 		"Title":         "Dashboard",
@@ -27,6 +29,7 @@ func getDashboard(c *fiber.Ctx) (err error) {
 	return
 }
 
+// getLogin renders the login page with an optional redirect target.
 func getLogin(c *fiber.Ctx) (err error) {
 	err = c.Render("login", fiber.Map{
 		"Title":         "Login",

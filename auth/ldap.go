@@ -12,22 +12,23 @@ const LDAP_USER = "uid=%s,cn=%s,cn=accounts,dc=%s,dc=%s"
 
 var ErrUnauthorized error = fmt.Errorf("unauthorized")
 
-func getUsername(s string) string {
+func getUsername(s string) (valueResult string) {
 	return fmt.Sprintf(LDAP_USER, s, config.Config.LDAP.UsersCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
 }
 
-func getGroupName(s string) string {
+func getGroupName(s string) (valueResult string) {
 	return fmt.Sprintf("cn=%s,cn=%s,cn=accounts,dc=%s,dc=%s", s, config.Config.LDAP.GroupsCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
 }
 
-func getFilter() string {
+func getFilter() (valueResult string) {
 	return fmt.Sprintf("cn=%s,cn=accounts,dc=%s,dc=%s", config.Config.LDAP.UsersCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
 }
 
-func getGroupsFilter() string {
+func getGroupsFilter() (valueResult string) {
 	return fmt.Sprintf("cn=%s,cn=accounts,dc=%s,dc=%s", config.Config.LDAP.GroupsCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
 }
 
+// UserExists reports whether an LDAP user exists.
 func UserExists(username string) (exists bool, err error) {
 	var conn *ldap.Conn
 	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
@@ -51,23 +52,26 @@ func UserExists(username string) (exists bool, err error) {
 	return
 }
 
-type LDAPConn struct {
-	conn            *ldap.Conn
-	Username        string
-	IsAuthenticated bool
-}
+type (
+	LDAPConn struct {
+		conn            *ldap.Conn
+		Username        string
+		IsAuthenticated bool
+	}
 
-type LDAPUser struct {
-	Username    string
-	DisplayName string
-	Email       string
-}
+	LDAPUser struct {
+		Username    string
+		DisplayName string
+		Email       string
+	}
 
-type LDAPGroup struct {
-	Name string
-}
+	LDAPGroup struct {
+		Name string
+	}
+)
 
-func LookupUser(username string) (*LDAPUser, bool, error) {
+// LookupUser looks up user.
+func LookupUser(username string) (lDAPUserResult *LDAPUser, okResult bool, errResult error) {
 	var conn *ldap.Conn
 	var err error
 	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
@@ -93,13 +97,18 @@ func LookupUser(username string) (*LDAPUser, bool, error) {
 	if len(result.Entries) == 0 {
 		return nil, false, nil
 	}
+	var entry *ldap.Entry
 
-	entry := result.Entries[0]
-	displayName := entry.GetAttributeValue("displayName")
+	entry = result.Entries[0]
+	var displayName string
+
+	displayName = entry.GetAttributeValue("displayName")
 	if displayName == "" {
 		displayName = entry.GetAttributeValue("cn")
 	}
-	user := &LDAPUser{
+	var user *LDAPUser
+
+	user = &LDAPUser{
 		Username:    entry.GetAttributeValue("uid"),
 		DisplayName: displayName,
 		Email:       entry.GetAttributeValue("mail"),
@@ -110,7 +119,8 @@ func LookupUser(username string) (*LDAPUser, bool, error) {
 	return user, true, nil
 }
 
-func LookupGroup(name string) (*LDAPGroup, bool, error) {
+// LookupGroup looks up group.
+func LookupGroup(name string) (lDAPGroupResult *LDAPGroup, okResult bool, errResult error) {
 	var conn *ldap.Conn
 	var err error
 	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
@@ -131,14 +141,16 @@ func LookupGroup(name string) (*LDAPGroup, bool, error) {
 	if len(result.Entries) == 0 {
 		return nil, false, nil
 	}
+	var group *LDAPGroup
 
-	group := &LDAPGroup{Name: result.Entries[0].GetAttributeValue("cn")}
+	group = &LDAPGroup{Name: result.Entries[0].GetAttributeValue("cn")}
 	if group.Name == "" {
 		group.Name = name
 	}
 	return group, true, nil
 }
 
+// NewLDAPConn opens and binds an LDAP connection for a user.
 func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {
 	var socket *ldap.Conn
 	if socket, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
@@ -154,12 +166,14 @@ func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {
 	return
 }
 
+// Close releases the underlying LDAP connection.
 func (l *LDAPConn) Close() {
 	if l.conn != nil {
 		l.conn.Close()
 	}
 }
 
+// WhoAmI returns the LDAP authorization identity for the connection.
 func (l *LDAPConn) WhoAmI() (id string, err error) {
 	if !l.IsAuthenticated {
 		err = ErrUnauthorized
@@ -175,6 +189,7 @@ func (l *LDAPConn) WhoAmI() (id string, err error) {
 	return
 }
 
+// Groups returns LDAP group names for the authenticated user.
 func (l *LDAPConn) Groups() (groups []string, err error) {
 	if !l.IsAuthenticated {
 		err = ErrUnauthorized
@@ -197,6 +212,7 @@ func (l *LDAPConn) Groups() (groups []string, err error) {
 	return
 }
 
+// GetAttributes returns selected LDAP attributes for the authenticated user.
 func (l *LDAPConn) GetAttributes(attrs ...string) (attributes map[string]string, err error) {
 	if !l.IsAuthenticated {
 		err = ErrUnauthorized
@@ -225,6 +241,7 @@ func (l *LDAPConn) GetAttributes(attrs ...string) (attributes map[string]string,
 	return
 }
 
+// IsMemberOf reports whether the authenticated user belongs to a group.
 func (l *LDAPConn) IsMemberOf(groupName string) (isMember bool, err error) {
 	if !l.IsAuthenticated {
 		err = ErrUnauthorized
@@ -243,6 +260,7 @@ func (l *LDAPConn) IsMemberOf(groupName string) (isMember bool, err error) {
 	return
 }
 
+// DisplayName returns the LDAP display name for the authenticated user.
 func (l *LDAPConn) DisplayName() (displayName string, err error) {
 	var attributes map[string]string
 	if attributes, err = l.GetAttributes("displayName"); err == nil {
@@ -252,6 +270,7 @@ func (l *LDAPConn) DisplayName() (displayName string, err error) {
 	return
 }
 
+// Email returns the LDAP email address for the authenticated user.
 func (l *LDAPConn) Email() (email string, err error) {
 	var attributes map[string]string
 	if attributes, err = l.GetAttributes("mail"); err == nil {
@@ -261,6 +280,7 @@ func (l *LDAPConn) Email() (email string, err error) {
 	return
 }
 
+// UID returns the numeric LDAP uid for the authenticated user.
 func (l *LDAPConn) UID() (uid uint64, err error) {
 	var attributes map[string]string
 	if attributes, err = l.GetAttributes("uidNumber"); err == nil {

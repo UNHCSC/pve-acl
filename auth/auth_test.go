@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -21,8 +22,12 @@ func TestAuthenticateWithUserInjection(t *testing.T) {
 	t.Cleanup(resetAuthState)
 
 	AddUserInjection("alice", "secret", AuthPermsUser)
+	var (
+		user *AuthUser
+		err  error
+	)
 
-	user, err := Authenticate("alice", "secret")
+	user, err = Authenticate("alice", "secret")
 	if err != nil {
 		t.Fatalf("Authenticate returned error: %v", err)
 	}
@@ -40,32 +45,41 @@ func TestAuthenticateWithUserInjection(t *testing.T) {
 func TestIsAuthenticatedAcceptsBearerToken(t *testing.T) {
 	resetAuthState()
 	t.Cleanup(resetAuthState)
+	var secret []byte
 
-	secret := []byte("test-secret")
+	secret = []byte("test-secret")
 	AddUserInjection("alice", "secret", AuthPermsUser)
+	var (
+		user *AuthUser
+		err  error
+	)
 
-	user, err := Authenticate("alice", "secret")
+	user, err = Authenticate("alice", "secret")
 	if err != nil {
 		t.Fatalf("Authenticate returned error: %v", err)
 	}
+	var token string
 
-	token, err := user.Token.SignedString(secret)
+	token, err = user.Token.SignedString(secret)
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
+	var app *fiber.App
 
-	app := fiber.New()
+	app = fiber.New()
 	app.Get("/protected", func(c *fiber.Ctx) error {
 		if IsAuthenticated(c, secret) == nil {
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 		return c.SendStatus(fiber.StatusOK)
 	})
+	var req *http.Request
 
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req = httptest.NewRequest("GET", "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+	var resp *http.Response
 
-	resp, err := app.Test(req)
+	resp, err = app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
@@ -79,8 +93,12 @@ func TestLogoutRemovesActiveUser(t *testing.T) {
 	t.Cleanup(resetAuthState)
 
 	AddUserInjection("alice", "secret", AuthPermsUser)
-	if _, err := Authenticate("alice", "secret"); err != nil {
-		t.Fatalf("Authenticate returned error: %v", err)
+	{
+		var err error
+
+		if _, err = Authenticate("alice", "secret"); err != nil {
+			t.Fatalf("Authenticate returned error: %v", err)
+		}
 	}
 
 	Logout("alice")

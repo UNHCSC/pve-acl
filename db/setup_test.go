@@ -9,24 +9,44 @@ import (
 func TestEnsureInitialSetupSeedsCoreRows(t *testing.T) {
 	initTestDB(t)
 	config.Config.LDAP.AdminGroups = []string{"admins", "Domain Admins"}
+	{
+		var err error
 
-	if err := EnsureInitialSetup(); err != nil {
-		t.Fatalf("EnsureInitialSetup returned error: %v", err)
+		if err = EnsureInitialSetup(); err != nil {
+			t.Fatalf("EnsureInitialSetup returned error: %v", err)
+		}
 	}
+	{
+		var (
+			found bool
+			err   error
+		)
 
-	if _, found, err := findOrganizationBySlug(DefaultRootOrganizationSlug); err != nil {
-		t.Fatalf("find organization: %v", err)
-	} else if !found {
-		t.Fatalf("expected root organization %q", DefaultRootOrganizationSlug)
+		if _, found, err = findOrganizationBySlug(DefaultRootOrganizationSlug); err != nil {
+			t.Fatalf("find organization: %v", err)
+		} else if !found {
+			t.Fatalf("expected root organization %q", DefaultRootOrganizationSlug)
+		}
 	}
+	{
+		var (
+			found bool
+			err   error
+		)
 
-	if _, found, err := findCloudGroupBySlug(DefaultAdminGroupSlug); err != nil {
-		t.Fatalf("find admin group: %v", err)
-	} else if !found {
-		t.Fatalf("expected admin group %q", DefaultAdminGroupSlug)
+		if _, found, err = findCloudGroupBySlug(DefaultAdminGroupSlug); err != nil {
+			t.Fatalf("find admin group: %v", err)
+		} else if !found {
+			t.Fatalf("expected admin group %q", DefaultAdminGroupSlug)
+		}
 	}
+	var (
+		configuredAdminGroup *CloudGroup
+		found                bool
+		err                  error
+	)
 
-	configuredAdminGroup, found, err := findCloudGroupBySlug("domain-admins")
+	configuredAdminGroup, found, err = findCloudGroupBySlug("domain-admins")
 	if err != nil {
 		t.Fatalf("find configured admin group: %v", err)
 	} else if !found {
@@ -35,36 +55,42 @@ func TestEnsureInitialSetupSeedsCoreRows(t *testing.T) {
 	if configuredAdminGroup.SyncSource != CloudGroupSyncSourceLDAP || !configuredAdminGroup.SyncMembership || configuredAdminGroup.ExternalID != "Domain Admins" {
 		t.Fatalf("expected configured admin group to be LDAP synced, got %#v", configuredAdminGroup)
 	}
+	var role *Role
 
-	role, found, err := findRoleByName(DefaultLabAdminRoleName)
+	role, found, err = findRoleByName(DefaultLabAdminRoleName)
 	if err != nil {
 		t.Fatalf("find role: %v", err)
 	}
 	if !found {
 		t.Fatalf("expected role %q", DefaultLabAdminRoleName)
 	}
+	var permissionCount int64
 
-	permissionCount, err := Permissions.Count()
+	permissionCount, err = Permissions.Count()
 	if err != nil {
 		t.Fatalf("count permissions: %v", err)
 	}
 	if permissionCount != int64(len(CorePermissionNames)) {
 		t.Fatalf("expected %d permissions, got %d", len(CorePermissionNames), permissionCount)
 	}
+	var rolePermissionCount int64
 
-	rolePermissionCount, err := RolePermissions.Count()
+	rolePermissionCount, err = RolePermissions.Count()
 	if err != nil {
 		t.Fatalf("count role permissions: %v", err)
 	}
-	expectedRolePermissions := 0
+	var expectedRolePermissions int
+
+	expectedRolePermissions = 0
 	for _, permissionNames := range SystemRolePermissions {
 		expectedRolePermissions += len(permissionNames)
 	}
 	if rolePermissionCount != int64(expectedRolePermissions) {
 		t.Fatalf("expected %d role permissions, got %d", expectedRolePermissions, rolePermissionCount)
 	}
+	var roleBindingCount int64
 
-	roleBindingCount, err := RoleBindings.Count()
+	roleBindingCount, err = RoleBindings.Count()
 	if err != nil {
 		t.Fatalf("count role bindings: %v", err)
 	}
@@ -80,12 +106,16 @@ func TestEnsureInitialSetupSeedsCoreRows(t *testing.T) {
 func TestEnsureInitialSetupIsIdempotent(t *testing.T) {
 	initTestDB(t)
 	config.Config.LDAP.AdminGroups = []string{"admins"}
+	{
+		var err error
 
-	if err := EnsureInitialSetup(); err != nil {
-		t.Fatalf("first EnsureInitialSetup returned error: %v", err)
+		if err = EnsureInitialSetup(); err != nil {
+			t.Fatalf("first EnsureInitialSetup returned error: %v", err)
+		}
 	}
+	var counts map[string]int64
 
-	counts := map[string]int64{}
+	counts = map[string]int64{}
 	for name, countFn := range map[string]func() (int64, error){
 		"organizations":    Organizations.Count,
 		"groups":           CloudGroups.Count,
@@ -95,15 +125,23 @@ func TestEnsureInitialSetupIsIdempotent(t *testing.T) {
 		"role_bindings":    RoleBindings.Count,
 		"audit_events":     AuditEvents.Count,
 	} {
-		count, err := countFn()
+		var (
+			count int64
+			err   error
+		)
+
+		count, err = countFn()
 		if err != nil {
 			t.Fatalf("count %s: %v", name, err)
 		}
 		counts[name] = count
 	}
+	{
+		var err error
 
-	if err := EnsureInitialSetup(); err != nil {
-		t.Fatalf("second EnsureInitialSetup returned error: %v", err)
+		if err = EnsureInitialSetup(); err != nil {
+			t.Fatalf("second EnsureInitialSetup returned error: %v", err)
+		}
 	}
 
 	for name, countFn := range map[string]func() (int64, error){
@@ -115,7 +153,12 @@ func TestEnsureInitialSetupIsIdempotent(t *testing.T) {
 		"role_bindings":    RoleBindings.Count,
 		"audit_events":     AuditEvents.Count,
 	} {
-		count, err := countFn()
+		var (
+			count int64
+			err   error
+		)
+
+		count, err = countFn()
 		if err != nil {
 			t.Fatalf("count %s after second setup: %v", name, err)
 		}

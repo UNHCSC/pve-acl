@@ -9,86 +9,114 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const currentUserLocalKey = "current_user"
-const currentDBUserLocalKey = "current_db_user"
+const (
+	currentUserLocalKey   = "current_user"
+	currentDBUserLocalKey = "current_db_user"
+)
 
-func securityHeaders(c *fiber.Ctx) error {
+// securityHeaders applies defensive browser headers to every response.
+func securityHeaders(c *fiber.Ctx) (err error) {
 	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 	c.Set("X-Content-Type-Options", "nosniff")
 	c.Set("Referrer-Policy", "same-origin")
-	return c.Next()
+	err = c.Next()
+	return
 }
 
-func requireAPIAuth(c *fiber.Ctx) error {
-	user := auth.IsAuthenticated(c, jwtSigningKey)
+// requireAPIAuth validates API sessions and stores current auth context on Fiber locals.
+func requireAPIAuth(c *fiber.Ctx) (err error) {
+	var (
+		user   *auth.AuthUser = auth.IsAuthenticated(c, jwtSigningKey)
+		dbUser *db.User
+	)
+
 	if user == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "authentication required",
 		})
+		return
 	}
 
-	dbUser, err := ensureDBUserForAuthUser(user)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if dbUser, err = ensureDBUserForAuthUser(user); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to sync authenticated user",
 		})
+		return
 	}
 
 	auth.RefreshToken(user)
 	c.Locals(currentUserLocalKey, user)
 	c.Locals(currentDBUserLocalKey, dbUser)
-	return c.Next()
+	err = c.Next()
+	return
 }
 
-func currentUser(c *fiber.Ctx) *auth.AuthUser {
-	user, _ := c.Locals(currentUserLocalKey).(*auth.AuthUser)
+// currentUser returns the authenticated user stored on the request context.
+func currentUser(c *fiber.Ctx) (authUserResult *auth.AuthUser) {
+	var user *auth.AuthUser
+	user, _ = c.Locals(currentUserLocalKey).(*auth.AuthUser)
 	return user
 }
 
-func currentDBUser(c *fiber.Ctx) *db.User {
-	user, _ := c.Locals(currentDBUserLocalKey).(*db.User)
+// currentDBUser returns the database user stored on the request context.
+func currentDBUser(c *fiber.Ctx) (userResult *db.User) {
+	var user *db.User
+	user, _ = c.Locals(currentDBUserLocalKey).(*db.User)
 	return user
 }
 
-func ensureDBUserForAuthUser(user *auth.AuthUser) (*db.User, error) {
-	var displayName, email, authSource string
+// ensureDBUserForAuthUser synchronizes the authenticated identity into the local database.
+func ensureDBUserForAuthUser(user *auth.AuthUser) (dbUser *db.User, err error) {
+	var (
+		displayName string
+		email       string
+		authSource  string
+		value       string
+		groups      []string
+		lookupErr   error
+	)
 
 	authSource = "local"
 	if user.LDAPConn != nil {
 		authSource = "ldap"
-		if value, err := user.LDAPConn.DisplayName(); err == nil {
+		if value, lookupErr = user.LDAPConn.DisplayName(); lookupErr == nil {
 			displayName = value
 		}
-		if value, err := user.LDAPConn.Email(); err == nil {
+		if value, lookupErr = user.LDAPConn.Email(); lookupErr == nil {
 			email = value
 		}
 	}
 
-	dbUser, _, err := db.EnsureUser(user.Username, displayName, email, authSource, user.Username)
+	dbUser, _, err = db.EnsureUser(user.Username, displayName, email, authSource, user.Username)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	if user.LDAPConn != nil {
-		if groups, err := user.LDAPConn.Groups(); err == nil {
-			if err := syncLDAPCloudGroupMemberships(dbUser, groups); err != nil {
-				return nil, err
+		if groups, lookupErr = user.LDAPConn.Groups(); lookupErr == nil {
+			if err = syncLDAPCloudGroupMemberships(dbUser, groups); err != nil {
+				return
 			}
 		}
 	}
 
-	return dbUser, nil
+	return
 }
 
-func syncLDAPCloudGroupMemberships(dbUser *db.User, ldapGroups []string) error {
+// syncLDAPCloudGroupMemberships updates opt-in cloud group memberships from LDAP groups.
+func syncLDAPCloudGroupMemberships(dbUser *db.User, ldapGroups []string) (err error) {
 	if dbUser == nil {
-		return nil
+		return
 	}
 
-	groupNames := make(map[string]bool, len(ldapGroups))
-	groupSlugs := make(map[string]bool, len(ldapGroups))
+	var (
+		groupNames map[string]bool = make(map[string]bool, len(ldapGroups))
+		groupSlugs map[string]bool = make(map[string]bool, len(ldapGroups))
+		clean      string
+	)
+
 	for _, groupName := range ldapGroups {
-		clean := strings.TrimSpace(groupName)
+		clean = strings.TrimSpace(groupName)
 		if clean == "" {
 			continue
 		}
@@ -96,63 +124,70 @@ func syncLDAPCloudGroupMemberships(dbUser *db.User, ldapGroups []string) error {
 		groupSlugs[slugForComparison(clean)] = true
 	}
 
-	seenAdminGroups := make(map[string]bool)
+	var (
+		seenAdminGroups map[string]bool = make(map[string]bool)
+		adminSlug       string
+		group           *db.CloudGroup
+	)
+
 	for _, adminGroupName := range append([]string{db.DefaultAdminGroupSlug}, config.Config.LDAP.AdminGroups...) {
 		adminGroupName = strings.TrimSpace(adminGroupName)
 		if adminGroupName == "" {
 			continue
 		}
-		adminSlug := slugForComparison(adminGroupName)
+		adminSlug = slugForComparison(adminGroupName)
 		if adminSlug == "" || seenAdminGroups[adminSlug] {
 			continue
 		}
 		seenAdminGroups[adminSlug] = true
 
-		group, _, err := db.EnsureCloudGroup(adminGroupName, "", db.GroupTypeAdmin)
-		if err != nil {
-			return err
+		if group, _, err = db.EnsureCloudGroup(adminGroupName, "", db.GroupTypeAdmin); err != nil {
+			return
 		}
 		if group.SyncSource != db.CloudGroupSyncSourceLDAP || group.ExternalID != adminGroupName || !group.SyncMembership || group.GroupType != db.GroupTypeAdmin {
 			group.SyncSource = db.CloudGroupSyncSourceLDAP
 			group.ExternalID = adminGroupName
 			group.SyncMembership = true
 			group.GroupType = db.GroupTypeAdmin
-			if err := db.UpdateCloudGroup(group); err != nil {
-				return err
+			if err = db.UpdateCloudGroup(group); err != nil {
+				return
 			}
 		}
 		if ldapGroupMapsContain(groupNames, groupSlugs, adminGroupName, group) {
-			if _, err := db.EnsureCloudGroupMembership(dbUser.ID, group.ID, db.MembershipRoleMember); err != nil {
-				return err
+			if _, err = db.EnsureCloudGroupMembership(dbUser.ID, group.ID, db.MembershipRoleMember); err != nil {
+				return
 			}
 		}
 	}
 
-	groups, err := db.ListCloudGroups()
-	if err != nil {
-		return err
+	var groups []*db.CloudGroup
+	if groups, err = db.ListCloudGroups(); err != nil {
+		return
 	}
 	for _, group := range groups {
 		if group.SyncSource != db.CloudGroupSyncSourceLDAP || !group.SyncMembership {
 			continue
 		}
 		if ldapGroupMapsContain(groupNames, groupSlugs, group.ExternalID, group) {
-			if _, err := db.EnsureCloudGroupMembership(dbUser.ID, group.ID, db.MembershipRoleMember); err != nil {
-				return err
+			if _, err = db.EnsureCloudGroupMembership(dbUser.ID, group.ID, db.MembershipRoleMember); err != nil {
+				return
 			}
 		}
 	}
 
-	return nil
+	return
 }
 
-func ldapGroupMapsContain(names, slugs map[string]bool, externalID string, group *db.CloudGroup) bool {
-	candidates := []string{externalID}
+// ldapGroupMapsContain reports whether a cloud group matches LDAP group names or slugs.
+func ldapGroupMapsContain(names, slugs map[string]bool, externalID string, group *db.CloudGroup) (okResult bool) {
+	var candidates []string
+	candidates = []string{externalID}
 	if group != nil {
 		candidates = append(candidates, group.Name, group.Slug)
 	}
 	for _, candidate := range candidates {
-		clean := strings.TrimSpace(candidate)
+		var clean string
+		clean = strings.TrimSpace(candidate)
 		if clean == "" {
 			continue
 		}
@@ -163,14 +198,16 @@ func ldapGroupMapsContain(names, slugs map[string]bool, externalID string, group
 	return false
 }
 
-func slugForComparison(value string) string {
+// slugForComparison normalizes a value into a lowercase dashed comparison key.
+func slugForComparison(value string) (valueResult string) {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var out strings.Builder
-	lastDash := false
-	for _, r := range value {
+	var lastDash bool
+	lastDash = false
+	for _, character := range value {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			out.WriteRune(r)
+		case character >= 'a' && character <= 'z', character >= '0' && character <= '9':
+			out.WriteRune(character)
 			lastDash = false
 		case !lastDash:
 			out.WriteByte('-')

@@ -7,10 +7,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// getGroupsForUser returns the directory groups visible for the requested user.
 func getGroupsForUser(c *fiber.Ctx) (err error) {
 	var (
 		username   string
 		groupnames []string
+		dbUser     *db.User
+		allowed    bool
 	)
 
 	if username = c.Params("username"); username == "" {
@@ -18,14 +21,14 @@ func getGroupsForUser(c *fiber.Ctx) (err error) {
 		return
 	}
 
-	dbUser := currentDBUser(c)
-	if dbUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
+	if dbUser = currentDBUser(c); dbUser == nil {
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required"})
+		return
 	}
+
 	if !strings.EqualFold(username, dbUser.Username) {
-		allowed, allowErr := requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
-		if allowErr != nil || !allowed {
-			return allowErr
+		if allowed, err = requirePermission(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil); err != nil || !allowed {
+			return
 		}
 	}
 
@@ -37,10 +40,12 @@ func getGroupsForUser(c *fiber.Ctx) (err error) {
 	return
 }
 
+// getUsersForGroup returns the directory users visible for the requested group.
 func getUsersForGroup(c *fiber.Ctx) (err error) {
 	var (
 		groupname string
 		usernames []string
+		allowed   bool
 	)
 
 	if groupname = c.Params("groupname"); groupname == "" {
@@ -48,9 +53,8 @@ func getUsersForGroup(c *fiber.Ctx) (err error) {
 		return
 	}
 
-	allowed, allowErr := requirePermission(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
-	if allowErr != nil || !allowed {
-		return allowErr
+	if allowed, err = requirePermission(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil); err != nil || !allowed {
+		return
 	}
 
 	if usernames, err = db.UsersForGroup(groupname); err != nil {

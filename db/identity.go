@@ -7,18 +7,34 @@ import (
 	"github.com/z46-dev/gomysql"
 )
 
-func EnsureUser(username, displayName, email, authSource, externalID string) (*User, bool, error) {
-	if existing, found, err := findUserByUsername(username); err != nil || found {
-		return existing, false, err
-	}
+// EnsureUser ensures user exists.
+func EnsureUser(username, displayName, email, authSource, externalID string) (userResult *User, okResult bool, errResult error) {
+	{
+		var (
+			existing *User
+			found    bool
+			err      error
+		)
 
-	uuid, err := randomUUID()
+		if existing, found, err = findUserByUsername(username); err != nil || found {
+			return existing, false, err
+		}
+	}
+	var (
+		uuid string
+		err  error
+	)
+
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, false, err
 	}
+	var now time.Time
 
-	now := time.Now().UTC()
-	user := &User{
+	now = time.Now().UTC()
+	var user *User
+
+	user = &User{
 		UUID:        uuid,
 		Username:    username,
 		DisplayName: displayName,
@@ -29,20 +45,30 @@ func EnsureUser(username, displayName, email, authSource, externalID string) (*U
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	{
+		var err error
 
-	if err := Users.Insert(user); err != nil {
-		return nil, false, err
+		if err = Users.Insert(user); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return user, true, nil
 }
 
-func ListUsers() ([]*User, error) {
+// ListUsers lists all local users.
+func ListUsers() (itemsResult []*User, errResult error) {
 	return Users.SelectAll()
 }
 
-func GetUserByID(id int) (*User, bool, error) {
-	user, err := Users.Select(id)
+// GetUserByID returns a local user by id.
+func GetUserByID(id int) (userResult *User, okResult bool, errResult error) {
+	var (
+		user *User
+		err  error
+	)
+
+	user, err = Users.Select(id)
 	if err != nil {
 		return nil, false, err
 	}
@@ -52,13 +78,17 @@ func GetUserByID(id int) (*User, bool, error) {
 	return user, true, nil
 }
 
-func ListCloudGroups() ([]*CloudGroup, error) {
+// ListCloudGroups lists cloud groups.
+func ListCloudGroups() (itemsResult []*CloudGroup, errResult error) {
 	return CloudGroups.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
-func CloudGroupsForOwner(scopeType RoleBindingScope, scopeID *int) ([]*CloudGroup, error) {
-	filter := gomysql.NewFilter().
+// CloudGroupsForOwner returns active cloud groups owned by a scope.
+func CloudGroupsForOwner(scopeType RoleBindingScope, scopeID *int) (itemsResult []*CloudGroup, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(CloudGroups.FieldBySQLName("owner_scope_type"), gomysql.OpEqual, scopeType).
 		And()
 	if scopeID == nil {
@@ -71,7 +101,8 @@ func CloudGroupsForOwner(scopeType RoleBindingScope, scopeID *int) ([]*CloudGrou
 		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
-func UpdateCloudGroup(group *CloudGroup) error {
+// UpdateCloudGroup updates cloud group.
+func UpdateCloudGroup(group *CloudGroup) (errResult error) {
 	if group.SyncSource == "" {
 		group.SyncSource = CloudGroupSyncSourceLocal
 	}
@@ -79,17 +110,26 @@ func UpdateCloudGroup(group *CloudGroup) error {
 	return CloudGroups.Update(group)
 }
 
-func ArchiveCloudGroup(group *CloudGroup) error {
+// ArchiveCloudGroup archives cloud group.
+func ArchiveCloudGroup(group *CloudGroup) (errResult error) {
 	if group.ArchivedAt == nil {
-		now := time.Now().UTC()
+		var now time.Time
+
+		now = time.Now().UTC()
 		group.ArchivedAt = &now
 	}
 	group.UpdatedAt = time.Now().UTC()
 	return CloudGroups.Update(group)
 }
 
-func GetCloudGroupByID(id int) (*CloudGroup, bool, error) {
-	group, err := CloudGroups.Select(id)
+// GetCloudGroupByID returns a cloud group by id.
+func GetCloudGroupByID(id int) (cloudGroupResult *CloudGroup, okResult bool, errResult error) {
+	var (
+		group *CloudGroup
+		err   error
+	)
+
+	group, err = CloudGroups.Select(id)
 	if err != nil {
 		return nil, false, err
 	}
@@ -99,29 +139,44 @@ func GetCloudGroupByID(id int) (*CloudGroup, bool, error) {
 	return group, true, nil
 }
 
-func GetCloudGroupBySlug(slug string) (*CloudGroup, bool, error) {
+// GetCloudGroupBySlug returns cloud group by slug.
+func GetCloudGroupBySlug(slug string) (cloudGroupResult *CloudGroup, okResult bool, errResult error) {
 	return findOneByStringField(CloudGroups, CloudGroups.FieldBySQLName("slug"), strings.TrimSpace(slug))
 }
 
-func CloudGroupMembershipsForGroup(groupID int) ([]*CloudGroupMembership, error) {
+// CloudGroupMembershipsForGroup returns memberships for a cloud group.
+func CloudGroupMembershipsForGroup(groupID int) (itemsResult []*CloudGroupMembership, errResult error) {
 	return CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID))
 }
 
-func CloudGroupMembershipsForUser(userID int) ([]*CloudGroupMembership, error) {
+// CloudGroupMembershipsForUser returns cloud group memberships for a user.
+func CloudGroupMembershipsForUser(userID int) (itemsResult []*CloudGroupMembership, errResult error) {
 	return CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID))
 }
 
-func CloudGroupIDsForUser(userID int) ([]int, error) {
-	memberships, err := CloudGroupMembershipsForUser(userID)
+// CloudGroupIDsForUser returns cloud group ids for a user.
+func CloudGroupIDsForUser(userID int) (itemsResult []int, errResult error) {
+	var (
+		memberships []*CloudGroupMembership
+		err         error
+	)
+
+	memberships, err = CloudGroupMembershipsForUser(userID)
 	if err != nil {
 		return nil, err
 	}
+	var groupIDs []int
 
-	groupIDs := make([]int, 0, len(memberships))
+	groupIDs = make([]int, 0, len(memberships))
 	for _, membership := range memberships {
-		group, err := CloudGroups.Select(membership.GroupID)
+		var (
+			group *CloudGroup
+			err   error
+		)
+
+		group, err = CloudGroups.Select(membership.GroupID)
 		if err != nil {
 			return nil, err
 		}
@@ -134,15 +189,27 @@ func CloudGroupIDsForUser(userID int) ([]int, error) {
 	return groupIDs, nil
 }
 
-func CloudGroupsForUser(userID int) ([]*CloudGroup, error) {
-	memberships, err := CloudGroupMembershipsForUser(userID)
+// CloudGroupsForUser returns active cloud groups for a user.
+func CloudGroupsForUser(userID int) (itemsResult []*CloudGroup, errResult error) {
+	var (
+		memberships []*CloudGroupMembership
+		err         error
+	)
+
+	memberships, err = CloudGroupMembershipsForUser(userID)
 	if err != nil {
 		return nil, err
 	}
+	var groups []*CloudGroup
 
-	groups := make([]*CloudGroup, 0, len(memberships))
+	groups = make([]*CloudGroup, 0, len(memberships))
 	for _, membership := range memberships {
-		group, err := CloudGroups.Select(membership.GroupID)
+		var (
+			group *CloudGroup
+			err   error
+		)
+
+		group, err = CloudGroups.Select(membership.GroupID)
 		if err != nil {
 			return nil, err
 		}
@@ -155,12 +222,19 @@ func CloudGroupsForUser(userID int) ([]*CloudGroup, error) {
 	return groups, nil
 }
 
-func RemoveCloudGroupMembership(membershipID int) error {
+// RemoveCloudGroupMembership removes cloud group membership.
+func RemoveCloudGroupMembership(membershipID int) (errResult error) {
 	return CloudGroupMemberships.Delete(membershipID)
 }
 
-func UpdateCloudGroupMembershipRole(membershipID int, role MembershipRole) (*CloudGroupMembership, error) {
-	membership, err := CloudGroupMemberships.Select(membershipID)
+// UpdateCloudGroupMembershipRole updates cloud group membership role.
+func UpdateCloudGroupMembershipRole(membershipID int, role MembershipRole) (cloudGroupMembershipResult *CloudGroupMembership, errResult error) {
+	var (
+		membership *CloudGroupMembership
+		err        error
+	)
+
+	membership, err = CloudGroupMemberships.Select(membershipID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +242,24 @@ func UpdateCloudGroupMembershipRole(membershipID int, role MembershipRole) (*Clo
 		return nil, nil
 	}
 	membership.MembershipRole = role
-	if err := CloudGroupMemberships.Update(membership); err != nil {
-		return nil, err
+	{
+		var err error
+
+		if err = CloudGroupMemberships.Update(membership); err != nil {
+			return nil, err
+		}
 	}
 	return membership, nil
 }
 
-func CloudGroupMembershipForUserAndGroup(userID, groupID int) (*CloudGroupMembership, bool, error) {
-	memberships, err := CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
+// CloudGroupMembershipForUserAndGroup returns a user's membership in a cloud group.
+func CloudGroupMembershipForUserAndGroup(userID, groupID int) (cloudGroupMembershipResult *CloudGroupMembership, okResult bool, errResult error) {
+	var (
+		memberships []*CloudGroupMembership
+		err         error
+	)
+
+	memberships, err = CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID).
 		And().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID).
@@ -189,6 +273,6 @@ func CloudGroupMembershipForUserAndGroup(userID, groupID int) (*CloudGroupMember
 	return memberships[0], true, nil
 }
 
-func findUserByUsername(username string) (*User, bool, error) {
+func findUserByUsername(username string) (userResult *User, okResult bool, errResult error) {
 	return findOneByStringField(Users, Users.FieldBySQLName("username"), username)
 }

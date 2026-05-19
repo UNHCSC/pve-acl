@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// runHttpRedirectServer starts a companion server that redirects plain HTTP to the configured app address.
 func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (err error) {
 	var (
 		redirectApp *fiber.App = fiber.New(fiber.Config{
@@ -37,7 +38,8 @@ func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (e
 	})
 
 	go func() {
-		if err := redirectApp.Listen(address); err != nil {
+		var err error
+		if err = redirectApp.Listen(address); err != nil {
 			panic(err)
 		}
 	}()
@@ -45,10 +47,12 @@ func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (e
 	return
 }
 
-func trimIPv6HostBrackets(host string) string {
+// trimIPv6HostBrackets removes square brackets from an IPv6 host string.
+func trimIPv6HostBrackets(host string) (valueResult string) {
 	return strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
 }
 
+// StartApp starts the Fiber app using either discovered TLS credentials or plain HTTP.
 func StartApp(app *fiber.App) (err error) {
 	if len(config.Config.WebServer.RedirectServerAddresses) > 0 && len(config.Config.WebServer.RedirectServerAddresses[0]) > 0 {
 		for _, redirectAddress := range config.Config.WebServer.RedirectServerAddresses {
@@ -75,33 +79,38 @@ func StartApp(app *fiber.App) (err error) {
 	return
 }
 
+// discoverTLSKeys finds a likely certificate and key pair in the configured TLS directory.
 func discoverTLSKeys(dir string) (certPath, keyPath string, found bool) {
 	type Candidate struct {
 		cert string
 		key  string
 	}
 
-	candidates := []Candidate{
-		{"fullchain.pem", "privkey.pem"},
-		{"cert.pem", "key.pem"},
-		{"tls.crt", "tls.key"},
-		{"server.crt", "server.key"},
-		{"webserver.crt", "webserver.key"},
-	}
+	var (
+		candidates []Candidate = []Candidate{
+			{"fullchain.pem", "privkey.pem"},
+			{"cert.pem", "key.pem"},
+			{"tls.crt", "tls.key"},
+			{"server.crt", "server.key"},
+			{"webserver.crt", "webserver.key"},
+		}
+		crtFiles []string
+		keyFiles []string
+		entries  []os.DirEntry
+		err      error
+		name     string
+	)
 
-	for _, c := range candidates {
-		certPath = filepath.Join(dir, c.cert)
-		keyPath = filepath.Join(dir, c.key)
+	for _, candidate := range candidates {
+		certPath = filepath.Join(dir, candidate.cert)
+		keyPath = filepath.Join(dir, candidate.key)
 
 		if fileExists(certPath) && fileExists(keyPath) {
 			return certPath, keyPath, true
 		}
 	}
 
-	var crtFiles, keyFiles []string
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+	if entries, err = os.ReadDir(dir); err != nil {
 		return "", "", false
 	}
 
@@ -109,7 +118,7 @@ func discoverTLSKeys(dir string) (certPath, keyPath string, found bool) {
 		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
+		name = entry.Name()
 		if strings.HasSuffix(name, ".crt") {
 			crtFiles = append(crtFiles, filepath.Join(dir, name))
 		}
@@ -125,8 +134,14 @@ func discoverTLSKeys(dir string) (certPath, keyPath string, found bool) {
 	return "", "", false
 }
 
-func fileExists(p string) bool {
-	info, err := os.Stat(p)
+// fileExists reports whether a path exists and is not a directory.
+func fileExists(p string) (okResult bool) {
+	var (
+		info os.FileInfo
+		err  error
+	)
+
+	info, err = os.Stat(p)
 	if err != nil {
 		return false
 	}

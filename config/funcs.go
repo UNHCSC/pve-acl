@@ -67,6 +67,7 @@ func generateDefaultConfig(path string) (err error) {
 	return
 }
 
+// Init initializes this package.
 func Init(path string) (err error) {
 	if !filepath.IsAbs(path) {
 		if path, err = filepath.Abs(path); err != nil {

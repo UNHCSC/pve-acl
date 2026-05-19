@@ -130,11 +130,13 @@ var CorePermissions = []PermissionKey{
 
 var CorePermissionNames = permissionKeyNames(CorePermissions)
 
-func (key PermissionKey) String() string {
+// String returns the string representation.
+func (key PermissionKey) String() (valueResult string) {
 	return permissionNames[key]
 }
 
-func PermissionKeyFromName(name string) (PermissionKey, bool) {
+// PermissionKeyFromName resolves a permission key by name.
+func PermissionKeyFromName(name string) (permissionKeyResult PermissionKey, okResult bool) {
 	for key, candidate := range permissionNames {
 		if candidate == name {
 			return key, true
@@ -143,8 +145,10 @@ func PermissionKeyFromName(name string) (PermissionKey, bool) {
 	return 0, false
 }
 
-func permissionKeyNames(keys []PermissionKey) []string {
-	names := make([]string, 0, len(keys))
+func permissionKeyNames(keys []PermissionKey) (itemsResult []string) {
+	var names []string
+
+	names = make([]string, 0, len(keys))
 	for _, key := range keys {
 		names = append(names, key.String())
 	}

@@ -193,15 +193,15 @@ var (
 )
 
 func init() {
-	for val, key := range AssetTypes {
-		AssetTypesReverse[key] = val
+	for assetType, key := range AssetTypes {
+		AssetTypesReverse[key] = assetType
 	}
 
-	for val, key := range AssetPermissions {
-		AssetPermissionsReverse[key] = val
+	for assetPermission, key := range AssetPermissions {
+		AssetPermissionsReverse[key] = assetPermission
 	}
 
-	for val, key := range ManagementPermissions {
-		ManagementPermissionsReverse[key] = val
+	for managementPermission, key := range ManagementPermissions {
+		ManagementPermissionsReverse[key] = managementPermission
 	}
 }

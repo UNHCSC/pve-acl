@@ -6,79 +6,95 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func currentUserCan(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
-	authUser := currentUser(c)
-	dbUser := currentDBUser(c)
+// currentUserCan checks whether the current request user has a scoped permission.
+func currentUserCan(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (allowed bool, err error) {
+	var (
+		authUser *auth.AuthUser = currentUser(c)
+		dbUser   *db.User       = currentDBUser(c)
+		groupIDs []int
+	)
+
 	if authUser == nil || dbUser == nil {
-		return false, nil
+		return
 	}
 
 	if currentUserIsSiteAdmin(c) {
-		return true, nil
+		allowed = true
+		return
 	}
 
-	groupIDs, err := db.CloudGroupIDsForUser(dbUser.ID)
-	if err != nil {
-		return false, err
+	if groupIDs, err = db.CloudGroupIDsForUser(dbUser.ID); err != nil {
+		return
 	}
 
-	return db.HasPermission(db.PermissionCheck{
+	allowed, err = db.HasPermission(db.PermissionCheck{
 		UserID:     dbUser.ID,
 		GroupIDs:   groupIDs,
 		Permission: permission,
 		ScopeType:  scopeType,
 		ScopeID:    scopeID,
 	})
+	return
 }
 
-func currentUserIsSiteAdmin(c *fiber.Ctx) bool {
-	authUser := currentUser(c)
-	dbUser := currentDBUser(c)
+// currentUserIsSiteAdmin reports whether the current user has global administrator access.
+func currentUserIsSiteAdmin(c *fiber.Ctx) (allowed bool) {
+	var (
+		authUser      *auth.AuthUser = currentUser(c)
+		dbUser        *db.User       = currentDBUser(c)
+		groupIDs      []int
+		bindings      []*db.RoleBinding
+		roles         []*db.Role
+		roleNamesByID map[int]string
+		err           error
+	)
+
 	if authUser == nil || dbUser == nil {
-		return false
+		return
 	}
 
 	if authUser.Permissions() == auth.AuthPermsAdministrator || dbUser.IsSystemAdmin {
-		return true
+		allowed = true
+		return
 	}
 
-	groupIDs, err := db.CloudGroupIDsForUser(dbUser.ID)
-	if err != nil {
-		return false
+	if groupIDs, err = db.CloudGroupIDsForUser(dbUser.ID); err != nil {
+		return
 	}
-	bindings, err := db.RoleBindingsForUserAndGroups(dbUser.ID, groupIDs)
-	if err != nil {
-		return false
+	if bindings, err = db.RoleBindingsForUserAndGroups(dbUser.ID, groupIDs); err != nil {
+		return
 	}
-	roles, err := db.RolesForBindings(bindings)
-	if err != nil {
-		return false
+	if roles, err = db.RolesForBindings(bindings); err != nil {
+		return
 	}
 
-	roleNamesByID := make(map[int]string, len(roles))
+	roleNamesByID = make(map[int]string, len(roles))
 	for _, role := range roles {
 		roleNamesByID[role.ID] = role.Name
 	}
 	for _, binding := range bindings {
 		if binding.ScopeType == db.RoleBindingScopeGlobal && roleNamesByID[binding.RoleID] == db.DefaultLabAdminRoleName {
-			return true
+			allowed = true
+			return
 		}
 	}
 
-	return false
+	return
 }
 
-func requirePermission(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (bool, error) {
-	allowed, err := currentUserCan(c, permission, scopeType, scopeID)
-	if err != nil {
-		return false, c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+// requirePermission enforces a scoped permission and writes a JSON error when denied.
+func requirePermission(c *fiber.Ctx, permission db.PermissionKey, scopeType db.RoleBindingScope, scopeID *int) (allowed bool, err error) {
+	if allowed, err = currentUserCan(c, permission, scopeType, scopeID); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "permission check failed",
 		})
+		return
 	}
 	if !allowed {
-		return false, c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+		err = c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "permission denied",
 		})
+		return
 	}
-	return true, nil
+	return
 }

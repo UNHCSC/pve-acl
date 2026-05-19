@@ -14,8 +14,9 @@ import (
 	"github.com/z46-dev/golog"
 )
 
-var authLog *golog.Logger = golog.New().Prefix("[Please call auth.Init() with the main logger]", golog.BoldRed)
+var authLog *golog.Logger = golog.New().Prefix("[Please call Init() with the main logger]", golog.BoldRed)
 
+// Init initializes this package.
 func Init(parentLog *golog.Logger) (err error) {
 	authLog = parentLog.SpawnChild().Prefix("[AUTH]", golog.BoldYellow)
 	return
@@ -31,7 +32,8 @@ const (
 
 const SessionDuration = 12 * time.Hour
 
-func (p authPerms) String() string {
+// String returns the string representation.
+func (p authPerms) String() (valueResult string) {
 	switch p {
 	case AuthPermsAdministrator:
 		return "administrator"
@@ -42,7 +44,7 @@ func (p authPerms) String() string {
 	}
 }
 
-func authPermsFromString(value string) authPerms {
+func authPermsFromString(value string) (authPermsResult authPerms) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case AuthPermsAdministrator.String():
 		return AuthPermsAdministrator
@@ -61,7 +63,8 @@ type AuthUser struct {
 	perms    authPerms
 }
 
-func (user *AuthUser) Permissions() authPerms {
+// Permissions returns the user's effective application permissions.
+func (user *AuthUser) Permissions() (authPermsResult authPerms) {
 	if user.perms != AuthPermsNone {
 		return user.perms
 	}
@@ -69,21 +72,27 @@ func (user *AuthUser) Permissions() authPerms {
 	if user.LDAPConn == nil {
 		return AuthPermsNone
 	}
+	{
+		var (
+			groups []string
+			err    error
+		)
 
-	if groups, err := user.LDAPConn.Groups(); err != nil || len(groups) == 0 {
-		return AuthPermsNone
-	} else {
-		for _, gName := range config.Config.LDAP.AdminGroups {
-			if slices.Contains(groups, gName) {
-				user.perms = AuthPermsAdministrator
-				return user.perms
+		if groups, err = user.LDAPConn.Groups(); err != nil || len(groups) == 0 {
+			return AuthPermsNone
+		} else {
+			for _, groupName := range config.Config.LDAP.AdminGroups {
+				if slices.Contains(groups, groupName) {
+					user.perms = AuthPermsAdministrator
+					return user.perms
+				}
 			}
-		}
 
-		for _, gName := range config.Config.LDAP.UserGroups {
-			if slices.Contains(groups, gName) {
-				user.perms = AuthPermsUser
-				return user.perms
+			for _, groupName := range config.Config.LDAP.UserGroups {
+				if slices.Contains(groups, groupName) {
+					user.perms = AuthPermsUser
+					return user.perms
+				}
 			}
 		}
 	}
@@ -95,40 +104,62 @@ func (user *AuthUser) Permissions() authPerms {
 var activeUsers = make(map[string]*AuthUser)
 var usersLock *sync.RWMutex = &sync.RWMutex{}
 
-func GetActiveUser(username string) *AuthUser {
+// GetActiveUser returns a non-expired active user by username.
+func GetActiveUser(username string) (authUserResult *AuthUser) {
 	usersLock.RLock()
 	defer usersLock.RUnlock()
+	{
+		var (
+			user *AuthUser
+			ok   bool
+		)
 
-	if user, ok := activeUsers[username]; ok {
-		if user.Expiry.After(time.Now()) {
-			return user
+		if user, ok = activeUsers[username]; ok {
+			if user.Expiry.After(time.Now()) {
+				return user
+			}
 		}
 	}
 
 	return nil
 }
 
+// RefreshToken extends a user's session expiration.
 func RefreshToken(user *AuthUser) {
 	user.Expiry = time.Now().Add(SessionDuration)
 }
 
-func WithAuth(w http.ResponseWriter, r *http.Request, jwtSecret []byte) bool {
+// WithAuth validates a standard HTTP request using the supplied JWT secret.
+func WithAuth(w http.ResponseWriter, r *http.Request, jwtSecret []byte) (okResult bool) {
 	var authToken string
+	{
+		var (
+			cookie *http.Cookie
+			err    error
+		)
 
-	if cookie, err := r.Cookie("Authorization"); err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return false
-	} else {
-		authToken = cookie.Value
+		if cookie, err = r.Cookie("Authorization"); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return false
+		} else {
+			authToken = cookie.Value
+		}
 	}
 
 	if authToken == "" {
 		w.WriteHeader(http.StatusUnauthorized)
 		return false
 	}
+	var (
+		parsedToken *jwt.Token
+		err         error
+	)
 
-	parsedToken, err := jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	parsedToken, err = jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
+		var ok bool
+
+		_, ok = token.Method.(*jwt.SigningMethodHMAC)
+		if !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}
 
@@ -139,16 +170,33 @@ func WithAuth(w http.ResponseWriter, r *http.Request, jwtSecret []byte) bool {
 		w.WriteHeader(http.StatusUnauthorized)
 		return false
 	}
+	{
+		var (
+			claims jwt.MapClaims
+			ok     bool
+		)
 
-	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
-		if username, ok := claims["username"].(string); ok {
-			usersLock.Lock()
-			defer usersLock.Unlock()
+		if claims, ok = parsedToken.Claims.(jwt.MapClaims); ok {
+			{
+				var (
+					username string
+					ok       bool
+				)
 
-			user, ok := activeUsers[username]
-			if ok && user.Expiry.After(time.Now()) {
-				RefreshToken(user)
-				return true
+				if username, ok = claims["username"].(string); ok {
+					usersLock.Lock()
+					defer usersLock.Unlock()
+					var (
+						user *AuthUser
+						ok   bool
+					)
+
+					user, ok = activeUsers[username]
+					if ok && user.Expiry.After(time.Now()) {
+						RefreshToken(user)
+						return true
+					}
+				}
 			}
 		}
 	}
@@ -157,19 +205,31 @@ func WithAuth(w http.ResponseWriter, r *http.Request, jwtSecret []byte) bool {
 	return false
 }
 
-func IsAuthenticated(r *fiber.Ctx, jwtSecret []byte) *AuthUser {
+// IsAuthenticated returns the authenticated user for a Fiber request.
+func IsAuthenticated(r *fiber.Ctx, jwtSecret []byte) (authUserResult *AuthUser) {
 	var authToken string = r.Cookies("Authorization")
 	if authToken == "" {
-		if header := r.Get("Authorization"); header != "" {
-			authToken = strings.TrimSpace(strings.TrimPrefix(header, "Bearer"))
+		{
+			var header string
+
+			if header = r.Get("Authorization"); header != "" {
+				authToken = strings.TrimSpace(strings.TrimPrefix(header, "Bearer"))
+			}
 		}
 		if authToken == "" {
 			return nil
 		}
 	}
+	var (
+		parsedToken *jwt.Token
+		err         error
+	)
 
-	parsedToken, err := jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	parsedToken, err = jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
+		var ok bool
+
+		_, ok = token.Method.(*jwt.SigningMethodHMAC)
+		if !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}
 
@@ -179,73 +239,120 @@ func IsAuthenticated(r *fiber.Ctx, jwtSecret []byte) *AuthUser {
 	if err != nil || !parsedToken.Valid {
 		return nil
 	}
+	{
+		var (
+			claims jwt.MapClaims
+			ok     bool
+		)
 
-	if claims, ok := parsedToken.Claims.(jwt.MapClaims); ok {
-		if username, ok := claims["username"].(string); ok {
-			usersLock.RLock()
-			user, ok := activeUsers[username]
-			if ok && user.Expiry.After(time.Now()) {
-				usersLock.RUnlock()
-				return user
-			}
-			usersLock.RUnlock()
+		if claims, ok = parsedToken.Claims.(jwt.MapClaims); ok {
+			{
+				var (
+					username string
+					ok       bool
+				)
 
-			expiry := time.Now().Add(SessionDuration)
-			if expiresAt, err := claims.GetExpirationTime(); err == nil && expiresAt != nil {
-				expiry = expiresAt.Time
-			}
-			if expiry.Before(time.Now()) {
-				return nil
-			}
+				if username, ok = claims["username"].(string); ok {
+					usersLock.RLock()
+					var (
+						user *AuthUser
+						ok   bool
+					)
 
-			perms := AuthPermsNone
-			if claimPerms, ok := claims["perms"].(string); ok {
-				perms = authPermsFromString(claimPerms)
-			}
-			if perms == AuthPermsNone {
-				return nil
-			}
+					user, ok = activeUsers[username]
+					if ok && user.Expiry.After(time.Now()) {
+						usersLock.RUnlock()
+						return user
+					}
+					usersLock.RUnlock()
+					var expiry time.Time
 
-			user = &AuthUser{
-				Token:    parsedToken,
-				Expiry:   expiry,
-				Username: username,
-				perms:    perms,
-			}
+					expiry = time.Now().Add(SessionDuration)
+					{
+						var (
+							expiresAt *jwt.NumericDate
+							err       error
+						)
 
-			usersLock.Lock()
-			activeUsers[username] = user
-			usersLock.Unlock()
-			return user
+						if expiresAt, err = claims.GetExpirationTime(); err == nil && expiresAt != nil {
+							expiry = expiresAt.Time
+						}
+					}
+					if expiry.Before(time.Now()) {
+						return nil
+					}
+					var perms authPerms
+
+					perms = AuthPermsNone
+					{
+						var (
+							claimPerms string
+							ok         bool
+						)
+
+						if claimPerms, ok = claims["perms"].(string); ok {
+							perms = authPermsFromString(claimPerms)
+						}
+					}
+					if perms == AuthPermsNone {
+						return nil
+					}
+
+					user = &AuthUser{
+						Token:    parsedToken,
+						Expiry:   expiry,
+						Username: username,
+						perms:    perms,
+					}
+
+					usersLock.Lock()
+					activeUsers[username] = user
+					usersLock.Unlock()
+					return user
+				}
+			}
 		}
 	}
 
 	return nil
 }
 
-func Authenticate(username, password string) (*AuthUser, error) {
-	if injection := GetUserInjection(username, password); injection != nil {
-		expiry := time.Now().Add(SessionDuration)
-		user := &AuthUser{
-			LDAPConn: nil,
-			Token: jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-				"username": username,
-				"perms":    injection.Permissions.String(),
-				"exp":      expiry.Unix(),
-				"iat":      time.Now().Unix(),
-			}),
-			Expiry:   expiry,
-			Username: username,
-			perms:    injection.Permissions,
+// Authenticate validates credentials and returns an active auth user.
+func Authenticate(username, password string) (authUserResult *AuthUser, errResult error) {
+	{
+		var injection *UserInjection
+
+		if injection = GetUserInjection(username, password); injection != nil {
+			var expiry time.Time
+
+			expiry = time.Now().Add(SessionDuration)
+			var user *AuthUser
+
+			user = &AuthUser{
+				LDAPConn: nil,
+				Token: jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+					"username": username,
+					"perms":    injection.Permissions.String(),
+					"exp":      expiry.Unix(),
+					"iat":      time.Now().Unix(),
+				}),
+				Expiry:   expiry,
+				Username: username,
+				perms:    injection.Permissions,
+			}
+
+			usersLock.Lock()
+			defer usersLock.Unlock()
+			activeUsers[username] = user
+			return user, nil
 		}
-
-		usersLock.Lock()
-		defer usersLock.Unlock()
-		activeUsers[username] = user
-		return user, nil
 	}
+	var (
+		ldapConn *LDAPConn
+		err      error
+	)
 
-	ldapConn, err := NewLDAPConn(username, password)
+	ldapConn, err = NewLDAPConn(username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -254,9 +361,12 @@ func Authenticate(username, password string) (*AuthUser, error) {
 		ldapConn.Close()
 		return nil, ErrUnauthorized
 	}
+	var expiry time.Time
 
-	expiry := time.Now().Add(SessionDuration)
-	user := &AuthUser{
+	expiry = time.Now().Add(SessionDuration)
+	var user *AuthUser
+
+	user = &AuthUser{
 		LDAPConn: ldapConn,
 		Token:    jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"username": username, "exp": expiry.Unix(), "iat": time.Now().Unix()}),
 		Expiry:   expiry,
@@ -283,16 +393,23 @@ func Authenticate(username, password string) (*AuthUser, error) {
 	return user, nil
 }
 
+// Logout ends an active user session.
 func Logout(username string) {
 	usersLock.Lock()
 	defer usersLock.Unlock()
+	{
+		var (
+			user *AuthUser
+			ok   bool
+		)
 
-	if user, ok := activeUsers[username]; ok {
-		if user.LDAPConn != nil {
-			user.LDAPConn.Close()
+		if user, ok = activeUsers[username]; ok {
+			if user.LDAPConn != nil {
+				user.LDAPConn.Close()
+			}
+
+			authLog.Infof("User '%s' logged out.\n", username)
+			delete(activeUsers, username)
 		}
-
-		authLog.Infof("User '%s' logged out.\n", username)
-		delete(activeUsers, username)
 	}
 }

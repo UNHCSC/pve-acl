@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -19,33 +20,38 @@ func TestGetCurrentUser(t *testing.T) {
 		auth.Logout("me-user")
 	})
 
-	user, err := auth.Authenticate("me-user", "secret")
-	if err != nil {
+	var (
+		user     *auth.AuthUser
+		token    string
+		fiberApp *fiber.App
+		req      *http.Request
+		resp     *http.Response
+		body     map[string]any
+		err      error
+	)
+
+	if user, err = auth.Authenticate("me-user", "secret"); err != nil {
 		t.Fatalf("Authenticate returned error: %v", err)
 	}
-
-	token, err := user.Token.SignedString(jwtSigningKey)
-	if err != nil {
+	if token, err = user.Token.SignedString(jwtSigningKey); err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
 
-	fiberApp := fiber.New()
+	fiberApp = fiber.New()
 	fiberApp.Use(requireAPIAuth)
 	fiberApp.Get("/api/v1/users/me", getCurrentUser)
 
-	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := fiberApp.Test(req)
-	if err != nil {
+	if resp, err = fiberApp.Test(req); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	var body map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 
@@ -62,21 +68,26 @@ func TestGetCurrentUser(t *testing.T) {
 
 func TestGetCurrentUserAccessIncludesGroupsAndRoles(t *testing.T) {
 	initACLTestDB(t)
-	if err := db.EnsureInitialSetup(); err != nil {
-		t.Fatalf("EnsureInitialSetup returned error: %v", err)
-	}
+	ensureInitialSetupForTest(t)
 
-	dbUser, _, err := db.EnsureUser("identity-user", "Identity User", "identity@example.test", "local", "identity-user")
-	if err != nil {
+	var (
+		dbUser     *db.User
+		groups     []*db.CloudGroup
+		adminGroup *db.CloudGroup
+		token      string
+		fiberApp   *fiber.App
+		req        *http.Request
+		resp       *http.Response
+		body       map[string]any
+		err        error
+	)
+
+	if dbUser, _, err = db.EnsureUser("identity-user", "Identity User", "identity@example.test", "local", "identity-user"); err != nil {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
-
-	groups, err := db.ListCloudGroups()
-	if err != nil {
+	if groups, err = db.ListCloudGroups(); err != nil {
 		t.Fatalf("ListCloudGroups returned error: %v", err)
 	}
-
-	var adminGroup *db.CloudGroup
 	for _, group := range groups {
 		if group.Slug == db.DefaultAdminGroupSlug {
 			adminGroup = group
@@ -87,29 +98,27 @@ func TestGetCurrentUserAccessIncludesGroupsAndRoles(t *testing.T) {
 		t.Fatal("expected default admin group")
 	}
 
-	if _, err := db.EnsureCloudGroupMembership(dbUser.ID, adminGroup.ID, db.MembershipRoleMember); err != nil {
+	if _, err = db.EnsureCloudGroupMembership(dbUser.ID, adminGroup.ID, db.MembershipRoleMember); err != nil {
 		t.Fatalf("EnsureCloudGroupMembership returned error: %v", err)
 	}
 
-	token := authenticateTestUser(t, "identity-user", false)
+	token = authenticateTestUser(t, "identity-user", false)
 
-	fiberApp := fiber.New()
+	fiberApp = fiber.New()
 	fiberApp.Use(requireAPIAuth)
 	fiberApp.Get("/api/v1/users/me/access", getCurrentUserAccess)
 
-	req := httptest.NewRequest("GET", "/api/v1/users/me/access", nil)
+	req = httptest.NewRequest("GET", "/api/v1/users/me/access", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := fiberApp.Test(req)
-	if err != nil {
+	if resp, err = fiberApp.Test(req); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	var body map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(body["groups"].([]any)) == 0 {

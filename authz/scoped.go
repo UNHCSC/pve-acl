@@ -27,19 +27,25 @@ m = g(r.sub, p.sub, p.dom) && scopeMatch(p.dom, r.dom) && (p.act == "*" || p.act
 
 type ScopeMatcher func(policyScope, requestedScope string) bool
 
-func NewScopedEnforcer(scopeMatcher ScopeMatcher) (*casbin.Enforcer, error) {
+// NewScopedEnforcer creates a Casbin enforcer with scoped RBAC matching.
+func NewScopedEnforcer(scopeMatcher ScopeMatcher) (enforcerResult *casbin.Enforcer, errResult error) {
 	if scopeMatcher == nil {
 		scopeMatcher = func(policyScope, requestedScope string) bool {
 			return policyScope == requestedScope
 		}
 	}
+	var (
+		model casbinmodel.Model
+		err   error
+	)
 
-	model, err := casbinmodel.NewModelFromString(ScopedRBACModel)
+	model, err = casbinmodel.NewModelFromString(ScopedRBACModel)
 	if err != nil {
 		return nil, err
 	}
+	var enforcer *casbin.Enforcer
 
-	enforcer, err := casbin.NewEnforcer(model)
+	enforcer, err = casbin.NewEnforcer(model)
 	if err != nil {
 		return nil, err
 	}
@@ -47,16 +53,23 @@ func NewScopedEnforcer(scopeMatcher ScopeMatcher) (*casbin.Enforcer, error) {
 	return enforcer, nil
 }
 
-func scopeMatchFunc(scopeMatcher ScopeMatcher) govaluate.ExpressionFunction {
+func scopeMatchFunc(scopeMatcher ScopeMatcher) (expressionFunctionResult govaluate.ExpressionFunction) {
 	return func(args ...interface{}) (interface{}, error) {
 		if len(args) != 2 {
 			return false, fmt.Errorf("scopeMatch expects 2 arguments")
 		}
-		policyScope, ok := args[0].(string)
+		var (
+			policyScope string
+			ok          bool
+		)
+
+		policyScope, ok = args[0].(string)
 		if !ok {
 			return false, fmt.Errorf("policy scope must be a string")
 		}
-		requestedScope, ok := args[1].(string)
+		var requestedScope string
+
+		requestedScope, ok = args[1].(string)
 		if !ok {
 			return false, fmt.Errorf("requested scope must be a string")
 		}

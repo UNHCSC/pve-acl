@@ -111,10 +111,15 @@ var SystemRolePermissions = map[string][]PermissionKey{
 	},
 }
 
+// EnsureInitialSetup seeds the required system records.
 func EnsureInitialSetup() (err error) {
 	var now = time.Now().UTC()
+	var (
+		org        *Organization
+		createdOrg bool
+	)
 
-	org, createdOrg, err := ensureOrganization(DefaultRootOrganizationName, DefaultRootOrganizationSlug, now)
+	org, createdOrg, err = ensureOrganization(DefaultRootOrganizationName, DefaultRootOrganizationSlug, now)
 	if err != nil {
 		return
 	}
@@ -125,7 +130,13 @@ func EnsureInitialSetup() (err error) {
 	}
 
 	for _, permissionKey := range CorePermissions {
-		permission, createdPermission, setupErr := ensurePermission(permissionKey.String())
+		var (
+			permission        *Permission
+			createdPermission bool
+			setupErr          error
+		)
+
+		permission, createdPermission, setupErr = ensurePermission(permissionKey.String())
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -137,10 +148,17 @@ func EnsureInitialSetup() (err error) {
 		}
 
 	}
+	var rolesByName map[string]*Role
 
-	rolesByName := map[string]*Role{}
+	rolesByName = map[string]*Role{}
 	for roleName, permissionKeys := range SystemRolePermissions {
-		role, createdRole, setupErr := ensureRole(roleName, systemRoleDescription(roleName), true, now)
+		var (
+			role        *Role
+			createdRole bool
+			setupErr    error
+		)
+
+		role, createdRole, setupErr = ensureRole(roleName, systemRoleDescription(roleName), true, now)
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -152,8 +170,16 @@ func EnsureInitialSetup() (err error) {
 			}
 		}
 		for _, permissionKey := range permissionKeys {
-			permissionName := permissionKey.String()
-			permission, found, findErr := findPermissionByName(permissionName)
+			var permissionName string
+
+			permissionName = permissionKey.String()
+			var (
+				permission *Permission
+				found      bool
+				findErr    error
+			)
+
+			permission, found, findErr = findPermissionByName(permissionName)
 			if findErr != nil {
 				err = findErr
 				return
@@ -162,7 +188,12 @@ func EnsureInitialSetup() (err error) {
 				err = fmt.Errorf("permission %q was not found", permissionName)
 				return
 			}
-			createdBinding, setupErr := ensureRolePermission(role.ID, permission.ID)
+			var (
+				createdBinding bool
+				setupErr       error
+			)
+
+			createdBinding, setupErr = ensureRolePermission(role.ID, permission.ID)
 			if setupErr != nil {
 				err = setupErr
 				return
@@ -176,7 +207,13 @@ func EnsureInitialSetup() (err error) {
 	}
 
 	for _, adminGroup := range initialAdminGroups() {
-		group, createdGroup, setupErr := ensureCloudGroup(displayNameFromSlug(adminGroup.Slug), adminGroup.Slug, GroupTypeAdmin, now)
+		var (
+			group        *CloudGroup
+			createdGroup bool
+			setupErr     error
+		)
+
+		group, createdGroup, setupErr = ensureCloudGroup(displayNameFromSlug(adminGroup.Slug), adminGroup.Slug, GroupTypeAdmin, now)
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -196,8 +233,9 @@ func EnsureInitialSetup() (err error) {
 				return
 			}
 		}
+		var createdRoleBinding bool
 
-		createdRoleBinding, setupErr := ensureRoleBinding(rolesByName[DefaultLabAdminRoleName].ID, RoleBindingSubjectGroup, group.ID, RoleBindingScopeGlobal, nil, now)
+		createdRoleBinding, setupErr = ensureRoleBinding(rolesByName[DefaultLabAdminRoleName].ID, RoleBindingSubjectGroup, group.ID, RoleBindingScopeGlobal, nil, now)
 		if setupErr != nil {
 			err = setupErr
 			return
@@ -213,7 +251,7 @@ func EnsureInitialSetup() (err error) {
 	return
 }
 
-func systemRoleDescription(name string) string {
+func systemRoleDescription(name string) (valueResult string) {
 	switch name {
 	case DefaultLabAdminRoleName:
 		return "Full system-level authority across Organesson Cloud."
@@ -234,42 +272,71 @@ func systemRoleDescription(name string) string {
 	}
 }
 
-func ensureOrganization(name, slug string, now time.Time) (*Organization, bool, error) {
-	if existing, found, err := findOrganizationBySlug(slug); err != nil || found {
-		return existing, false, err
-	}
+func ensureOrganization(name, slug string, now time.Time) (organizationResult *Organization, okResult bool, errResult error) {
+	{
+		var (
+			existing *Organization
+			found    bool
+			err      error
+		)
 
-	uuid, err := randomUUID()
+		if existing, found, err = findOrganizationBySlug(slug); err != nil || found {
+			return existing, false, err
+		}
+	}
+	var (
+		uuid string
+		err  error
+	)
+
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, false, err
 	}
+	var org *Organization
 
-	org := &Organization{
+	org = &Organization{
 		UUID:      uuid,
 		Name:      name,
 		Slug:      slug,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	{
+		var err error
 
-	if err := Organizations.Insert(org); err != nil {
-		return nil, false, err
+		if err = Organizations.Insert(org); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return org, true, nil
 }
 
-func ensureCloudGroup(name, slug string, groupType GroupType, now time.Time) (*CloudGroup, bool, error) {
-	if existing, found, err := findCloudGroupBySlug(slug); err != nil || found {
-		return existing, false, err
-	}
+func ensureCloudGroup(name, slug string, groupType GroupType, now time.Time) (cloudGroupResult *CloudGroup, okResult bool, errResult error) {
+	{
+		var (
+			existing *CloudGroup
+			found    bool
+			err      error
+		)
 
-	uuid, err := randomUUID()
+		if existing, found, err = findCloudGroupBySlug(slug); err != nil || found {
+			return existing, false, err
+		}
+	}
+	var (
+		uuid string
+		err  error
+	)
+
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, false, err
 	}
+	var group *CloudGroup
 
-	group := &CloudGroup{
+	group = &CloudGroup{
 		UUID:           uuid,
 		Name:           name,
 		Slug:           slug,
@@ -279,15 +346,19 @@ func ensureCloudGroup(name, slug string, groupType GroupType, now time.Time) (*C
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
+	{
+		var err error
 
-	if err := CloudGroups.Insert(group); err != nil {
-		return nil, false, err
+		if err = CloudGroups.Insert(group); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return group, true, nil
 }
 
-func EnsureCloudGroup(name, slug string, groupType GroupType) (*CloudGroup, bool, error) {
+// EnsureCloudGroup ensures cloud group exists.
+func EnsureCloudGroup(name, slug string, groupType GroupType) (cloudGroupResult *CloudGroup, okResult bool, errResult error) {
 	if slug == "" {
 		slug = slugify(name)
 	}
@@ -297,18 +368,27 @@ func EnsureCloudGroup(name, slug string, groupType GroupType) (*CloudGroup, bool
 	return ensureCloudGroup(name, slug, groupType, time.Now().UTC())
 }
 
-func EnsureCloudGroupMembership(userID, groupID int, role MembershipRole) (bool, error) {
-	filter := gomysql.NewFilter().
+// EnsureCloudGroupMembership ensures cloud group membership exists.
+func EnsureCloudGroupMembership(userID, groupID int, role MembershipRole) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID).
 		And().
 		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID)
+	var (
+		existing []*CloudGroupMembership
+		err      error
+	)
 
-	existing, err := CloudGroupMemberships.SelectAllWithFilter(filter.Limit(1))
+	existing, err = CloudGroupMemberships.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return false, err
 	}
 	if len(existing) > 0 {
-		membership := existing[0]
+		var membership *CloudGroupMembership
+
+		membership = existing[0]
 		if membership.MembershipRole != role {
 			membership.MembershipRole = role
 			return false, CloudGroupMemberships.Update(membership)
@@ -324,46 +404,77 @@ func EnsureCloudGroupMembership(userID, groupID int, role MembershipRole) (bool,
 	})
 }
 
-func ensureRole(name, description string, isSystemRole bool, now time.Time) (*Role, bool, error) {
-	if existing, found, err := findRoleByName(name); err != nil || found {
-		return existing, false, err
-	}
+func ensureRole(name, description string, isSystemRole bool, now time.Time) (roleResult *Role, okResult bool, errResult error) {
+	{
+		var (
+			existing *Role
+			found    bool
+			err      error
+		)
 
-	role := &Role{
+		if existing, found, err = findRoleByName(name); err != nil || found {
+			return existing, false, err
+		}
+	}
+	var role *Role
+
+	role = &Role{
 		Name:         name,
 		Description:  description,
 		IsSystemRole: isSystemRole,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+	{
+		var err error
 
-	if err := Roles.Insert(role); err != nil {
-		return nil, false, err
+		if err = Roles.Insert(role); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return role, true, nil
 }
 
-func ensurePermission(name string) (*Permission, bool, error) {
-	if existing, found, err := findPermissionByName(name); err != nil || found {
-		return existing, false, err
-	}
+func ensurePermission(name string) (permissionResult *Permission, okResult bool, errResult error) {
+	{
+		var (
+			existing *Permission
+			found    bool
+			err      error
+		)
 
-	permission := &Permission{Name: name}
-	if err := Permissions.Insert(permission); err != nil {
-		return nil, false, err
+		if existing, found, err = findPermissionByName(name); err != nil || found {
+			return existing, false, err
+		}
+	}
+	var permission *Permission
+
+	permission = &Permission{Name: name}
+	{
+		var err error
+
+		if err = Permissions.Insert(permission); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return permission, true, nil
 }
 
-func ensureRolePermission(roleID, permissionID int) (bool, error) {
-	filter := gomysql.NewFilter().
+func ensureRolePermission(roleID, permissionID int) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
 		And().
 		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gomysql.OpEqual, permissionID)
+	var (
+		count int64
+		err   error
+	)
 
-	count, err := RolePermissions.CountWithFilter(filter)
+	count, err = RolePermissions.CountWithFilter(filter)
 	if err != nil || count > 0 {
 		return false, err
 	}
@@ -374,8 +485,10 @@ func ensureRolePermission(roleID, permissionID int) (bool, error) {
 	})
 }
 
-func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int, now time.Time) (bool, error) {
-	filter := gomysql.NewFilter().
+func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int, now time.Time) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
 		And().
 		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
@@ -389,8 +502,12 @@ func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int
 	} else {
 		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gomysql.OpEqual, scopeID)
 	}
+	var (
+		count int64
+		err   error
+	)
 
-	count, err := RoleBindings.CountWithFilter(filter)
+	count, err = RoleBindings.CountWithFilter(filter)
 	if err != nil || count > 0 {
 		return false, err
 	}
@@ -405,24 +522,29 @@ func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int
 	})
 }
 
-func findOrganizationBySlug(slug string) (*Organization, bool, error) {
+func findOrganizationBySlug(slug string) (organizationResult *Organization, okResult bool, errResult error) {
 	return findOneByStringField(Organizations, Organizations.FieldBySQLName("slug"), slug)
 }
 
-func findCloudGroupBySlug(slug string) (*CloudGroup, bool, error) {
+func findCloudGroupBySlug(slug string) (cloudGroupResult *CloudGroup, okResult bool, errResult error) {
 	return findOneByStringField(CloudGroups, CloudGroups.FieldBySQLName("slug"), slug)
 }
 
-func findRoleByName(name string) (*Role, bool, error) {
+func findRoleByName(name string) (roleResult *Role, okResult bool, errResult error) {
 	return findOneByStringField(Roles, Roles.FieldBySQLName("name"), name)
 }
 
-func findPermissionByName(name string) (*Permission, bool, error) {
+func findPermissionByName(name string) (permissionResult *Permission, okResult bool, errResult error) {
 	return findOneByStringField(Permissions, Permissions.FieldBySQLName("name"), name)
 }
 
-func findOneByStringField[T any](table *gomysql.RegisteredStruct[T], field *gomysql.RegisteredStructField, value string) (*T, bool, error) {
-	items, err := table.SelectAllWithFilter(gomysql.NewFilter().KeyCmp(field, gomysql.OpEqual, value).Limit(1))
+func findOneByStringField[T any](table *gomysql.RegisteredStruct[T], field *gomysql.RegisteredStructField, value string) (tResult *T, okResult bool, errResult error) {
+	var (
+		items []*T
+		err   error
+	)
+
+	items, err = table.SelectAllWithFilter(gomysql.NewFilter().KeyCmp(field, gomysql.OpEqual, value).Limit(1))
 	if err != nil {
 		return nil, false, err
 	}
@@ -432,8 +554,13 @@ func findOneByStringField[T any](table *gomysql.RegisteredStruct[T], field *gomy
 	return items[0], true, nil
 }
 
-func writeSetupAudit(action, targetType string, targetID int, now time.Time) error {
-	uuid, err := randomUUID()
+func writeSetupAudit(action, targetType string, targetID int, now time.Time) (errResult error) {
+	var (
+		uuid string
+		err  error
+	)
+
+	uuid, err = randomUUID()
 	if err != nil {
 		return err
 	}
@@ -452,13 +579,21 @@ type initialAdminGroup struct {
 	ExternalID string
 }
 
-func initialAdminGroups() []initialAdminGroup {
-	seen := map[string]bool{}
-	groups := make([]initialAdminGroup, 0, len(config.Config.LDAP.AdminGroups)+1)
+func initialAdminGroups() (itemsResult []initialAdminGroup) {
+	var seen map[string]bool
+
+	seen = map[string]bool{}
+	var groups []initialAdminGroup
+
+	groups = make([]initialAdminGroup, 0, len(config.Config.LDAP.AdminGroups)+1)
 
 	for _, group := range append([]string{DefaultAdminGroupSlug}, config.Config.LDAP.AdminGroups...) {
-		externalID := strings.TrimSpace(group)
-		slug := slugify(externalID)
+		var externalID string
+
+		externalID = strings.TrimSpace(group)
+		var slug string
+
+		slug = slugify(externalID)
 		if slug == "" || seen[slug] {
 			continue
 		}
@@ -472,30 +607,33 @@ func initialAdminGroups() []initialAdminGroup {
 	return groups
 }
 
-func displayNameFromSlug(slug string) string {
+func displayNameFromSlug(slug string) (valueResult string) {
 	if slug == DefaultAdminGroupSlug {
 		return DefaultAdminGroupName
 	}
+	var parts []string
 
-	parts := strings.Split(slug, "-")
-	for i := range parts {
-		if parts[i] == "" {
+	parts = strings.Split(slug, "-")
+	for index := range parts {
+		if parts[index] == "" {
 			continue
 		}
-		parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		parts[index] = strings.ToUpper(parts[index][:1]) + parts[index][1:]
 	}
 	return strings.Join(parts, " ")
 }
 
-func slugify(value string) string {
+func slugify(value string) (valueResult string) {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var out strings.Builder
-	lastDash := false
+	var lastDash bool
 
-	for _, r := range value {
+	lastDash = false
+
+	for _, character := range value {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			out.WriteRune(r)
+		case character >= 'a' && character <= 'z', character >= '0' && character <= '9':
+			out.WriteRune(character)
 			lastDash = false
 		case !lastDash:
 			out.WriteByte('-')
@@ -506,10 +644,14 @@ func slugify(value string) string {
 	return strings.Trim(out.String(), "-")
 }
 
-func randomUUID() (string, error) {
+func randomUUID() (valueResult string, errResult error) {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", err
+	{
+		var err error
+
+		if _, err = rand.Read(b[:]); err != nil {
+			return "", err
+		}
 	}
 
 	b[6] = (b[6] & 0x0f) | 0x40

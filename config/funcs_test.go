@@ -9,9 +9,12 @@ import (
 
 func TestInitGeneratesDefaultConfigWhenMissing(t *testing.T) {
 	Config = Configuration{}
+	var path string
 
-	path := filepath.Join(t.TempDir(), "config.toml")
-	err := Init(path)
+	path = filepath.Join(t.TempDir(), "config.toml")
+	var err error
+
+	err = Init(path)
 	if err == nil {
 		t.Fatal("expected Init to report that a default config was created")
 	}
@@ -19,17 +22,23 @@ func TestInitGeneratesDefaultConfigWhenMissing(t *testing.T) {
 	if !strings.Contains(err.Error(), "created a default config") {
 		t.Fatalf("expected default-config error, got %v", err)
 	}
+	{
+		var statErr error
 
-	if _, statErr := os.Stat(path); statErr != nil {
-		t.Fatalf("expected generated config at %s: %v", path, statErr)
+		if _, statErr = os.Stat(path); statErr != nil {
+			t.Fatalf("expected generated config at %s: %v", path, statErr)
+		}
 	}
 }
 
 func TestInitLoadsValidConfig(t *testing.T) {
 	Config = Configuration{}
+	var path string
 
-	path := filepath.Join(t.TempDir(), "config.toml")
-	content := `
+	path = filepath.Join(t.TempDir(), "config.toml")
+	var content string
+
+	content = `
 [web_server]
 address = ":0"
 
@@ -49,12 +58,19 @@ file = "test.db"
 [proxmox]
 enabled = false
 `
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	{
+		var err error
 
-	if err := Init(path); err != nil {
-		t.Fatalf("Init returned error: %v", err)
+		if err = os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+	}
+	{
+		var err error
+
+		if err = Init(path); err != nil {
+			t.Fatalf("Init returned error: %v", err)
+		}
 	}
 
 	if Config.WebServer.Address != ":0" {

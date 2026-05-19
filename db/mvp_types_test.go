@@ -7,8 +7,8 @@ import (
 
 func TestMVPTableRegistration(t *testing.T) {
 	initTestDB(t)
-
-	registered := map[string]any{
+	var registered map[string]any
+	registered = map[string]any{
 		"Users":                   Users,
 		"CloudGroups":             CloudGroups,
 		"CloudGroupMemberships":   CloudGroupMemberships,
@@ -43,31 +43,44 @@ func TestMVPTableRegistration(t *testing.T) {
 			t.Fatalf("%s was not registered", name)
 		}
 	}
+	{
+		var (
+			count int64
+			err   error
+		)
 
-	if count, err := Organizations.Count(); err != nil {
-		t.Fatalf("count organizations: %v", err)
-	} else if count != 0 {
-		t.Fatalf("expected empty organizations table, got %d rows", count)
+		if count, err = Organizations.Count(); err != nil {
+			t.Fatalf("count organizations: %v", err)
+		} else if count != 0 {
+			t.Fatalf("expected empty organizations table, got %d rows", count)
+		}
 	}
 }
 
 func TestMVPResourceChainInsert(t *testing.T) {
 	initTestDB(t)
+	var now time.Time
 
-	now := time.Now().UTC()
+	now = time.Now().UTC()
+	var org *Organization
 
-	org := &Organization{
+	org = &Organization{
 		UUID:      "00000000-0000-0000-0000-000000000001",
 		Name:      "Lab",
 		Slug:      "lab",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := Organizations.Insert(org); err != nil {
-		t.Fatalf("insert organization: %v", err)
-	}
+	{
+		var err error
 
-	project := &Project{
+		if err = Organizations.Insert(org); err != nil {
+			t.Fatalf("insert organization: %v", err)
+		}
+	}
+	var project *Project
+
+	project = &Project{
 		UUID:           "00000000-0000-0000-0000-000000000002",
 		OrganizationID: org.ID,
 		Name:           "Admin Infrastructure",
@@ -77,11 +90,16 @@ func TestMVPResourceChainInsert(t *testing.T) {
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	if err := Projects.Insert(project); err != nil {
-		t.Fatalf("insert project: %v", err)
-	}
+	{
+		var err error
 
-	resource := &Resource{
+		if err = Projects.Insert(project); err != nil {
+			t.Fatalf("insert project: %v", err)
+		}
+	}
+	var resource *Resource
+
+	resource = &Resource{
 		UUID:         "00000000-0000-0000-0000-000000000003",
 		ProjectID:    project.ID,
 		OwnerType:    OwnerTypeProject,
@@ -93,11 +111,16 @@ func TestMVPResourceChainInsert(t *testing.T) {
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := Resources.Insert(resource); err != nil {
-		t.Fatalf("insert resource: %v", err)
-	}
+	{
+		var err error
 
-	cluster := &ProxmoxCluster{
+		if err = Resources.Insert(resource); err != nil {
+			t.Fatalf("insert resource: %v", err)
+		}
+	}
+	var cluster *ProxmoxCluster
+
+	cluster = &ProxmoxCluster{
 		UUID:      "00000000-0000-0000-0000-000000000004",
 		Name:      "lab-pve",
 		APIURL:    "https://pve.example.test:8006",
@@ -106,11 +129,16 @@ func TestMVPResourceChainInsert(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := ProxmoxClusters.Insert(cluster); err != nil {
-		t.Fatalf("insert cluster: %v", err)
-	}
+	{
+		var err error
 
-	node := &ProxmoxNode{
+		if err = ProxmoxClusters.Insert(cluster); err != nil {
+			t.Fatalf("insert cluster: %v", err)
+		}
+	}
+	var node *ProxmoxNode
+
+	node = &ProxmoxNode{
 		ClusterID:     cluster.ID,
 		Name:          "pve01",
 		Status:        "online",
@@ -119,11 +147,16 @@ func TestMVPResourceChainInsert(t *testing.T) {
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
-	if err := ProxmoxNodes.Insert(node); err != nil {
-		t.Fatalf("insert node: %v", err)
-	}
+	{
+		var err error
 
-	vm := &VirtualMachine{
+		if err = ProxmoxNodes.Insert(node); err != nil {
+			t.Fatalf("insert node: %v", err)
+		}
+	}
+	var vm *VirtualMachine
+
+	vm = &VirtualMachine{
 		ResourceID:  resource.ID,
 		ClusterID:   cluster.ID,
 		NodeID:      &node.ID,
@@ -135,11 +168,19 @@ func TestMVPResourceChainInsert(t *testing.T) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := VirtualMachines.Insert(vm); err != nil {
-		t.Fatalf("insert vm: %v", err)
-	}
+	{
+		var err error
 
-	fetched, err := VirtualMachines.Select(vm.ID)
+		if err = VirtualMachines.Insert(vm); err != nil {
+			t.Fatalf("insert vm: %v", err)
+		}
+	}
+	var (
+		fetched *VirtualMachine
+		err     error
+	)
+
+	fetched, err = VirtualMachines.Select(vm.ID)
 	if err != nil {
 		t.Fatalf("select vm: %v", err)
 	}

@@ -8,8 +8,13 @@ import (
 
 func TestEnsureUserIsIdempotent(t *testing.T) {
 	initTestDB(t)
+	var (
+		user    *User
+		created bool
+		err     error
+	)
 
-	user, created, err := EnsureUser("alice", "Alice Example", "alice@example.test", "local", "alice")
+	user, created, err = EnsureUser("alice", "Alice Example", "alice@example.test", "local", "alice")
 	if err != nil {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
@@ -19,8 +24,9 @@ func TestEnsureUserIsIdempotent(t *testing.T) {
 	if user.ID == 0 {
 		t.Fatal("expected user ID to be set")
 	}
+	var existing *User
 
-	existing, created, err := EnsureUser("alice", "Ignored", "ignored@example.test", "local", "alice")
+	existing, created, err = EnsureUser("alice", "Ignored", "ignored@example.test", "local", "alice")
 	if err != nil {
 		t.Fatalf("second EnsureUser returned error: %v", err)
 	}
@@ -34,33 +40,48 @@ func TestEnsureUserIsIdempotent(t *testing.T) {
 
 func TestCloudGroupIDsForUser(t *testing.T) {
 	initTestDB(t)
-	now := time.Now().UTC()
+	var now time.Time
 
-	user, _, err := EnsureUser("alice", "Alice Example", "alice@example.test", "local", "alice")
+	now = time.Now().UTC()
+	var (
+		user *User
+		err  error
+	)
+
+	user, _, err = EnsureUser("alice", "Alice Example", "alice@example.test", "local", "alice")
 	if err != nil {
 		t.Fatalf("EnsureUser returned error: %v", err)
 	}
+	var group *CloudGroup
 
-	group := insertTestCloudGroup(t, "Teaching Staff", "teaching-staff", now)
-	if err := CloudGroupMemberships.Insert(&CloudGroupMembership{
-		UserID:         user.ID,
-		GroupID:        group.ID,
-		MembershipRole: MembershipRoleMember,
-		CreatedAt:      now,
-	}); err != nil {
-		t.Fatalf("insert cloud group membership: %v", err)
+	group = insertTestCloudGroup(t, "Teaching Staff", "teaching-staff", now)
+	{
+		var err error
+
+		if err = CloudGroupMemberships.Insert(&CloudGroupMembership{
+			UserID:         user.ID,
+			GroupID:        group.ID,
+			MembershipRole: MembershipRoleMember,
+			CreatedAt:      now,
+		}); err != nil {
+			t.Fatalf("insert cloud group membership: %v", err)
+		}
 	}
+	var groupIDs []int
 
-	groupIDs, err := CloudGroupIDsForUser(user.ID)
+	groupIDs, err = CloudGroupIDsForUser(user.ID)
 	if err != nil {
 		t.Fatalf("CloudGroupIDsForUser returned error: %v", err)
 	}
 	if !slices.Contains(groupIDs, group.ID) {
 		t.Fatalf("expected group IDs to contain %d, got %#v", group.ID, groupIDs)
 	}
+	{
+		var err error
 
-	if err := ArchiveCloudGroup(group); err != nil {
-		t.Fatalf("ArchiveCloudGroup returned error: %v", err)
+		if err = ArchiveCloudGroup(group); err != nil {
+			t.Fatalf("ArchiveCloudGroup returned error: %v", err)
+		}
 	}
 	groupIDs, err = CloudGroupIDsForUser(user.ID)
 	if err != nil {

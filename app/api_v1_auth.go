@@ -16,46 +16,48 @@ import (
 var jwtSigningKey []byte = make([]byte, 64)
 
 func init() {
-	if _, err := rand.Read(jwtSigningKey); err != nil {
+	var err error
+
+	if _, err = rand.Read(jwtSigningKey); err != nil {
 		appLog.Errorf("failed to generate JWT signing key: %v\n", err)
 		panic(err)
 	}
 }
 
-func initPersistentJWTSigningKey() error {
-	dbPath := config.Config.Database.File
+// initPersistentJWTSigningKey loads or creates the JWT signing key beside the configured database.
+func initPersistentJWTSigningKey() (err error) {
+	var dbPath string = config.Config.Database.File
 	if dbPath == "" {
-		return nil
+		return
 	}
 
-	keyDir := filepath.Dir(dbPath)
+	var keyDir string = filepath.Dir(dbPath)
 	if keyDir == "" || keyDir == "." {
 		keyDir = "."
 	}
-	keyPath := filepath.Join(keyDir, ".organesson-session-key")
-	legacyKeyPath := filepath.Join(keyDir, ".pve-acl-session-key")
 
-	if key, err := os.ReadFile(keyPath); err == nil && len(key) >= 32 {
+	var keyPath string = filepath.Join(keyDir, ".organesson-session-key")
+
+	var key []byte
+	if key, err = os.ReadFile(keyPath); err == nil && len(key) >= 32 {
 		jwtSigningKey = key
-		return nil
-	}
-	if key, err := os.ReadFile(legacyKeyPath); err == nil && len(key) >= 32 {
-		jwtSigningKey = key
-		_ = os.WriteFile(keyPath, key, 0600)
-		return nil
+		return
 	}
 
-	key := make([]byte, 64)
-	if _, err := rand.Read(key); err != nil {
+	key = make([]byte, 64)
+	if _, err = rand.Read(key); err != nil {
 		return fmt.Errorf("generate session key: %w", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+
+	if err = os.WriteFile(keyPath, key, 0600); err != nil {
 		return fmt.Errorf("write session key: %w", err)
 	}
+
 	jwtSigningKey = key
-	return nil
+	return
 }
 
+// postLogin authenticates a user and stores the session token in a site-wide cookie.
 func postLogin(c *fiber.Ctx) (err error) {
 	var (
 		username, password, redirect string = c.FormValue("username"), c.FormValue("password"), c.FormValue("redirect")
@@ -97,6 +99,7 @@ func postLogin(c *fiber.Ctx) (err error) {
 	return
 }
 
+// postLogout clears the current session cookie and logs out the authenticated user.
 func postLogout(c *fiber.Ctx) (err error) {
 	var user *auth.AuthUser
 	if user = auth.IsAuthenticated(c, jwtSigningKey); user != nil {
@@ -114,6 +117,7 @@ func postLogout(c *fiber.Ctx) (err error) {
 	return
 }
 
+// getStatus reports whether the current request has a valid authenticated session.
 func getStatus(c *fiber.Ctx) (err error) {
 	var user *auth.AuthUser
 	if user = auth.IsAuthenticated(c, jwtSigningKey); user != nil {

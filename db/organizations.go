@@ -15,7 +15,8 @@ type OrganizationCreateInput struct {
 	ParentOrgID *int
 }
 
-func CreateOrganization(input OrganizationCreateInput) (*Organization, error) {
+// CreateOrganization creates an organization from input.
+func CreateOrganization(input OrganizationCreateInput) (organizationResult *Organization, errResult error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Slug = slugify(input.Slug)
 	if input.Slug == "" {
@@ -29,7 +30,12 @@ func CreateOrganization(input OrganizationCreateInput) (*Organization, error) {
 		return nil, fmt.Errorf("organization slug is required")
 	}
 	if input.ParentOrgID == nil {
-		roots, err := rootOrganizations()
+		var (
+			roots []*Organization
+			err   error
+		)
+
+		roots, err = rootOrganizations()
 		if err != nil {
 			return nil, err
 		}
@@ -37,15 +43,28 @@ func CreateOrganization(input OrganizationCreateInput) (*Organization, error) {
 			return nil, fmt.Errorf("root organization already exists")
 		}
 	}
+	{
+		var (
+			existing *Organization
+			found    bool
+			err      error
+		)
 
-	if existing, found, err := findOrganizationBySlug(input.Slug); err != nil || found {
-		if err != nil {
-			return nil, err
+		if existing, found, err = findOrganizationBySlug(input.Slug); err != nil || found {
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("organization slug %q already exists", existing.Slug)
 		}
-		return nil, fmt.Errorf("organization slug %q already exists", existing.Slug)
 	}
 	if input.ParentOrgID != nil {
-		parent, found, err := GetOrganizationByID(*input.ParentOrgID)
+		var (
+			parent *Organization
+			found  bool
+			err    error
+		)
+
+		parent, found, err = GetOrganizationByID(*input.ParentOrgID)
 		if err != nil {
 			return nil, err
 		}
@@ -53,14 +72,21 @@ func CreateOrganization(input OrganizationCreateInput) (*Organization, error) {
 			return nil, fmt.Errorf("parent organization was not found")
 		}
 	}
+	var (
+		uuid string
+		err  error
+	)
 
-	uuid, err := randomUUID()
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, err
 	}
+	var now time.Time
 
-	now := time.Now().UTC()
-	org := &Organization{
+	now = time.Now().UTC()
+	var org *Organization
+
+	org = &Organization{
 		UUID:        uuid,
 		Name:        input.Name,
 		Slug:        input.Slug,
@@ -69,36 +95,52 @@ func CreateOrganization(input OrganizationCreateInput) (*Organization, error) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	{
+		var err error
 
-	if err := Organizations.Insert(org); err != nil {
-		return nil, err
+		if err = Organizations.Insert(org); err != nil {
+			return nil, err
+		}
 	}
 
 	return org, nil
 }
 
-func ListOrganizations() ([]*Organization, error) {
+// ListOrganizations lists active organizations.
+func ListOrganizations() (itemsResult []*Organization, errResult error) {
 	return Organizations.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(Organizations.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
-func ActiveRootOrganizationExists() (bool, error) {
-	roots, err := rootOrganizations()
+// ActiveRootOrganizationExists reports whether an active root organization exists.
+func ActiveRootOrganizationExists() (okResult bool, errResult error) {
+	var (
+		roots []*Organization
+		err   error
+	)
+
+	roots, err = rootOrganizations()
 	if err != nil {
 		return false, err
 	}
 	return len(roots) > 0, nil
 }
 
-func rootOrganizations() ([]*Organization, error) {
+func rootOrganizations() (itemsResult []*Organization, errResult error) {
 	return Organizations.SelectAllWithFilter(gomysql.NewFilter().
 		KeyCmp(Organizations.FieldBySQLName("parent_org_id"), gomysql.OpIsNull, nil).
 		And().
 		KeyCmp(Organizations.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
 }
 
-func GetOrganizationByID(id int) (*Organization, bool, error) {
-	org, err := Organizations.Select(id)
+// GetOrganizationByID returns an organization by id.
+func GetOrganizationByID(id int) (organizationResult *Organization, okResult bool, errResult error) {
+	var (
+		org *Organization
+		err error
+	)
+
+	org, err = Organizations.Select(id)
 	if err != nil {
 		return nil, false, err
 	}
@@ -108,11 +150,13 @@ func GetOrganizationByID(id int) (*Organization, bool, error) {
 	return org, true, nil
 }
 
-func GetOrganizationBySlug(slug string) (*Organization, bool, error) {
+// GetOrganizationBySlug returns organization by slug.
+func GetOrganizationBySlug(slug string) (organizationResult *Organization, okResult bool, errResult error) {
 	return findOrganizationBySlug(strings.TrimSpace(slug))
 }
 
-func UpdateOrganization(org *Organization) error {
+// UpdateOrganization updates an organization.
+func UpdateOrganization(org *Organization) (errResult error) {
 	org.Name = strings.TrimSpace(org.Name)
 	org.Slug = slugify(org.Slug)
 	if org.Name == "" {
@@ -129,8 +173,15 @@ func UpdateOrganization(org *Organization) error {
 	return Organizations.Update(org)
 }
 
-func DeleteOrganization(orgID int) error {
-	org, found, err := GetOrganizationByID(orgID)
+// DeleteOrganization deletes an empty organization.
+func DeleteOrganization(orgID int) (errResult error) {
+	var (
+		org   *Organization
+		found bool
+		err   error
+	)
+
+	org, found, err = GetOrganizationByID(orgID)
 	if err != nil {
 		return err
 	}
@@ -140,35 +191,48 @@ func DeleteOrganization(orgID int) error {
 	return ArchiveOrganization(org)
 }
 
-func ArchiveOrganization(org *Organization) error {
+// ArchiveOrganization archives an organization.
+func ArchiveOrganization(org *Organization) (errResult error) {
 	if org.ArchivedAt == nil {
-		now := time.Now().UTC()
+		var now time.Time
+
+		now = time.Now().UTC()
 		org.ArchivedAt = &now
 	}
 	org.UpdatedAt = time.Now().UTC()
 	return Organizations.Update(org)
 }
 
-func OrganizationMembershipsForOrganization(orgID int) ([]*OrganizationMembership, error) {
+// OrganizationMembershipsForOrganization returns memberships for an organization.
+func OrganizationMembershipsForOrganization(orgID int) (itemsResult []*OrganizationMembership, errResult error) {
 	return OrganizationMemberships.SelectAllWithFilter(
 		gomysql.NewFilter().KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID),
 	)
 }
 
-func EnsureOrganizationMembership(orgID int, subjectType ProjectMemberSubject, subjectID int, role MembershipRole) (bool, error) {
-	filter := gomysql.NewFilter().
+// EnsureOrganizationMembership ensures organization membership exists.
+func EnsureOrganizationMembership(orgID int, subjectType ProjectMemberSubject, subjectID int, role MembershipRole) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID).
 		And().
 		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
 		And().
 		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+	var (
+		existing []*OrganizationMembership
+		err      error
+	)
 
-	existing, err := OrganizationMemberships.SelectAllWithFilter(filter.Limit(1))
+	existing, err = OrganizationMemberships.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return false, err
 	}
 	if len(existing) > 0 {
-		membership := existing[0]
+		var membership *OrganizationMembership
+
+		membership = existing[0]
 		if membership.MembershipRole != role {
 			membership.MembershipRole = role
 			return false, OrganizationMemberships.Update(membership)
@@ -185,21 +249,37 @@ func EnsureOrganizationMembership(orgID int, subjectType ProjectMemberSubject, s
 	})
 }
 
-func RemoveOrganizationMembership(membershipID int) error {
+// RemoveOrganizationMembership removes organization membership.
+func RemoveOrganizationMembership(membershipID int) (errResult error) {
 	return OrganizationMemberships.Delete(membershipID)
 }
 
-func EnsureOrganizationMemberRoleBinding(orgID int, subjectType ProjectMemberSubject, subjectID int, roleID int) error {
-	if err := RemoveOrganizationMemberAccessRoles(orgID, subjectType, subjectID); err != nil {
-		return err
+// EnsureOrganizationMemberRoleBinding ensures organization member role binding exists.
+func EnsureOrganizationMemberRoleBinding(orgID int, subjectType ProjectMemberSubject, subjectID int, roleID int) (errResult error) {
+	{
+		var err error
+
+		if err = RemoveOrganizationMemberAccessRoles(orgID, subjectType, subjectID); err != nil {
+			return err
+		}
 	}
-	scopeID := orgID
-	_, err := ensureRoleBinding(roleID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeOrg, &scopeID, time.Now().UTC())
+	var scopeID int
+
+	scopeID = orgID
+	var err error
+
+	_, err = ensureRoleBinding(roleID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeOrg, &scopeID, time.Now().UTC())
 	return err
 }
 
-func RemoveOrganizationMemberAccessRoles(orgID int, subjectType ProjectMemberSubject, subjectID int) error {
-	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
+// RemoveOrganizationMemberAccessRoles removes organization member access roles.
+func RemoveOrganizationMemberAccessRoles(orgID int, subjectType ProjectMemberSubject, subjectID int) (errResult error) {
+	var (
+		bindings []*RoleBinding
+		err      error
+	)
+
+	bindings, err = roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return err
 	}
@@ -207,20 +287,35 @@ func RemoveOrganizationMemberAccessRoles(orgID int, subjectType ProjectMemberSub
 		if binding.ScopeType != RoleBindingScopeOrg || binding.ScopeID == nil || *binding.ScopeID != orgID {
 			continue
 		}
-		if err := RoleBindings.Delete(binding.ID); err != nil {
-			return err
+		{
+			var err error
+
+			if err = RoleBindings.Delete(binding.ID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func SubjectInOrganizationOrAncestor(orgID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
-	ancestorIDs, err := OrganizationAncestorIDs(orgID)
+// SubjectInOrganizationOrAncestor reports whether a subject belongs to an organization or ancestor.
+func SubjectInOrganizationOrAncestor(orgID int, subjectType ProjectMemberSubject, subjectID int) (okResult bool, errResult error) {
+	var (
+		ancestorIDs []int
+		err         error
+	)
+
+	ancestorIDs, err = OrganizationAncestorIDs(orgID)
 	if err != nil {
 		return false, err
 	}
 	for _, ancestorID := range ancestorIDs {
-		memberships, err := OrganizationMembershipsForOrganization(ancestorID)
+		var (
+			memberships []*OrganizationMembership
+			err         error
+		)
+
+		memberships, err = OrganizationMembershipsForOrganization(ancestorID)
 		if err != nil {
 			return false, err
 		}
@@ -233,12 +328,21 @@ func SubjectInOrganizationOrAncestor(orgID int, subjectType ProjectMemberSubject
 	return false, nil
 }
 
-func SubjectInProjectOrAncestor(projectID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
-	project, found, err := GetProjectByID(projectID)
+// SubjectInProjectOrAncestor reports whether a subject belongs to a project or its organization ancestors.
+func SubjectInProjectOrAncestor(projectID int, subjectType ProjectMemberSubject, subjectID int) (okResult bool, errResult error) {
+	var (
+		project *Project
+		found   bool
+		err     error
+	)
+
+	project, found, err = GetProjectByID(projectID)
 	if err != nil || !found {
 		return false, err
 	}
-	memberships, err := ProjectMembershipsForProject(projectID)
+	var memberships []*ProjectMembership
+
+	memberships, err = ProjectMembershipsForProject(projectID)
 	if err != nil {
 		return false, err
 	}
@@ -250,10 +354,17 @@ func SubjectInProjectOrAncestor(projectID int, subjectType ProjectMemberSubject,
 	return SubjectInOrganizationOrAncestor(project.OrganizationID, subjectType, subjectID)
 }
 
-func OrganizationAncestorIDs(orgID int) ([]int, error) {
-	ancestors := []int{}
-	seen := map[int]bool{}
-	currentID := orgID
+// OrganizationAncestorIDs returns an organization id and its ancestor ids.
+func OrganizationAncestorIDs(orgID int) (itemsResult []int, errResult error) {
+	var ancestors []int
+
+	ancestors = []int{}
+	var seen map[int]bool
+
+	seen = map[int]bool{}
+	var currentID int
+
+	currentID = orgID
 
 	for currentID > 0 {
 		if seen[currentID] {
@@ -261,8 +372,12 @@ func OrganizationAncestorIDs(orgID int) ([]int, error) {
 		}
 		seen[currentID] = true
 		ancestors = append(ancestors, currentID)
+		var (
+			org *Organization
+			err error
+		)
 
-		org, err := Organizations.Select(currentID)
+		org, err = Organizations.Select(currentID)
 		if err != nil {
 			return nil, err
 		}
@@ -275,16 +390,29 @@ func OrganizationAncestorIDs(orgID int) ([]int, error) {
 	return ancestors, nil
 }
 
-func ProjectOrganizationAncestorIDs(projectID int) ([]int, error) {
-	project, found, err := GetProjectByID(projectID)
+// ProjectOrganizationAncestorIDs returns ancestor organization ids for a project.
+func ProjectOrganizationAncestorIDs(projectID int) (itemsResult []int, errResult error) {
+	var (
+		project *Project
+		found   bool
+		err     error
+	)
+
+	project, found, err = GetProjectByID(projectID)
 	if err != nil || !found {
 		return nil, err
 	}
 	return OrganizationAncestorIDs(project.OrganizationID)
 }
 
-func ResourceOrganizationAncestorIDs(resourceID int) ([]int, error) {
-	resource, err := Resources.Select(resourceID)
+// ResourceOrganizationAncestorIDs returns ancestor organization ids for a resource.
+func ResourceOrganizationAncestorIDs(resourceID int) (itemsResult []int, errResult error) {
+	var (
+		resource *Resource
+		err      error
+	)
+
+	resource, err = Resources.Select(resourceID)
 	if err != nil || resource == nil {
 		return nil, err
 	}

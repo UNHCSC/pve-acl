@@ -6,21 +6,29 @@ import (
 	"github.com/z46-dev/gomysql"
 )
 
-func ResourceOwnersForResource(resourceID int) ([]*ResourceOwner, error) {
+// ResourceOwnersForResource returns ownership records for a resource.
+func ResourceOwnersForResource(resourceID int) (itemsResult []*ResourceOwner, errResult error) {
 	return ResourceOwners.SelectAllWithFilter(
 		gomysql.NewFilter().KeyCmp(ResourceOwners.FieldBySQLName("resource_id"), gomysql.OpEqual, resourceID),
 	)
 }
 
-func EnsureResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID int) (bool, error) {
-	filter := gomysql.NewFilter().
+// EnsureResourceOwner ensures resource owner exists.
+func EnsureResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID int) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(ResourceOwners.FieldBySQLName("resource_id"), gomysql.OpEqual, resourceID).
 		And().
 		KeyCmp(ResourceOwners.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
 		And().
 		KeyCmp(ResourceOwners.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+	var (
+		existing []*ResourceOwner
+		err      error
+	)
 
-	existing, err := ResourceOwners.SelectAllWithFilter(filter.Limit(1))
+	existing, err = ResourceOwners.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return false, err
 	}
@@ -36,8 +44,11 @@ func EnsureResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID
 	})
 }
 
-func RemoveResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID int) error {
-	_, err := ResourceOwners.DeleteWithFilter(gomysql.NewFilter().
+// RemoveResourceOwner removes resource owner.
+func RemoveResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID int) (errResult error) {
+	var err error
+
+	_, err = ResourceOwners.DeleteWithFilter(gomysql.NewFilter().
 		KeyCmp(ResourceOwners.FieldBySQLName("resource_id"), gomysql.OpEqual, resourceID).
 		And().
 		KeyCmp(ResourceOwners.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
@@ -46,15 +57,24 @@ func RemoveResourceOwner(resourceID int, subjectType OwnerSubjectType, subjectID
 	return err
 }
 
-func EnsureResourceUserAccess(resourceID int, subjectType RoleBindingSubject, subjectID int) error {
-	role, found, err := GetRoleByName(DefaultResourceUserRoleName)
+// EnsureResourceUserAccess ensures resource user access exists.
+func EnsureResourceUserAccess(resourceID int, subjectType RoleBindingSubject, subjectID int) (errResult error) {
+	var (
+		role  *Role
+		found bool
+		err   error
+	)
+
+	role, found, err = GetRoleByName(DefaultResourceUserRoleName)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return nil
 	}
-	scopeID := resourceID
+	var scopeID int
+
+	scopeID = resourceID
 	_, err = ensureRoleBinding(role.ID, subjectType, subjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC())
 	return err
 }

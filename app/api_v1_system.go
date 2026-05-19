@@ -5,64 +5,76 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func getSystemSummary(c *fiber.Ctx) error {
-	dbUser := currentDBUser(c)
+// getSystemSummary returns dashboard counts and capabilities for the current user.
+func getSystemSummary(c *fiber.Ctx) (err error) {
+	var (
+		dbUser            *db.User = currentDBUser(c)
+		groupIDs          []int
+		canCreateProjects bool
+		canManageUsers    bool
+		canManageGroups   bool
+		canManageRoles    bool
+		canManageOrgs     bool
+		counts            fiber.Map
+	)
+
 	if dbUser == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		err = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "authentication required",
 		})
+		return
 	}
 
-	groupIDs, err := db.CloudGroupIDsForUser(dbUser.ID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if groupIDs, err = db.CloudGroupIDsForUser(dbUser.ID); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load current groups",
 		})
+		return
 	}
 
-	canCreateProjects, err := currentUserCanCreateProjects(c)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if canCreateProjects, err = currentUserCanCreateProjects(c); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check project permissions",
 		})
+		return
 	}
-	canManageUsers, err := currentUserCan(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if canManageUsers, err = currentUserCan(c, db.PermissionUserManage, db.RoleBindingScopeGlobal, nil); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check user permissions",
 		})
+		return
 	}
-	canManageGroups, err := currentUserCan(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if canManageGroups, err = currentUserCan(c, db.PermissionGroupManage, db.RoleBindingScopeGlobal, nil); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check group permissions",
 		})
+		return
 	}
-	canManageRoles, err := currentUserCan(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if canManageRoles, err = currentUserCan(c, db.PermissionRoleManage, db.RoleBindingScopeGlobal, nil); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check role permissions",
 		})
+		return
 	}
-	canManageOrgs, err := currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if canManageOrgs, err = currentUserCan(c, db.PermissionOrgManage, db.RoleBindingScopeGlobal, nil); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to check organization permissions",
 		})
+		return
 	}
-	counts, err := systemCounts(c, fiber.Map{
+	if counts, err = systemCounts(c, fiber.Map{
 		"canManageUsers":  canManageUsers,
 		"canManageGroups": canManageGroups,
 		"canManageRoles":  canManageRoles,
 		"canManageOrgs":   canManageOrgs,
-	})
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	}); err != nil {
+		err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to load system summary",
 		})
+		return
 	}
 
-	return c.JSON(fiber.Map{
+	err = c.JSON(fiber.Map{
 		"counts": counts,
 		"currentUser": fiber.Map{
 			"id":          dbUser.ID,
@@ -82,14 +94,20 @@ func getSystemSummary(c *fiber.Ctx) error {
 			"canViewUsers":      canManageUsers,
 		},
 	})
+	return
 }
 
-func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (fiber.Map, error) {
-	counts := fiber.Map{}
+// systemCounts builds visible dashboard counts based on current user capabilities.
+func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (counts fiber.Map, err error) {
+	var (
+		projectCount int64
+		orgCount     int64
+	)
 
-	projectCount, orgCount, err := visibleDirectoryCounts(c)
-	if err != nil {
-		return nil, err
+	counts = fiber.Map{}
+
+	if projectCount, orgCount, err = visibleDirectoryCounts(c); err != nil {
+		return
 	}
 	counts["projects"] = projectCount
 	counts["organizations"] = orgCount
@@ -97,14 +115,14 @@ func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (fiber.Map, error) {
 	counts["users"] = int64(0)
 	if capabilities["canManageUsers"] == true {
 		if counts["users"], err = db.Users.Count(); err != nil {
-			return nil, err
+			return
 		}
 	}
 
 	counts["groups"] = int64(0)
 	if capabilities["canManageGroups"] == true {
 		if counts["groups"], err = db.CloudGroups.Count(); err != nil {
-			return nil, err
+			return
 		}
 	}
 
@@ -113,69 +131,80 @@ func systemCounts(c *fiber.Ctx, capabilities fiber.Map) (fiber.Map, error) {
 	counts["roleBindings"] = int64(0)
 	if capabilities["canManageRoles"] == true {
 		if counts["roles"], err = db.Roles.Count(); err != nil {
-			return nil, err
+			return
 		}
 		if counts["permissions"], err = db.Permissions.Count(); err != nil {
-			return nil, err
+			return
 		}
 		if counts["roleBindings"], err = db.RoleBindings.Count(); err != nil {
-			return nil, err
+			return
 		}
 	}
 
 	counts["auditEvents"] = int64(0)
 	if currentUserIsSiteAdmin(c) {
 		if counts["auditEvents"], err = db.AuditEvents.Count(); err != nil {
-			return nil, err
+			return
 		}
 	}
 
-	return counts, nil
+	return
 }
 
-func visibleDirectoryCounts(c *fiber.Ctx) (int64, int64, error) {
-	orgs, err := db.ListOrganizations()
-	if err != nil {
-		return 0, 0, err
+// visibleDirectoryCounts counts organizations and projects visible to the current user.
+func visibleDirectoryCounts(c *fiber.Ctx) (projectCount int64, orgCount int64, err error) {
+	var (
+		orgs            []*db.Organization
+		projects        []*db.Project
+		visibleProjects []fiber.Map
+		visibleOrgs     map[int]bool
+		allowed         bool
+		allowErr        error
+	)
+
+	if orgs, err = db.ListOrganizations(); err != nil {
+		return
 	}
-	projects, err := db.ListProjects()
-	if err != nil {
-		return 0, 0, err
+	if projects, err = db.ListProjects(); err != nil {
+		return
 	}
 
-	visibleProjects := make([]fiber.Map, 0, len(projects))
+	visibleProjects = make([]fiber.Map, 0, len(projects))
 	for _, project := range projects {
-		allowed, allowErr := currentUserCanViewProject(c, project)
-		if allowErr != nil {
-			return 0, 0, allowErr
+		if allowed, allowErr = currentUserCanViewProject(c, project); allowErr != nil {
+			err = allowErr
+			return
 		}
 		if allowed {
 			visibleProjects = append(visibleProjects, fiber.Map{"organization_id": project.OrganizationID})
 		}
 	}
 
-	visibleOrgs, err := visibleOrganizationIDs(c, orgs, visibleProjects)
-	if err != nil {
-		return 0, 0, err
+	if visibleOrgs, err = visibleOrganizationIDs(c, orgs, visibleProjects); err != nil {
+		return
 	}
-	return int64(len(visibleProjects)), int64(len(visibleOrgs)), nil
+	projectCount = int64(len(visibleProjects))
+	orgCount = int64(len(visibleOrgs))
+	return
 }
 
-func currentUserCanCreateProjects(c *fiber.Ctx) (bool, error) {
-	allowed, err := currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
+// currentUserCanCreateProjects reports whether the current user can create any project.
+func currentUserCanCreateProjects(c *fiber.Ctx) (allowed bool, err error) {
+	var orgs []*db.Organization
+
+	allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeGlobal, nil)
 	if err != nil || allowed {
-		return allowed, err
+		return
 	}
 
-	orgs, err := db.ListOrganizations()
-	if err != nil {
-		return false, err
+	if orgs, err = db.ListOrganizations(); err != nil {
+		return
 	}
 	for _, org := range orgs {
 		allowed, err = currentUserCan(c, db.PermissionProjectManage, db.RoleBindingScopeOrg, &org.ID)
 		if err != nil || allowed {
-			return allowed, err
+			return
 		}
 	}
-	return false, nil
+	return
 }

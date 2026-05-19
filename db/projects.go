@@ -16,7 +16,8 @@ type ProjectCreateInput struct {
 	ProjectType    ProjectType
 }
 
-func CreateProject(input ProjectCreateInput) (*Project, error) {
+// CreateProject creates a project from input.
+func CreateProject(input ProjectCreateInput) (projectResult *Project, errResult error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Slug = slugify(input.Slug)
 	if input.Slug == "" {
@@ -31,7 +32,13 @@ func CreateProject(input ProjectCreateInput) (*Project, error) {
 	}
 
 	if input.OrganizationID == 0 {
-		org, found, err := findOrganizationBySlug(DefaultRootOrganizationSlug)
+		var (
+			org   *Organization
+			found bool
+			err   error
+		)
+
+		org, found, err = findOrganizationBySlug(DefaultRootOrganizationSlug)
 		if err != nil {
 			return nil, err
 		}
@@ -40,26 +47,48 @@ func CreateProject(input ProjectCreateInput) (*Project, error) {
 		}
 		input.OrganizationID = org.ID
 	}
-	if org, found, err := GetOrganizationByID(input.OrganizationID); err != nil {
-		return nil, err
-	} else if !found || org.ArchivedAt != nil {
-		return nil, fmt.Errorf("organization was not found")
-	}
+	{
+		var (
+			org   *Organization
+			found bool
+			err   error
+		)
 
-	if existing, found, err := findProjectBySlug(input.Slug); err != nil || found {
-		if err != nil {
+		if org, found, err = GetOrganizationByID(input.OrganizationID); err != nil {
 			return nil, err
+		} else if !found || org.ArchivedAt != nil {
+			return nil, fmt.Errorf("organization was not found")
 		}
-		return nil, fmt.Errorf("project slug %q already exists", existing.Slug)
 	}
+	{
+		var (
+			existing *Project
+			found    bool
+			err      error
+		)
 
-	uuid, err := randomUUID()
+		if existing, found, err = findProjectBySlug(input.Slug); err != nil || found {
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("project slug %q already exists", existing.Slug)
+		}
+	}
+	var (
+		uuid string
+		err  error
+	)
+
+	uuid, err = randomUUID()
 	if err != nil {
 		return nil, err
 	}
+	var now time.Time
 
-	now := time.Now().UTC()
-	project := &Project{
+	now = time.Now().UTC()
+	var project *Project
+
+	project = &Project{
 		UUID:           uuid,
 		OrganizationID: input.OrganizationID,
 		Name:           input.Name,
@@ -70,24 +99,35 @@ func CreateProject(input ProjectCreateInput) (*Project, error) {
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
+	{
+		var err error
 
-	if err := Projects.Insert(project); err != nil {
-		return nil, err
+		if err = Projects.Insert(project); err != nil {
+			return nil, err
+		}
 	}
 
 	return project, nil
 }
 
-func ListProjects() ([]*Project, error) {
+// ListProjects lists all projects.
+func ListProjects() (itemsResult []*Project, errResult error) {
 	return Projects.SelectAll()
 }
 
-func GetProjectBySlug(slug string) (*Project, bool, error) {
+// GetProjectBySlug returns project by slug.
+func GetProjectBySlug(slug string) (projectResult *Project, okResult bool, errResult error) {
 	return findProjectBySlug(slug)
 }
 
-func GetProjectByID(id int) (*Project, bool, error) {
-	project, err := Projects.Select(id)
+// GetProjectByID returns a project by id.
+func GetProjectByID(id int) (projectResult *Project, okResult bool, errResult error) {
+	var (
+		project *Project
+		err     error
+	)
+
+	project, err = Projects.Select(id)
 	if err != nil {
 		return nil, false, err
 	}
@@ -97,21 +137,29 @@ func GetProjectByID(id int) (*Project, bool, error) {
 	return project, true, nil
 }
 
-func ProjectMembershipsForProject(projectID int) ([]*ProjectMembership, error) {
+// ProjectMembershipsForProject returns all memberships for a project.
+func ProjectMembershipsForProject(projectID int) (itemsResult []*ProjectMembership, errResult error) {
 	return ProjectMemberships.SelectAllWithFilter(
 		gomysql.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID),
 	)
 }
 
-func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, subjectID int) (bool, error) {
-	filter := gomysql.NewFilter().
+// EnsureProjectMembership ensures project membership exists.
+func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, subjectID int) (okResult bool, errResult error) {
+	var filter *gomysql.Filter
+
+	filter = gomysql.NewFilter().
 		KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID).
 		And().
 		KeyCmp(ProjectMemberships.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
 		And().
 		KeyCmp(ProjectMemberships.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+	var (
+		existing []*ProjectMembership
+		err      error
+	)
 
-	existing, err := ProjectMemberships.SelectAllWithFilter(filter.Limit(1))
+	existing, err = ProjectMemberships.SelectAllWithFilter(filter.Limit(1))
 	if err != nil {
 		return false, err
 	}
@@ -127,11 +175,13 @@ func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, su
 	})
 }
 
-func RemoveProjectMembership(membershipID int) error {
+// RemoveProjectMembership removes project membership.
+func RemoveProjectMembership(membershipID int) (errResult error) {
 	return ProjectMemberships.Delete(membershipID)
 }
 
-func UpdateProject(project *Project) error {
+// UpdateProject updates a project.
+func UpdateProject(project *Project) (errResult error) {
 	project.Name = strings.TrimSpace(project.Name)
 	project.Slug = slugify(project.Slug)
 	if project.Name == "" {
@@ -148,21 +198,27 @@ func UpdateProject(project *Project) error {
 	return Projects.Update(project)
 }
 
-func DeleteProject(projectID int) error {
-	if _, err := ProjectMemberships.DeleteWithFilter(
-		gomysql.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID),
-	); err != nil {
-		return err
+// DeleteProject deletes a project and its memberships.
+func DeleteProject(projectID int) (errResult error) {
+	{
+		var err error
+
+		if _, err = ProjectMemberships.DeleteWithFilter(
+			gomysql.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID),
+		); err != nil {
+			return err
+		}
 	}
 
 	return Projects.Delete(projectID)
 }
 
-func findProjectBySlug(slug string) (*Project, bool, error) {
+func findProjectBySlug(slug string) (projectResult *Project, okResult bool, errResult error) {
 	return findOneByStringField(Projects, Projects.FieldBySQLName("slug"), slug)
 }
 
-func ProjectRoleName(role ProjectRole) string {
+// ProjectRoleName returns the system role name for a project role.
+func ProjectRoleName(role ProjectRole) (valueResult string) {
 	switch role {
 	case ProjectRoleOperator:
 		return DefaultProjectOperatorRoleName
@@ -177,7 +233,8 @@ func ProjectRoleName(role ProjectRole) string {
 	}
 }
 
-func ProjectRoleForRoleName(name string) (ProjectRole, bool) {
+// ProjectRoleForRoleName resolves a project role from a role name.
+func ProjectRoleForRoleName(name string) (projectRoleResult ProjectRole, okResult bool) {
 	switch name {
 	case DefaultProjectViewerRoleName:
 		return ProjectRoleViewer, true
@@ -194,8 +251,15 @@ func ProjectRoleForRoleName(name string) (ProjectRole, bool) {
 	}
 }
 
-func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int, projectRole ProjectRole) error {
-	role, found, err := GetRoleByName(ProjectRoleName(projectRole))
+// EnsureProjectMemberAccessRole ensures project member access role exists.
+func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int, projectRole ProjectRole) (errResult error) {
+	var (
+		role  *Role
+		found bool
+		err   error
+	)
+
+	role, found, err = GetRoleByName(ProjectRoleName(projectRole))
 	if err != nil {
 		return err
 	}
@@ -205,17 +269,32 @@ func EnsureProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubje
 	return EnsureProjectMemberRoleBinding(projectID, subjectType, subjectID, role.ID)
 }
 
-func EnsureProjectMemberRoleBinding(projectID int, subjectType ProjectMemberSubject, subjectID int, roleID int) error {
-	if err := RemoveProjectMemberAccessRoles(projectID, subjectType, subjectID); err != nil {
-		return err
+// EnsureProjectMemberRoleBinding ensures project member role binding exists.
+func EnsureProjectMemberRoleBinding(projectID int, subjectType ProjectMemberSubject, subjectID int, roleID int) (errResult error) {
+	{
+		var err error
+
+		if err = RemoveProjectMemberAccessRoles(projectID, subjectType, subjectID); err != nil {
+			return err
+		}
 	}
-	scopeID := projectID
-	_, err := ensureRoleBinding(roleID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeProject, &scopeID, time.Now().UTC())
+	var scopeID int
+
+	scopeID = projectID
+	var err error
+
+	_, err = ensureRoleBinding(roleID, RoleBindingSubject(subjectType), subjectID, RoleBindingScopeProject, &scopeID, time.Now().UTC())
 	return err
 }
 
-func RemoveProjectMemberAccessRoles(projectID int, subjectType ProjectMemberSubject, subjectID int) error {
-	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
+// RemoveProjectMemberAccessRoles removes project member access roles.
+func RemoveProjectMemberAccessRoles(projectID int, subjectType ProjectMemberSubject, subjectID int) (errResult error) {
+	var (
+		bindings []*RoleBinding
+		err      error
+	)
+
+	bindings, err = roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return err
 	}
@@ -223,33 +302,56 @@ func RemoveProjectMemberAccessRoles(projectID int, subjectType ProjectMemberSubj
 		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID {
 			continue
 		}
-		if err := RoleBindings.Delete(binding.ID); err != nil {
-			return err
+		{
+			var err error
+
+			if err = RoleBindings.Delete(binding.ID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func ProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int) (ProjectRole, bool, error) {
-	bindings, err := roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
+// ProjectMemberAccessRole returns the best access role assigned to a project member.
+func ProjectMemberAccessRole(projectID int, subjectType ProjectMemberSubject, subjectID int) (projectRoleResult ProjectRole, okResult bool, errResult error) {
+	var (
+		bindings []*RoleBinding
+		err      error
+	)
+
+	bindings, err = roleBindingsForSubject(RoleBindingSubject(subjectType), subjectID)
 	if err != nil {
 		return ProjectRoleViewer, false, err
 	}
+	var best ProjectRole
 
-	best := ProjectRoleViewer
-	found := false
+	best = ProjectRoleViewer
+	var found bool
+
+	found = false
 	for _, binding := range bindings {
 		if binding.ScopeType != RoleBindingScopeProject || binding.ScopeID == nil || *binding.ScopeID != projectID {
 			continue
 		}
-		role, err := Roles.Select(binding.RoleID)
+		var (
+			role *Role
+			err  error
+		)
+
+		role, err = Roles.Select(binding.RoleID)
 		if err != nil {
 			return ProjectRoleViewer, false, err
 		}
 		if role == nil {
 			continue
 		}
-		projectRole, ok := ProjectRoleForRoleName(role.Name)
+		var (
+			projectRole ProjectRole
+			ok          bool
+		)
+
+		projectRole, ok = ProjectRoleForRoleName(role.Name)
 		if !ok {
 			continue
 		}
