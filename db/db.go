@@ -12,6 +12,7 @@ import (
 
 var (
 	dbLog                          *golog.Logger
+	Driver                         *gomysql.Driver
 	LocalUsers                     *gomysql.RegisteredStruct[LocalUser]
 	LocalGroups                    *gomysql.RegisteredStruct[LocalGroup]
 	ProxmoxAssets                  *gomysql.RegisteredStruct[ProxmoxAsset]
@@ -52,7 +53,7 @@ var (
 func Init(parentLog *golog.Logger) (err error) {
 	dbLog = parentLog.SpawnChild().Prefix("[DB]", golog.BoldGreen)
 
-	if err = gomysql.Begin(config.Config.Database.File); err != nil {
+	if Driver, err = gomysql.Begin(config.Config.Database.File); err != nil {
 		dbLog.Errorf("Failed to initialize database: %v\n", err)
 		return
 	}
@@ -210,7 +211,7 @@ func Init(parentLog *golog.Logger) (err error) {
 }
 
 func registerAndMigrate[T any](name string, target **gomysql.RegisteredStruct[T], model T, opts gomysql.MigrationOptions) (err error) {
-	if *target, err = gomysql.Register(model); err != nil {
+	if *target, err = gomysql.Register(Driver, model); err != nil {
 		dbLog.Errorf("Failed to register %s struct: %v\n", name, err)
 		return
 	}

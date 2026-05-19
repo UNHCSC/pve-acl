@@ -12,14 +12,13 @@ import (
 	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 	"github.com/z46-dev/golog"
-	"github.com/z46-dev/gomysql"
 )
 
 func initACLTestDB(t *testing.T) {
 	t.Helper()
 
-	if gomysql.DB != nil {
-		if err := gomysql.Close(); err != nil {
+	if db.Driver != nil {
+		if err := db.Driver.Close(); err != nil {
 			t.Fatalf("close previous database: %v", err)
 		}
 	}
@@ -32,8 +31,8 @@ func initACLTestDB(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		if gomysql.DB != nil {
-			_ = gomysql.Close()
+		if db.Driver != nil {
+			_ = db.Driver.Close()
 		}
 	})
 }

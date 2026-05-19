@@ -8,14 +8,13 @@ import (
 
 	"github.com/UNHCSC/organesson/config"
 	"github.com/z46-dev/golog"
-	"github.com/z46-dev/gomysql"
 )
 
 func initTestDB(t *testing.T) {
 	t.Helper()
 
-	if gomysql.DB != nil {
-		if err := gomysql.Close(); err != nil {
+	if Driver != nil {
+		if err := Driver.Close(); err != nil {
 			t.Fatalf("close previous database: %v", err)
 		}
 	}
@@ -28,8 +27,8 @@ func initTestDB(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		if gomysql.DB != nil {
-			_ = gomysql.Close()
+		if Driver != nil {
+			_ = Driver.Close()
 		}
 	})
 }
