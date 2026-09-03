@@ -1,4 +1,8 @@
+![Tests](https://img.shields.io/github/actions/workflow/status/UNHCSC/pve-acl/ci.yml?branch=main&event=push&label=CI)
+![Made with Golang](https://img.shields.io/badge/-Made_with_Golang-007d9c?logo=go&logoColor=white)
+
 # Organesson Cloud
+
 Organesson Cloud is a Proxmox-backed access control system that uses LDAP and a local database to create fine-tuned asset management on a per-user basis without clogging up your Proxmox cluster.
 
 ## Motivation
