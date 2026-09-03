@@ -590,6 +590,8 @@ function ProjectResourcesPanel(props: {
 	const jobStatusNames = ["queued", "running", "succeeded", "failed", "cancelled"];
 	const [pending, setPending] = useState<string | null>(null);
 	const [resourceJobs, setResourceJobs] = useState<Record<number, Job>>({});
+	const [powerStates, setPowerStates] = useState<Record<number, number>>({});
+	const [expandedResourceID, setExpandedResourceID] = useState<number | null>(null);
 	const [consoleSession, setConsoleSession] = useState<{ path: string; password: string; targetWindow: Window } | null>(null);
 	const [operationError, setOperationError] = useState("");
 	const trackJob = async (resourceID: number, initial: Job) => {
@@ -599,6 +601,9 @@ function ProjectResourcesPanel(props: {
 			await new Promise((resolve) => window.setTimeout(resolve, 1000));
 			job = await apiFetch<Job>(`/api/v1/jobs/${job.id}`);
 			setResourceJobs((current) => ({ ...current, [resourceID]: job }));
+		}
+		if (job.status === 2) {
+			setPowerStates((current) => ({ ...current, [resourceID]: job.operation === "vm.stop" || job.operation === "vm.shutdown" ? 1 : 0 }));
 		}
 	};
 	const power = async (resource: ProjectResource, action: string) => {
@@ -646,36 +651,50 @@ function ProjectResourcesPanel(props: {
             {props.loading && <EmptyState>Loading resources...</EmptyState>}
             {!props.loading && props.resources.length === 0 && <EmptyState>No local resources have been created.</EmptyState>}
             {!props.loading && props.resources.length > 0 && (
-                <div className="compact-list">
-                    {props.resources.map((resource) => (
-                        <div className="compact-list-row action-list-row access-list-row asset-list-row" key={resource.id}>
-                            <AccessRowSubject
-                                title={resource.name}
-                                meta={`${resource.slug} / ${resource.resource_type_label || "resource"}`}
-                            />
-                            <div className="project-access-actions">
-                                <span className="access-pill">{resource.status_label || "ready"}</span>
-                                {resource.power_state !== undefined && <span className="access-pill">{["running", "stopped", "paused", "unknown"][resource.power_state] || "unknown"}</span>}
-								{resourceJobs[resource.id] && <span className={`access-pill job-${jobStatusNames[resourceJobs[resource.id].status] || "unknown"}`}>{resourceJobs[resource.id].operation}: {jobStatusNames[resourceJobs[resource.id].status] || "unknown"} · {resourceJobs[resource.id].progress}%</span>}
-                                <span className="access-pill">{resource.assignment_count || 0} grants</span>
-                                <span className="access-pill">{resource.asset_group_count || 0} groups</span>
-                                {resource.resource_type_label === "vm" && resource.power_state !== undefined && <>
-                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "start")}>Start</button>
-                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "stop")}>Stop</button>
-                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "reboot")}>Reboot</button>
-                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => openConsole(resource)}>Console</button>
-                                </>}
-                                <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
-                                    <button type="button" role="menuitem" onClick={props.createAssetAssignment}>
-                                        Assign
-                                    </button>
-                                    <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>
-                                        Archive resource
-                                    </button>
-                                </RowActionMenu>
+                <div className="resource-list">
+                    {props.resources.map((resource) => {
+						const powerState = powerStates[resource.id] ?? resource.power_state;
+						return (
+                        <article className="resource-card" key={resource.id}>
+                            <div className="resource-card-main">
+                                <div className="resource-identity">
+                                    <span className="resource-kind" aria-hidden="true">{resource.resource_type_label === "vm" ? "VM" : resource.resource_type_label?.slice(0, 2).toUpperCase()}</span>
+                                    <div><strong>{resource.name}</strong><span>{resource.proxmox_vmid ? `${resource.proxmox_node} · VMID ${resource.proxmox_vmid}` : `${resource.slug} · ${resource.resource_type_label || "resource"}`}</span></div>
+                                </div>
+                                <div className="resource-card-controls">
+                                    {resource.resource_type_label === "vm" && powerState !== undefined && <RowActionMenu
+                                        ariaLabel={`${resource.name} power actions`}
+                                        buttonClassName={classNames("power-control", `is-${["running", "stopped", "paused", "unknown"][powerState] || "unknown"}`)}
+                                        buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span aria-hidden="true">⌄</span></>}
+                                        menuWidth={168}
+                                    >
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 0} onClick={() => power(resource, "start")}>Start</button>
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "stop")}>Stop now</button>
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "reboot")}>Reboot</button>
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => openConsole(resource)}>Open console</button>
+                                    </RowActionMenu>}
+                                    <button className="button-secondary compact-button" type="button" aria-expanded={expandedResourceID === resource.id} onClick={() => setExpandedResourceID((current) => current === resource.id ? null : resource.id)}>Details</button>
+                                    <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                        <button type="button" role="menuitem" onClick={props.createAssetAssignment}>Assign access</button>
+                                        <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>Archive resource</button>
+                                    </RowActionMenu>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                            <div className="resource-summary">
+                                <span>{resource.status_label || "ready"}</span><span>{resource.assignment_count || 0} grants</span><span>{resource.asset_group_count || 0} groups</span>
+                                {resourceJobs[resource.id] && <strong className={`job-${jobStatusNames[resourceJobs[resource.id].status] || "unknown"}`}>{resourceJobs[resource.id].operation}: {jobStatusNames[resourceJobs[resource.id].status] || "unknown"} · {resourceJobs[resource.id].progress}%</strong>}
+                            </div>
+                            {expandedResourceID === resource.id && <dl className="resource-details">
+                                <div><dt>Provider</dt><dd>{resource.proxmox_node || "Local inventory"}</dd></div>
+                                <div><dt>Identity</dt><dd>{resource.proxmox_vmid ? `VMID ${resource.proxmox_vmid}` : resource.uuid || "—"}</dd></div>
+                                <div><dt>Compute</dt><dd>{resource.cpu_cores || 0} vCPU · {resource.memory_mb || 0} MiB RAM</dd></div>
+                                <div><dt>Disk / OS</dt><dd>{resource.disk_gb ? `${resource.disk_gb} GiB` : "No disk reported"} · {resource.os_type || "Unknown OS"}</dd></div>
+                                <div><dt>State observed</dt><dd>{resource.power_updated_at ? new Date(resource.power_updated_at).toLocaleString() : "Never"}</dd></div>
+                                <div><dt>Resource ID</dt><dd>{resource.slug} · #{resource.id}</dd></div>
+                            </dl>}
+                        </article>
+						);
+					})}
                 </div>
             )}
             {consoleSession && <ConsoleViewer path={consoleSession.path} password={consoleSession.password} targetWindow={consoleSession.targetWindow} onClose={() => { consoleSession.targetWindow.close(); setConsoleSession(null); }} />}

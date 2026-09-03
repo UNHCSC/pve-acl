@@ -38,8 +38,6 @@ export type Organization = {
     parent_org_id: number | null;
     created_at?: string;
     updated_at?: string;
-    power_state?: number;
-    power_updated_at?: string;
 };
 
 export type Project = {
@@ -191,6 +189,12 @@ export type ProjectResource = {
     assignment_count?: number;
     power_state?: number;
     power_updated_at?: string;
+    proxmox_vmid?: number;
+    proxmox_node?: string;
+    cpu_cores?: number;
+    memory_mb?: number;
+    disk_gb?: number;
+    os_type?: string;
     created_at?: string;
     updated_at?: string;
 };

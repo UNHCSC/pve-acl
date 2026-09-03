@@ -155,6 +155,46 @@
     justify-content: flex-end;
 }
 
+.resource-card-controls {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+
+.power-control {
+    align-items: center;
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    color: var(--color-ink);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    font-weight: 700;
+    gap: 7px;
+    min-height: 38px;
+    padding: 7px 12px;
+    width: auto;
+}
+
+.power-control:hover,
+.power-control[aria-expanded="true"] {
+    background: var(--color-surface);
+    border-color: var(--color-ink-muted);
+}
+
+.power-indicator {
+    background: var(--color-ink-muted);
+    border-radius: 50%;
+    height: 8px;
+    margin: 0;
+    width: 8px;
+}
+
+.power-control.is-running .power-indicator { background: var(--color-success); }
+.power-control.is-stopped .power-indicator { background: var(--color-danger); }
+
 .compact-button {
     min-height: 38px;
     padding: 8px 12px;

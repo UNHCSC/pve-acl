@@ -767,6 +767,12 @@ func projectResourceResponse(resources []*db.Resource) (itemsResult []fiber.Map,
 			if found {
 				items[len(items)-1]["power_state"] = machine.PowerState
 				items[len(items)-1]["power_updated_at"] = machine.UpdatedAt
+				items[len(items)-1]["proxmox_vmid"] = machine.ProxmoxVMID
+				items[len(items)-1]["proxmox_node"] = machineNode(machine)
+				items[len(items)-1]["cpu_cores"] = machine.CPUCores
+				items[len(items)-1]["memory_mb"] = machine.MemoryMB
+				items[len(items)-1]["disk_gb"] = machine.DiskGB
+				items[len(items)-1]["os_type"] = machine.OSType
 			}
 		}
 	}
