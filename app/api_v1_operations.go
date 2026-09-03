@@ -170,7 +170,8 @@ func postResourceConsoleSession(c *fiber.Ctx) (errResult error) {
 	}
 	consoleSessions.items[session.ID] = session
 	consoleSessions.Unlock()
-	return c.Status(201).JSON(fiber.Map{"id": session.ID, "job_id": job.ID, "expires_at": session.ExpiresAt, "websocket_path": "/api/v1/console-sessions/" + session.ID + "/websocket"})
+	c.Set(fiber.HeaderCacheControl, "no-store")
+	return c.Status(201).JSON(fiber.Map{"id": session.ID, "job_id": job.ID, "expires_at": session.ExpiresAt, "websocket_path": "/api/v1/console-sessions/" + session.ID + "/websocket", "console_password": ticket.Ticket})
 }
 
 func validateConsoleUpgrade(c *fiber.Ctx) (errResult error) {

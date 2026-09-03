@@ -3,7 +3,7 @@ import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "..
 import type { AssetAssignment, AssetGroup, AuditEvent, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectQuota, ProjectResource, Role, SecretMetadata, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
-import { apiFetch } from "../api";
+import { apiFetch, requestKey } from "../api";
 import { ConsoleViewer } from "../components/ConsoleViewer";
 
 const MIN_SIDEBAR_WIDTH = 232;
@@ -588,19 +588,26 @@ function ProjectResourcesPanel(props: {
     deleteResource: (resource: ProjectResource) => void;
 }) {
 	const [pending, setPending] = useState<string | null>(null);
-	const [consolePath, setConsolePath] = useState<string | null>(null);
+	const [consoleSession, setConsoleSession] = useState<{ path: string; password: string } | null>(null);
 	const [operationError, setOperationError] = useState("");
 	const power = async (resource: ProjectResource, action: string) => {
 		setPending(`${resource.id}:${action}`);
 		setOperationError("");
-		try { await apiFetch(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }); }
+		try { await apiFetch(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": requestKey() } }); }
 		catch (error) { setOperationError(error instanceof Error ? error.message : "Power action failed"); }
 		finally { setPending(null); }
 	};
 	const openConsole = async (resource: ProjectResource) => {
+		if (!window.isSecureContext) {
+			setOperationError("VM consoles require HTTPS. Configure web_server.tls_dir and open this site over https://.");
+			return;
+		}
 		setPending(`${resource.id}:console`);
 		setOperationError("");
-		try { const session = await apiFetch<{ websocket_path: string }>(`/api/v1/resources/${resource.id}/console-sessions`, { method: "POST" }); setConsolePath(session.websocket_path); }
+		try {
+			const session = await apiFetch<{ websocket_path: string; console_password: string }>(`/api/v1/resources/${resource.id}/console-sessions`, { method: "POST" });
+			setConsoleSession({ path: session.websocket_path, password: session.console_password });
+		}
 		catch (error) { setOperationError(error instanceof Error ? error.message : "Console request failed"); }
 		finally { setPending(null); }
 	};
@@ -646,7 +653,7 @@ function ProjectResourcesPanel(props: {
                     ))}
                 </div>
             )}
-            {consolePath && <ConsoleViewer path={consolePath} onClose={() => setConsolePath(null)} />}
+            {consoleSession && <ConsoleViewer path={consoleSession.path} password={consoleSession.password} onClose={() => setConsoleSession(null)} />}
         </section>
     );
 }

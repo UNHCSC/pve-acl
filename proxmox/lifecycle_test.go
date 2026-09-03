@@ -114,6 +114,13 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 	if connection, err = client.DialConsole(ctx, node, vmID, ticket.Port, ticket.Ticket); err != nil {
 		t.Fatalf("open console websocket: %v", err)
 	}
+	if err = connection.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatalf("set console read deadline: %v", err)
+	}
+	var greeting []byte
+	if _, greeting, err = connection.ReadMessage(); err != nil || !strings.HasPrefix(string(greeting), "RFB ") {
+		t.Fatalf("read RFB console greeting: greeting=%q err=%v", greeting, err)
+	}
 	_ = connection.Close()
 	t.Logf("real lifecycle and console succeeded for tagged guest %d (fixture created=%t)", vmID, created)
 }

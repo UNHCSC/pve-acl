@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { apiFetch } from "../api";
+import { apiFetch, requestKey } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
 import type { Job, JobLog } from "../types";
 
@@ -15,7 +15,7 @@ export function OperationsView({ isSiteAdmin, showToast }: { isSiteAdmin: boolea
     const jobs = jobsQuery.data || [];
     const selected = jobs.find((job) => job.id === selectedID) || null;
     const demoMutation = useMutation({
-        mutationFn: () => apiFetch<Job>("/api/v1/jobs/demo", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }),
+        mutationFn: () => apiFetch<Job>("/api/v1/jobs/demo", { method: "POST", headers: { "Idempotency-Key": requestKey() } }),
         onSuccess: (job) => { setSelectedID(job.id); queryClient.invalidateQueries({ queryKey: ["jobs"] }); showToast("Demonstration job queued", "success"); },
         onError: (error) => showToast(error instanceof Error ? error.message : "Failed to queue job", "warning")
     });

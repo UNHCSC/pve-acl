@@ -95,10 +95,14 @@ func TestAssignedPowerAndConsoleStayTagAndPermissionScoped(t *testing.T) {
 	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode != 200 || len(fake.Actions) != 1 {
 		t.Fatalf("duplicate request created work: status=%d actions=%#v err=%v", response.StatusCode, fake.Actions, err)
 	}
-	response = resourceAPIRequest(t, app, authenticateTestUser(t, assigned.Username, false), http.MethodPost, "/api/v1/resources/"+strconv.Itoa(resource.ID)+"/console-sessions", "")
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/resources/"+strconv.Itoa(resource.ID)+"/console-sessions", nil)
+	request.Header.Set("Authorization", "Bearer "+authenticateTestUser(t, assigned.Username, false))
+	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode != fiber.StatusCreated {
+		t.Fatalf("console status=%d err=%v", response.StatusCode, err)
+	}
 	var body map[string]any
-	if err = json.NewDecoder(response.Body).Decode(&body); err != nil || strings.Contains(fmt.Sprint(body), "short-lived-secret") {
-		t.Fatalf("console response leaked ticket: %#v err=%v", body, err)
+	if err = json.NewDecoder(response.Body).Decode(&body); err != nil || body["console_password"] != "short-lived-secret" || strings.Contains(fmt.Sprint(body), "PVEAPIToken") {
+		t.Fatalf("console response did not contain only the scoped console credential: %#v err=%v", body, err)
 	}
 	fake.Guests[0].Tags = nil
 	if _, err = managedMachineGuest(context.Background(), &db.VirtualMachine{ClusterID: cluster.ID, NodeID: &node.ID, ProxmoxVMID: 101}); err == nil {
