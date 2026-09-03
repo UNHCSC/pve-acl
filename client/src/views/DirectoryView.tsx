@@ -46,6 +46,8 @@ type DirectoryViewProps = {
     createGroup: (context: Organization | Project) => void;
     createResource: () => void;
     createAssetGroup: () => void;
+    editAssetGroup: (group: AssetGroup) => void;
+    deleteAssetGroup: (group: AssetGroup) => void;
     manageAssetGroupResources: (group: AssetGroup) => void;
     createAssetAssignment: () => void;
     editRole: (role: Role, context: Organization | Project) => void;
@@ -236,6 +238,8 @@ export function DirectoryView(props: DirectoryViewProps) {
                             createProjectGroup={() => props.createGroup(props.selectedProject!)}
                             createResource={props.createResource}
                             createAssetGroup={props.createAssetGroup}
+                            editAssetGroup={props.editAssetGroup}
+                            deleteAssetGroup={props.deleteAssetGroup}
                             manageAssetGroupResources={props.manageAssetGroupResources}
                             createAssetAssignment={props.createAssetAssignment}
                             editRole={(role) => props.editRole(role, props.selectedProject!)}
@@ -415,6 +419,8 @@ function ProjectDetail(props: {
     createProjectGroup: () => void;
     createResource: () => void;
     createAssetGroup: () => void;
+    editAssetGroup: (group: AssetGroup) => void;
+    deleteAssetGroup: (group: AssetGroup) => void;
     manageAssetGroupResources: (group: AssetGroup) => void;
     createAssetAssignment: () => void;
     editRole: (role: Role) => void;
@@ -465,6 +471,8 @@ function ProjectDetail(props: {
                 <ProjectAssetGroupsPanel
                     groups={props.assetGroups}
                     createAssetGroup={props.createAssetGroup}
+                    editAssetGroup={props.editAssetGroup}
+                    deleteAssetGroup={props.deleteAssetGroup}
                     manageResources={props.manageAssetGroupResources}
                     createAssetAssignment={props.createAssetAssignment}
                     loading={props.loading}
@@ -539,7 +547,7 @@ function ProjectResourcesPanel(props: {
                                         Assign
                                     </button>
                                     <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>
-                                        Delete resource
+                                        Archive resource
                                     </button>
                                 </RowActionMenu>
                             </div>
@@ -555,6 +563,8 @@ function ProjectAssetGroupsPanel(props: {
     groups: AssetGroup[];
     loading: boolean;
     createAssetGroup: () => void;
+    editAssetGroup: (group: AssetGroup) => void;
+    deleteAssetGroup: (group: AssetGroup) => void;
     manageResources: (group: AssetGroup) => void;
     createAssetAssignment: () => void;
 }) {
@@ -582,8 +592,14 @@ function ProjectAssetGroupsPanel(props: {
                                     <button type="button" role="menuitem" onClick={() => props.manageResources(group)}>
                                         Manage resources
                                     </button>
+                                    <button type="button" role="menuitem" onClick={() => props.editAssetGroup(group)}>
+                                        Edit group
+                                    </button>
                                     <button type="button" role="menuitem" onClick={props.createAssetAssignment}>
                                         Assign group
+                                    </button>
+                                    <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteAssetGroup(group)}>
+                                        Archive group
                                     </button>
                                 </RowActionMenu>
                             </div>

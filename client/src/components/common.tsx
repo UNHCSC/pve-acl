@@ -236,20 +236,20 @@ export function ModalActions({ disabled, onClose }: { disabled: boolean; onClose
     );
 }
 
-export function Field({ name, label, type = "text", required = false }: { name: string; label: string; type?: string; required?: boolean }) {
+export function Field({ name, label, type = "text", required = false, defaultValue }: { name: string; label: string; type?: string; required?: boolean; defaultValue?: string }) {
     return (
         <label className="field-group">
             <span className="field-label">{label}</span>
-            <input className="field-input" name={name} type={type} required={required} />
+            <input className="field-input" name={name} type={type} required={required} defaultValue={defaultValue} />
         </label>
     );
 }
 
-export function Textarea({ name, label }: { name: string; label: string }) {
+export function Textarea({ name, label, defaultValue }: { name: string; label: string; defaultValue?: string }) {
     return (
         <label className="field-group">
             <span className="field-label">{label}</span>
-            <textarea className="field-input" name={name} rows={3} />
+            <textarea className="field-input" name={name} rows={3} defaultValue={defaultValue} />
         </label>
     );
 }

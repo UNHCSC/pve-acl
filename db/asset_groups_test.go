@@ -232,6 +232,62 @@ func TestAssetGroupAssignmentMaintainsSourceTaggedDerivedBindings(t *testing.T) 
 	assertHasResourcePermission(t, 1001, PermissionVMConsole, secondResource.ID, false)
 }
 
+func TestArchiveAssetGroupRemovesDerivedBindingsAndResourceLinks(t *testing.T) {
+	initTestDB(t)
+	var now time.Time
+
+	now = time.Now().UTC()
+	var org *Organization
+
+	org = insertTestOrganization(t, "Lab", "lab", nil, now)
+	var project *Project
+
+	project = insertTestProject(t, "IT666", "it666", org.ID, now)
+	var resource *Resource
+
+	resource = insertTestResource(t, project.ID, "student-vm", now)
+	var role *Role
+
+	role = insertTestRoleWithPermission(t, "IT666 VM User", PermissionVMConsole, now)
+	var (
+		group      *AssetGroup
+		assignment *AssetAssignment
+		links      []*AssetGroupResource
+		err        error
+	)
+
+	group, err = CreateAssetGroup(AssetGroupCreateInput{ProjectID: project.ID, Name: "Student Lab"})
+	if err != nil {
+		t.Fatalf("CreateAssetGroup returned error: %v", err)
+	}
+	if _, err = EnsureAssetGroupResource(group.ID, resource.ID); err != nil {
+		t.Fatalf("EnsureAssetGroupResource returned error: %v", err)
+	}
+	assignment, _, err = EnsureAssetAssignment(AssetAssignmentInput{
+		ProjectID:    project.ID,
+		AssetGroupID: &group.ID,
+		SubjectType:  RoleBindingSubjectUser,
+		SubjectID:    1001,
+		RoleID:       role.ID,
+	})
+	if err != nil {
+		t.Fatalf("EnsureAssetAssignment returned error: %v", err)
+	}
+	assertSourceTaggedBinding(t, RoleBindingSubjectUser, 1001, assignment.ID, resource.ID, true)
+	if err = ArchiveAssetGroup(group); err != nil {
+		t.Fatalf("ArchiveAssetGroup returned error: %v", err)
+	}
+	assertSourceTaggedBinding(t, RoleBindingSubjectUser, 1001, assignment.ID, resource.ID, false)
+	assertHasResourcePermission(t, 1001, PermissionVMConsole, resource.ID, false)
+	links, err = AssetGroupResourcesForGroup(group.ID)
+	if err != nil || len(links) != 0 {
+		t.Fatalf("expected archived group resource links removed, links=%#v err=%v", links, err)
+	}
+	if _, err = EnsureAssetGroupResource(group.ID, resource.ID); err == nil {
+		t.Fatal("expected archived group to reject new resources")
+	}
+}
+
 func assertHasResourcePermission(t *testing.T, userID int, permission PermissionKey, resourceID int, expected bool) {
 	t.Helper()
 	var (

@@ -108,11 +108,8 @@ func postCreateProjectResource(c *fiber.Ctx) (errResult error) {
 	if !ok {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unsupported resource type"})
 	}
-	var status db.ResourceStatus
-
-	status, ok = parseLocalResourceStatus(req.Status)
-	if !ok {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unsupported resource status"})
+	if strings.TrimSpace(req.Status) != "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "resource status is server-managed"})
 	}
 	var allowed bool
 
@@ -146,7 +143,7 @@ func postCreateProjectResource(c *fiber.Ctx) (errResult error) {
 		Name:            req.Name,
 		Slug:            req.Slug,
 		ResourceType:    resourceType,
-		Status:          status,
+		Status:          db.ResourceStatusReady,
 		CreatedByUserID: createdByUserID,
 	})
 	if err != nil {
@@ -190,21 +187,12 @@ func patchProjectResource(c *fiber.Ctx) (errResult error) {
 	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid resource request"})
 	}
-	var (
-		status db.ResourceStatus
-		ok     bool
-	)
-	status = resource.Status
 	if strings.TrimSpace(req.Status) != "" {
-		status, ok = parseLocalResourceStatus(req.Status)
-		if !ok {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unsupported resource status"})
-		}
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "resource status is server-managed"})
 	}
 	if err = db.UpdateResource(resource, db.ResourceUpdateInput{
-		Name:   req.Name,
-		Slug:   req.Slug,
-		Status: status,
+		Name: req.Name,
+		Slug: req.Slug,
 	}); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -234,9 +222,15 @@ func deleteProjectResource(c *fiber.Ctx) (errResult error) {
 	}
 	var allowed bool
 
-	allowed, err = currentUserCanViewProject(c, project)
+	allowed, err = currentUserCanManageProject(c, project)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		allowed, err = currentUserCanDeleteResource(c, project, resource)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+		}
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
@@ -326,6 +320,83 @@ func postCreateProjectAssetGroup(c *fiber.Ctx) (errResult error) {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load asset group metadata"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(items[0])
+}
+
+// patchProjectAssetGroup updates an asset group's editable fields.
+func patchProjectAssetGroup(c *fiber.Ctx) (errResult error) {
+	var (
+		project *db.Project
+		group   *db.AssetGroup
+		err     error
+	)
+
+	project, err = projectFromIDParam(c)
+	if err != nil {
+		return projectParamError(c, err)
+	}
+	group, err = projectAssetGroupFromParam(c, project.ID)
+	if err != nil {
+		return assetGroupParamError(c, err)
+	}
+	var allowed bool
+
+	allowed, err = currentUserCanManageProject(c, project)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
+	var req assetGroupRequest
+
+	if err = c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid asset group request"})
+	}
+	if err = db.UpdateAssetGroup(group, db.AssetGroupUpdateInput{
+		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+	}); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	var items []fiber.Map
+
+	items, err = assetGroupResponse([]*db.AssetGroup{group})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load asset group metadata"})
+	}
+	return c.JSON(items[0])
+}
+
+// deleteProjectAssetGroup archives an asset group and removes its assignment grants.
+func deleteProjectAssetGroup(c *fiber.Ctx) (errResult error) {
+	var (
+		project *db.Project
+		group   *db.AssetGroup
+		err     error
+	)
+
+	project, err = projectFromIDParam(c)
+	if err != nil {
+		return projectParamError(c, err)
+	}
+	group, err = projectAssetGroupFromParam(c, project.ID)
+	if err != nil {
+		return assetGroupParamError(c, err)
+	}
+	var allowed bool
+
+	allowed, err = currentUserCanManageProject(c, project)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
+	if !allowed {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
+	if err = db.ArchiveAssetGroup(group); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive asset group"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // postProjectAssetGroupResource adds a resource to an asset group.
@@ -812,6 +883,32 @@ func resourceCreatePermission(resourceType db.ResourceType) (permissionResult db
 	}
 }
 
+func currentUserCanDeleteResource(c *fiber.Ctx, project *db.Project, resource *db.Resource) (okResult bool, errResult error) {
+	var (
+		allowed    bool
+		permission db.PermissionKey
+		err        error
+	)
+
+	permission = resourceDeletePermission(resource.ResourceType)
+	allowed, err = currentUserCan(c, permission, db.RoleBindingScopeProject, &project.ID)
+	if err != nil || allowed {
+		return allowed, err
+	}
+	return currentUserCan(c, permission, db.RoleBindingScopeResource, &resource.ID)
+}
+
+func resourceDeletePermission(resourceType db.ResourceType) (permissionResult db.PermissionKey) {
+	switch resourceType {
+	case db.ResourceTypeCT:
+		return db.PermissionCTDelete
+	case db.ResourceTypeNetwork:
+		return db.PermissionNetworkDelete
+	default:
+		return db.PermissionVMDelete
+	}
+}
+
 func parseLocalResourceType(value string) (resourceTypeResult db.ResourceType, okResult bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "vm":
@@ -822,19 +919,6 @@ func parseLocalResourceType(value string) (resourceTypeResult db.ResourceType, o
 		return db.ResourceTypeNetwork, true
 	default:
 		return db.ResourceTypeVM, false
-	}
-}
-
-func parseLocalResourceStatus(value string) (resourceStatusResult db.ResourceStatus, okResult bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "ready":
-		return db.ResourceStatusReady, true
-	case "unknown":
-		return db.ResourceStatusUnknown, true
-	case "error":
-		return db.ResourceStatusError, true
-	default:
-		return db.ResourceStatusReady, false
 	}
 }
 

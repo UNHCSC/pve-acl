@@ -19,9 +19,8 @@ type (
 	}
 
 	ResourceUpdateInput struct {
-		Name   string
-		Slug   string
-		Status ResourceStatus
+		Name string
+		Slug string
 	}
 )
 
@@ -142,9 +141,6 @@ func UpdateResource(resource *Resource, input ResourceUpdateInput) (errResult er
 	if input.Slug == "" {
 		return fmt.Errorf("resource slug is required")
 	}
-	if !LocalInventoryResourceStatus(input.Status) {
-		return fmt.Errorf("unsupported resource status")
-	}
 	var (
 		existing []*Resource
 		err      error
@@ -161,7 +157,6 @@ func UpdateResource(resource *Resource, input ResourceUpdateInput) (errResult er
 	}
 	resource.Name = input.Name
 	resource.Slug = input.Slug
-	resource.Status = input.Status
 	resource.UpdatedAt = time.Now().UTC()
 	return Resources.Update(resource)
 }
@@ -182,11 +177,6 @@ func ArchiveResource(resource *Resource) (errResult error) {
 // LocalInventoryResourceType reports whether a resource type is user-manageable here.
 func LocalInventoryResourceType(value ResourceType) (okResult bool) {
 	return value == ResourceTypeVM || value == ResourceTypeCT || value == ResourceTypeNetwork
-}
-
-// LocalInventoryResourceStatus reports whether a status is user-manageable here.
-func LocalInventoryResourceStatus(value ResourceStatus) (okResult bool) {
-	return value == ResourceStatusReady || value == ResourceStatusUnknown || value == ResourceStatusError
 }
 
 // ResourceOwnersForResource returns ownership records for a resource.
