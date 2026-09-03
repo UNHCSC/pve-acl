@@ -16,7 +16,7 @@ export function ConsoleViewer({ path, password, onClose }: { path: string; passw
             const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
             const rfb = new RFB(screen.current, `${scheme}//${window.location.host}${path}`, { credentials: { password } });
             rfb.scaleViewport = true;
-            rfb.resizeSession = true;
+            rfb.resizeSession = false;
             rfb.addEventListener("connect", () => setStatus("Connected"));
             rfb.addEventListener("disconnect", (event) => setStatus(event.detail.clean ? "Disconnected" : "Console connection failed"));
             rfb.addEventListener("securityfailure", (event) => setStatus(event.detail.reason || "Console authentication failed"));
