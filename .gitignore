@@ -3,6 +3,7 @@
 *.db
 *.log
 .organesson-session-key
+.local-tls/
 *.db.tasks
 log/
 
