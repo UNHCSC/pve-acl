@@ -1,5 +1,5 @@
 export type ToastKind = "info" | "success" | "warning";
-export type ViewKey = "overview" | "directory" | "operations" | "infrastructure" | "people" | "identity";
+export type ViewKey = "overview" | "directory" | "blueprints" | "operations" | "infrastructure" | "people" | "identity";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
 export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | "resource" | "asset-group" | "asset-group-resources" | "asset-assignment" | null;
 export type Selection =
@@ -342,11 +342,26 @@ export type Job = {
 
 export type JobLog = { id: number; job_id: number; stream: number; message: string; created_at: string };
 
+export type BlueprintDocument = {
+    format_version: number;
+    opentofu_module: string;
+    ansible_project: string;
+    name_pattern: string;
+    resources: Array<{ key: string; kind: "vm" | "ct"; template: string; vcpu: number; memory_mb: number; disk_gb: number; networks: string[]; configuration_role?: string }>;
+    networks: Array<{ key: string; kind: string; ipv4_cidr?: string; ipv6_cidr?: string; public?: boolean }>;
+};
+
+export type Blueprint = {
+    id: number; uuid: string; project_id: number; name: string; slug: string; description?: string;
+    versions: Array<{ id: number; uuid: string; version: number; document_digest: string; document: BlueprintDocument; created_at: string }>;
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {
     overview: "Overview",
     directory: "Directory",
+    blueprints: "Blueprints",
     operations: "Operations",
     infrastructure: "Infrastructure",
     people: "People",

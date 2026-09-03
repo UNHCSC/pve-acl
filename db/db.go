@@ -50,6 +50,12 @@ var (
 	JobLogs                        *gosqlite.RegisteredStruct[JobLog]
 	AuditEvents                    *gosqlite.RegisteredStruct[AuditEvent]
 	Secrets                        *gosqlite.RegisteredStruct[Secret]
+	Blueprints                     *gosqlite.RegisteredStruct[Blueprint]
+	BlueprintVersions              *gosqlite.RegisteredStruct[BlueprintVersion]
+	Deployments                    *gosqlite.RegisteredStruct[Deployment]
+	DeploymentResources            *gosqlite.RegisteredStruct[DeploymentResource]
+	AllocationPools                *gosqlite.RegisteredStruct[AllocationPool]
+	Allocations                    *gosqlite.RegisteredStruct[Allocation]
 )
 
 // Init initializes this package.
@@ -216,6 +222,30 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("Secrets", &Secrets, Secret{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("Blueprints", &Blueprints, Blueprint{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("BlueprintVersions", &BlueprintVersions, BlueprintVersion{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("Deployments", &Deployments, Deployment{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("DeploymentResources", &DeploymentResources, DeploymentResource{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("AllocationPools", &AllocationPools, AllocationPool{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("Allocations", &Allocations, Allocation{}, migrationOpts); err != nil {
 		return
 	}
 

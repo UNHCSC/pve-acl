@@ -9,6 +9,7 @@
 @import "./components/data.css";
 @import "./components/overlays.css";
 @import "./views/directory.css";
+@import "./views/blueprints.css";
 @import "./components/responsive.css";
 
 @source "../../views/**/*.html";
