@@ -1,4 +1,8 @@
+![Tests](https://img.shields.io/github/actions/workflow/status/UNHCSC/pve-acl/ci.yml?branch=main&event=push&label=CI)
+![Made with Golang](https://img.shields.io/badge/-Made_with_Golang-007d9c?logo=go&logoColor=white)
+
 # Organesson Cloud
+
 Organesson Cloud is a Proxmox-backed access control system that uses LDAP and a local database to create fine-tuned asset management on a per-user basis without clogging up your Proxmox cluster.
 
 ## Motivation
@@ -17,40 +21,12 @@ I also want non-students (e.g. other TAs, professors) to be able to manage creat
 3. Users can only perform actions on assets that they have permissions for, and these permissions are defined in a local database that is separate from Proxmox's ACL system. Note that there should be a native console/vnc viewer that users can use to access their VMs without needing to log into Proxmox itself.
 4. The system should be easy to manage and scale, and should not require a lot of manual configuration in Proxmox itself. (Only an API user/token will be necessary)
 
-## Go Coding Guidelines
+## Proxmox inventory safety
 
-- Important functions should have a brief one-line comment describing what they do, and more detailed comments if necessary.
-- Use clear and descriptive variable names.
+Organesson's discovery is read-only and retains only guests carrying the exact configured `managed_tag`, which defaults to `organesson-managed`. Untagged guests are never adopted, persisted as new inventory, or operated on. Nodes, storage, and networks are displayed only as cluster context.
 
-Follow these style guidelines:
+The real-cluster smoke test is disabled by default and performs GET requests only. Configure the `[proxmox]` section in the ignored local `config.toml`, then run. Keep `verify_tls = true` for a publicly or locally trusted certificate. For a private Proxmox CA, set `tls_fingerprint_sha256` to the expected leaf-certificate fingerprint; hostname validation remains enforced with the pin.
 
-```go
-
-// Documentation comment....
-func (s *Struct) ImportantFunction(a, b int, c string) (result int, err error) { // Return types should be named
-    if a < 0 || b < 0 {
-        err = fmt.Errorf("a and b must be non-negative, got a=%d, b=%d", a, b) // Declare return values before returning
-        return // Naked returns are acceptable in this case since we have named return values
-    } // A full line of space after closing a block for readability and flow
-
-    if result = a + b; result > 100 { // If we can condense two related statements into one in an if statement, we should do so for readability and flow
-        err = fmt.Errorf("result must be less than or equal to 100, got %d", result)
-        return
-    }
-
-    return
-}
-
-func main() {
-    var ( // Variable blocks for readability, avoid := at all costs EXCEPT for loops or case statements
-        a, b, result int = 10, 20, 0
-        err    error
-    )
-
-    if result, err = ImportantFunction(a, b, "example"); err != nil {
-        log.Fatalf("Error calling ImportantFunction: %v", err)
-    }
-
-    fmt.Printf("Result: %d\n", result)
-}
+```sh
+ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterReadOnlyInventory -v
 ```

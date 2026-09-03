@@ -22,6 +22,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	if err = initPersistentJWTSigningKey(); err != nil {
 		return
 	}
+	if err = configureProxmoxIntegration(); err != nil {
+		return
+	}
 
 	app = fiber.New(fiber.Config{
 		Views:   templateEngine,
@@ -55,6 +58,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 		apiV1Projects fiber.Router = apiV1.Group("/projects")
 		apiV1Assets   fiber.Router = apiV1.Group("/assets")
 		apiV1ACL      fiber.Router = apiV1.Group("/acl")
+		apiV1Proxmox  fiber.Router = apiV1.Group("/proxmox")
 	)
 
 	// API v1 auth
@@ -74,6 +78,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 
 	// API v1 system
 	apiV1System.Get("/summary", getSystemSummary)
+	apiV1Proxmox.Get("/health", getProxmoxHealth)
+	apiV1Proxmox.Get("/inventory", getProxmoxInventory)
+	apiV1Proxmox.Post("/inventory/sync", postProxmoxInventorySync)
 	apiV1.Get("/permissions", getPermissions)
 
 	// API v1 users
@@ -161,6 +168,19 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Projects.Patch("/:id", patchProject)
 	apiV1Projects.Get("/:slug", getProjectBySlug)
 	apiV1Projects.Delete("/:slug", deleteProjectBySlug)
+	apiV1Projects.Get("/:id/quota", getProjectQuota)
+	apiV1Projects.Get("/:id/audit", getProjectAudit)
+	apiV1Projects.Get("/:id/secrets", getProjectSecrets)
+	apiV1Projects.Post("/:id/secrets", postProjectSecret)
+	apiV1Projects.Patch("/:id/secrets/:secretID", patchProjectSecret)
+	apiV1Projects.Delete("/:id/secrets/:secretID", deleteProjectSecret)
+
+	apiV1.Get("/quota-policies", getQuotaPolicies)
+	apiV1.Post("/quota-policies", postQuotaPolicy)
+	apiV1.Patch("/quota-policies/:policyID", patchQuotaPolicy)
+	apiV1.Delete("/quota-policies/:policyID", deleteQuotaPolicy)
+	apiV1.Post("/quota-policies/:policyID/bindings", postQuotaPolicyBinding)
+	apiV1.Delete("/quota-bindings/:bindingID", deleteQuotaPolicyBinding)
 
 	// API v1 assets
 	apiV1Assets.Get("/search", _noop)

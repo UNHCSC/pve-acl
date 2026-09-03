@@ -678,7 +678,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 	t.Fatalf("expected target to receive scoped role binding, got %#v", bindings)
 }
 
-func TestProjectAPIDeleteRemovesProject(t *testing.T) {
+func TestProjectAPIDeleteArchivesProject(t *testing.T) {
 	initACLTestDB(t)
 	ensureInitialSetupForTest(t)
 
@@ -713,8 +713,8 @@ func TestProjectAPIDeleteRemovesProject(t *testing.T) {
 		t.Fatalf("expected 204, got %d", resp.StatusCode)
 	}
 
-	if _, found, err = db.GetProjectBySlug(project.Slug); err != nil || found {
-		t.Fatalf("expected project to be deleted, found=%v err=%v", found, err)
+	if project, found, err = db.GetProjectBySlug(project.Slug); err != nil || !found || project.IsActive {
+		t.Fatalf("expected project to be archived, project=%#v found=%v err=%v", project, found, err)
 	}
 }
 

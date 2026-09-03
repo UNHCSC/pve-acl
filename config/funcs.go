@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/creasty/defaults"
@@ -22,11 +23,24 @@ func loadConfig(path string) (err error) {
 		err = fmt.Errorf("decode toml: %w", err)
 		return
 	}
+	if os.Getenv("ORGANESSON_SECRET_MASTER_KEY") != "" {
+		Config.Secrets.MasterKey = os.Getenv("ORGANESSON_SECRET_MASTER_KEY")
+	}
 
 	// Validate required fields
 	if err = validator.New(validator.WithRequiredStructEnabled()).Struct(Config); err != nil {
 		err = fmt.Errorf("validate config: %w", err)
 		return
+	}
+	if Config.Proxmox.Enabled {
+		if strings.TrimSpace(Config.Proxmox.Hostname) == "" || strings.TrimSpace(Config.Proxmox.TokenID) == "" || strings.TrimSpace(Config.Proxmox.Secret) == "" {
+			err = fmt.Errorf("validate config: enabled Proxmox integration requires hostname, token_id, and secret")
+			return
+		}
+		if strings.TrimSpace(Config.Proxmox.ManagedTag) == "" {
+			err = fmt.Errorf("validate config: enabled Proxmox integration requires managed_tag")
+			return
+		}
 	}
 
 	return

@@ -17,7 +17,10 @@ type (
 	}
 
 	projectUpdateRequest struct {
-		OrganizationID int `json:"organizationID"`
+		Name           *string `json:"name"`
+		Slug           *string `json:"slug"`
+		Description    *string `json:"description"`
+		OrganizationID *int    `json:"organizationID"`
 	}
 
 	organizationCreateRequest struct {
@@ -280,6 +283,9 @@ func postCreateProject(c *fiber.Ctx) (errResult error) {
 			})
 		}
 	}
+	if err = auditRequest(c, "project.create", "project", &project.ID, &project.ID, map[string]any{"name": project.Name}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 
 	return c.Status(fiber.StatusCreated).JSON(project)
 }
@@ -487,6 +493,9 @@ func patchProject(c *fiber.Ctx) (errResult error) {
 	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
 	}
+	if !project.IsActive {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "archived projects cannot be updated"})
+	}
 	var allowed bool
 
 	allowed, err = currentUserCanManageProject(c, project)
@@ -501,26 +510,39 @@ func patchProject(c *fiber.Ctx) (errResult error) {
 	if err = c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid project request"})
 	}
-	if req.OrganizationID <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization is required"})
+	if req.OrganizationID != nil {
+		if *req.OrganizationID <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization is required"})
+		}
+		var org *db.Organization
+		if org, found, err = db.GetOrganizationByID(*req.OrganizationID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organization"})
+		} else if !found || org.ArchivedAt != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization was not found"})
+		}
+		allowed, err = currentUserCanManageOrganization(c, *req.OrganizationID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+		}
+		if !allowed {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied for target organization"})
+		}
+		project.OrganizationID = *req.OrganizationID
 	}
-	var org *db.Organization
-	if org, found, err = db.GetOrganizationByID(req.OrganizationID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load organization"})
-	} else if !found || org.ArchivedAt != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "organization was not found"})
+	if req.Name != nil {
+		project.Name = *req.Name
 	}
-	allowed, err = currentUserCanManageOrganization(c, req.OrganizationID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	if req.Slug != nil {
+		project.Slug = *req.Slug
 	}
-	if !allowed {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied for target organization"})
+	if req.Description != nil {
+		project.Description = *req.Description
 	}
-
-	project.OrganizationID = req.OrganizationID
 	if err = db.UpdateProject(project); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err = auditRequest(c, "project.update", "project", &project.ID, &project.ID, map[string]any{"name": project.Name}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.JSON(project)
 }

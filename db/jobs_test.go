@@ -64,7 +64,7 @@ func TestJobStatusAndLogs(t *testing.T) {
 	if err = MarkJobRunning(job.ID); err != nil {
 		t.Fatalf("MarkJobRunning returned error: %v", err)
 	}
-	if err = AppendJobLog(job.ID, JobLogStreamSystem, "started"); err != nil {
+	if err = AppendJobLog(job.ID, JobLogStreamSystem, "started token=do-not-log"); err != nil {
 		t.Fatalf("AppendJobLog returned error: %v", err)
 	}
 	if err = MarkJobFinished(job.ID, JobStatusSucceeded); err != nil {
@@ -85,7 +85,7 @@ func TestJobStatusAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("JobLogsForJob returned error: %v", err)
 	}
-	if len(logs) != 1 || logs[0].Message != "started" {
+	if len(logs) != 1 || logs[0].Message != "started token=[REDACTED]" {
 		t.Fatalf("expected one job log, got %#v", logs)
 	}
 }

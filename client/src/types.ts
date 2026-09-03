@@ -1,5 +1,5 @@
 export type ToastKind = "info" | "success" | "warning";
-export type ViewKey = "overview" | "directory" | "people" | "identity";
+export type ViewKey = "overview" | "directory" | "infrastructure" | "people" | "identity";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
 export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | "resource" | "asset-group" | "asset-group-resources" | "asset-assignment" | null;
 export type Selection =
@@ -25,6 +25,7 @@ export type Summary = {
         canManageRoles?: boolean;
         canManageOrgs?: boolean;
         canViewUsers?: boolean;
+        canManageProxmox?: boolean;
     };
 };
 
@@ -229,11 +230,102 @@ export type AssetAssignment = {
     created_at?: string;
 };
 
+export type QuotaDimensions = {
+    vms: number;
+    containers: number;
+    vcpu: number;
+    memoryMB: number;
+    storageGB: number;
+    networks: number;
+    publicIPs: number;
+};
+
+export type ProjectQuota = {
+    policy: { name: string; max_vms?: number; max_vcpu?: number; max_memory_mb?: number; max_storage_gb?: number; max_networks?: number; max_public_ips?: number } | null;
+    usage: QuotaDimensions;
+};
+
+export type AuditEvent = {
+    id: number;
+    action: string;
+    target_type?: string;
+    created_at: string;
+};
+
+export type SecretMetadata = {
+    id: number;
+    name: string;
+    secret_type: number | string;
+    updated_at: string;
+};
+
+export type ProxmoxHealth = {
+    enabled: boolean;
+    healthy: boolean;
+    managed_tag?: string;
+    error?: string;
+};
+
+export type ProxmoxNode = {
+    name: string;
+    status: string;
+    cpu_total: number;
+    memory_total: number;
+};
+
+export type ProxmoxStorage = {
+    id: string;
+    node?: string;
+    type: string;
+    available: number;
+    total: number;
+    active: boolean;
+    shared: boolean;
+};
+
+export type ProxmoxNetwork = {
+    id: string;
+    node?: string;
+    type: string;
+    bridge?: string;
+    cidr?: string;
+    active: boolean;
+};
+
+export type ProxmoxInventoryGuest = {
+    id: number;
+    cluster_identity: string;
+    vmid: number;
+    resource_id?: number;
+    node: string;
+    name: string;
+    kind: "qemu" | "lxc" | string;
+    is_template: boolean;
+    status: string;
+    tags: string;
+    drift_state: "in_sync" | "missing" | "changed" | "unmanaged" | "ambiguous" | "error" | string;
+    last_error?: string;
+    last_seen_at: string;
+    missing_since?: string;
+};
+
+export type ProxmoxInventory = {
+    enabled?: boolean;
+    cluster_identity?: string;
+    managed_tag: string;
+    nodes?: ProxmoxNode[];
+    storages?: ProxmoxStorage[];
+    networks?: ProxmoxNetwork[];
+    guests: ProxmoxInventoryGuest[];
+    synced_at?: string;
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {
     overview: "Overview",
     directory: "Directory",
+    infrastructure: "Infrastructure",
     people: "People",
     identity: "Identity",
 };

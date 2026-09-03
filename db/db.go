@@ -34,6 +34,7 @@ var (
 	RoleBindings                   *gosqlite.RegisteredStruct[RoleBinding]
 	QuotaPolicies                  *gosqlite.RegisteredStruct[QuotaPolicy]
 	QuotaBindings                  *gosqlite.RegisteredStruct[QuotaBinding]
+	QuotaReservations              *gosqlite.RegisteredStruct[QuotaReservation]
 	Resources                      *gosqlite.RegisteredStruct[Resource]
 	ResourceOwners                 *gosqlite.RegisteredStruct[ResourceOwner]
 	AssetGroups                    *gosqlite.RegisteredStruct[AssetGroup]
@@ -41,6 +42,7 @@ var (
 	AssetAssignments               *gosqlite.RegisteredStruct[AssetAssignment]
 	ProxmoxClusters                *gosqlite.RegisteredStruct[ProxmoxCluster]
 	ProxmoxNodes                   *gosqlite.RegisteredStruct[ProxmoxNode]
+	ProxmoxInventoryGuests         *gosqlite.RegisteredStruct[ProxmoxInventoryGuest]
 	VirtualMachines                *gosqlite.RegisteredStruct[VirtualMachine]
 	Containers                     *gosqlite.RegisteredStruct[Container]
 	VirtualNetworks                *gosqlite.RegisteredStruct[VirtualNetwork]
@@ -53,6 +55,9 @@ var (
 // Init initializes this package.
 func Init(parentLog *golog.Logger) (err error) {
 	dbLog = parentLog.SpawnChild().Prefix("[DB]", golog.BoldGreen)
+	if err = ConfigureSecretEncryption(config.Config.Secrets.MasterKey); err != nil {
+		return err
+	}
 
 	if Driver, err = gosqlite.Begin(config.Config.Database.File); err != nil {
 		dbLog.Errorf("Failed to initialize database: %v\n", err)
@@ -150,6 +155,10 @@ func Init(parentLog *golog.Logger) (err error) {
 		return
 	}
 
+	if err = registerAndMigrate("QuotaReservations", &QuotaReservations, QuotaReservation{}, migrationOpts); err != nil {
+		return
+	}
+
 	if err = registerAndMigrate("Resources", &Resources, Resource{}, migrationOpts); err != nil {
 		return
 	}
@@ -175,6 +184,10 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("ProxmoxNodes", &ProxmoxNodes, ProxmoxNode{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("ProxmoxInventoryGuests", &ProxmoxInventoryGuests, ProxmoxInventoryGuest{}, migrationOpts); err != nil {
 		return
 	}
 

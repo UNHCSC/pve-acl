@@ -28,12 +28,20 @@ type Configuration struct {
 		DatabaseFile string `toml:"database_file" default:""` // Path to the gasket task database. Empty uses the application database path with ".tasks" appended.
 	} `toml:"scheduler"` // Embedded task scheduler configuration
 
+	Secrets struct {
+		MasterKey string `toml:"master_key" default:""` // Base64-encoded 32-byte application encryption key.
+	} `toml:"secrets"`
+
 	Proxmox struct {
-		Enabled  bool   `toml:"enabled" default:"false"`           // Enable Proxmox VE integration
-		Hostname string `toml:"hostname" default:""`               // Proxmox VE server hostname or IP address (e.g. "proxmox.cyber.lab")
-		Port     string `toml:"port" default:""`                   // Proxmox VE API port (usually "8006")
-		TokenID  string `toml:"token_id" default:""`               // Proxmox VE API token ID (e.g. "api-token-id")
-		Secret   string `toml:"secret" default:"api-token-secret"` // Proxmox VE API token secret
+		Enabled              bool   `toml:"enabled" default:"false"`                  // Enable Proxmox VE integration.
+		Hostname             string `toml:"hostname" default:""`                      // Proxmox VE server hostname, IP address, or HTTPS URL.
+		Port                 string `toml:"port" default:"8006"`                      // Proxmox VE API port.
+		TokenID              string `toml:"token_id" default:""`                      // Proxmox VE API token ID, including the user realm.
+		Secret               string `toml:"secret" default:""`                        // Proxmox VE API token secret.
+		VerifyTLS            bool   `toml:"verify_tls" default:"true"`                // Verify the Proxmox API TLS certificate.
+		TLSFingerprintSHA256 string `toml:"tls_fingerprint_sha256" default:""`        // Optional SHA-256 certificate pin for a private Proxmox CA.
+		ClusterID            string `toml:"cluster_id" default:""`                    // Stable local identity for this cluster; defaults to hostname.
+		ManagedTag           string `toml:"managed_tag" default:"organesson-managed"` // Required tag for guests visible to Organesson.
 	} `toml:"proxmox"` // Proxmox VE integration configuration
 }
 

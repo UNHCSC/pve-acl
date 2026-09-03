@@ -1229,6 +1229,9 @@ func postCreateOrganizationMembership(c *fiber.Ctx) (errResult error) {
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subject"})
 			}
+			if err = auditRequest(c, "access.membership.create", "organization_membership", &membership.ID, nil, map[string]any{"organizationID": org.ID, "subjectID": subjectID}); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+			}
 			return c.Status(fiber.StatusCreated).JSON(items[0])
 		}
 	}
@@ -1285,6 +1288,9 @@ func patchOrganizationMembership(c *fiber.Ctx) (errResult error) {
 	items, err = organizationMembershipResponse([]*db.OrganizationMembership{membership})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
+	}
+	if err = auditRequest(c, "access.membership.update", "organization_membership", &membership.ID, nil, map[string]any{"organizationID": org.ID, "roleID": req.RoleID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.JSON(items[0])
 }
@@ -1434,6 +1440,9 @@ func postCreateProjectMembership(c *fiber.Ctx) (errResult error) {
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership subject"})
 			}
+			if err = auditRequest(c, "access.membership.create", "project_membership", &membership.ID, &projectID, map[string]any{"subjectID": subjectID}); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+			}
 			return c.Status(fiber.StatusCreated).JSON(items[0])
 		}
 	}
@@ -1521,6 +1530,9 @@ func patchProjectMembership(c *fiber.Ctx) (errResult error) {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load membership"})
 	}
+	if err = auditRequest(c, "access.membership.update", "project_membership", &membership.ID, &projectID, map[string]any{"roleID": req.RoleID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 	return c.JSON(items[0])
 }
 
@@ -1576,10 +1588,13 @@ func deleteProjectMembership(c *fiber.Ctx) (errResult error) {
 	if err = db.RemoveProjectMembership(membershipID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove membership"})
 	}
+	if err = auditRequest(c, "access.membership.delete", "project_membership", &membershipID, &projectID, map[string]any{"subjectID": membership.SubjectID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// deleteProjectBySlug deletes a project when the current user can manage it.
+// deleteProjectBySlug archives a project when the current user can manage it.
 func deleteProjectBySlug(c *fiber.Ctx) (errResult error) {
 	var (
 		project *db.Project
@@ -1603,8 +1618,11 @@ func deleteProjectBySlug(c *fiber.Ctx) (errResult error) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
 
-	if err = db.DeleteProject(project.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete project"})
+	if err = db.ArchiveProject(project); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to archive project"})
+	}
+	if err = auditRequest(c, "project.archive", "project", &project.ID, &project.ID, nil); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
