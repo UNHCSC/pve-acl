@@ -263,7 +263,7 @@ export function ResourceModal({
     onClose
 }: {
     project: Project;
-    onSubmit: (values: { name: string; slug: string; resourceType: string; status: string }) => Promise<void>;
+    onSubmit: (values: { name: string; slug: string; resourceType: string }) => Promise<void>;
     onClose: () => void;
 }) {
     return (
@@ -275,8 +275,7 @@ export function ResourceModal({
                 onSubmit({
                     name: String(data.get("name") || ""),
                     slug: String(data.get("slug") || ""),
-                    resourceType: String(data.get("resourceType") || "vm"),
-                    status: String(data.get("status") || "ready")
+                    resourceType: String(data.get("resourceType") || "vm")
                 })
             }
         >
@@ -287,27 +286,24 @@ export function ResourceModal({
                 <option value="container">Container</option>
                 <option value="network">Network</option>
             </Select>
-            <Select name="status" label="Status" defaultValue="ready" required>
-                <option value="ready">Ready</option>
-                <option value="unknown">Unknown</option>
-                <option value="error">Error</option>
-            </Select>
         </SimpleFormModal>
     );
 }
 
 export function AssetGroupModal({
     project,
+    group,
     onSubmit,
     onClose
 }: {
     project: Project;
+    group?: AssetGroup;
     onSubmit: (values: { name: string; slug: string; description: string }) => Promise<void>;
     onClose: () => void;
 }) {
     return (
         <SimpleFormModal
-            title={`New asset group for ${project.name}`}
+            title={group ? `Edit ${group.name}` : `New asset group for ${project.name}`}
             label="Inventory"
             onClose={onClose}
             onSubmit={(data) =>
@@ -318,9 +314,9 @@ export function AssetGroupModal({
                 })
             }
         >
-            <Field name="name" label="Name" required />
-            <Field name="slug" label="Slug" />
-            <Textarea name="description" label="Description" />
+            <Field name="name" label="Name" defaultValue={group?.name} required />
+            <Field name="slug" label="Slug" defaultValue={group?.slug} />
+            <Textarea name="description" label="Description" defaultValue={group?.description} />
         </SimpleFormModal>
     );
 }

@@ -61,6 +61,7 @@ function DashboardApp() {
     const [projectMemberSubjectType, setProjectMemberSubjectType] = useState<"user" | "group">("user");
     const [groupMembersContext, setGroupMembersContext] = useState<{ id: number; name: string } | null>(null);
     const [assetGroupResourceContext, setAssetGroupResourceContext] = useState<AssetGroup | null>(null);
+    const [editingAssetGroup, setEditingAssetGroup] = useState<AssetGroup | null>(null);
     const [editingRole, setEditingRole] = useState<{ role: Role; context: Organization | Project } | null>(null);
 
     const { toasts, showToast } = useToasts();
@@ -325,7 +326,7 @@ function DashboardApp() {
         showToast("Project member added", "success");
     };
 
-    const createResource = async (values: { name: string; slug: string; resourceType: string; status: string }) => {
+    const createResource = async (values: { name: string; slug: string; resourceType: string }) => {
         if (!activeProject) {
             return;
         }
@@ -350,6 +351,24 @@ function DashboardApp() {
         await apiFetch<AssetGroup>(`/api/v1/projects/${activeProject.id}/asset-groups`, { method: "POST", body: JSON.stringify(values) });
         await reloadProjectAssetGroups();
         showToast("Asset group created", "success");
+    };
+
+    const updateAssetGroup = async (group: AssetGroup, values: { name: string; slug: string; description: string }) => {
+        if (!activeProject) {
+            return;
+        }
+        await apiFetch<AssetGroup>(`/api/v1/projects/${activeProject.id}/asset-groups/${group.id}`, { method: "PATCH", body: JSON.stringify(values) });
+        await reloadProjectAssetGroups();
+        showToast("Asset group updated", "success");
+    };
+
+    const deleteAssetGroup = async (group: AssetGroup) => {
+        if (!activeProject || !window.confirm(`Archive ${group.name}? Its assignments and derived resource access will be removed.`)) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/asset-groups/${group.id}`, { method: "DELETE" });
+        await reloadProjectAssets();
+        showToast("Asset group archived", "success");
     };
 
     const addAssetGroupResource = async (group: AssetGroup, resourceID: number) => {
@@ -570,6 +589,11 @@ function DashboardApp() {
                             deleteRole={(role) => mutateWithToast(() => deleteRole(role))}
                             createResource={() => openContextModal("resource", activeProject || selectedProject)}
                             createAssetGroup={() => openContextModal("asset-group", activeProject || selectedProject)}
+                            editAssetGroup={(group) => {
+                                setOpenMenu(null);
+                                setEditingAssetGroup(group);
+                            }}
+                            deleteAssetGroup={(group) => mutateWithToast(() => deleteAssetGroup(group))}
                             manageAssetGroupResources={(group) => {
                                 setAssetGroupResourceContext(group);
                                 openContextModal("asset-group-resources", activeProject || selectedProject);
@@ -714,6 +738,17 @@ function DashboardApp() {
                     project={activeProject}
                     onClose={() => setModal(null)}
                     onSubmit={(values) => submitModalMutation(() => createAssetGroup(values))}
+                />
+            )}
+            {editingAssetGroup && activeProject && (
+                <AssetGroupModal
+                    project={activeProject}
+                    group={editingAssetGroup}
+                    onClose={() => setEditingAssetGroup(null)}
+                    onSubmit={async (values) => {
+                        await updateAssetGroup(editingAssetGroup, values);
+                        setEditingAssetGroup(null);
+                    }}
                 />
             )}
             {modal === "asset-group-resources" && assetGroupResourceContext && (

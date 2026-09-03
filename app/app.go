@@ -148,6 +148,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Projects.Delete("/:id/resources/:resourceID", deleteProjectResource)
 	apiV1Projects.Get("/:id/asset-groups", getProjectAssetGroups)
 	apiV1Projects.Post("/:id/asset-groups", postCreateProjectAssetGroup)
+	apiV1Projects.Patch("/:id/asset-groups/:groupID", patchProjectAssetGroup)
+	apiV1Projects.Delete("/:id/asset-groups/:groupID", deleteProjectAssetGroup)
 	apiV1Projects.Post("/:id/asset-groups/:groupID/resources/:resourceID", postProjectAssetGroupResource)
 	apiV1Projects.Delete("/:id/asset-groups/:groupID/resources/:resourceID", deleteProjectAssetGroupResource)
 	apiV1Projects.Get("/:id/asset-assignments", getProjectAssetAssignments)

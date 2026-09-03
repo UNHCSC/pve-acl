@@ -52,7 +52,7 @@ func TestProjectManagerCanManageResourceWorkflow(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("expected one resource, got %#v", resources)
 	}
-	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(resourceID), `{"name":"Student VM Updated","slug":"student-vm-updated","status":"unknown"}`)
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(resourceID), `{"name":"Student VM Updated","slug":"student-vm-updated"}`)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected update 200, got %d", resp.StatusCode)
 	}
@@ -84,15 +84,173 @@ func TestProjectViewerCannotMutateResourceWorkflow(t *testing.T) {
 	var fiberApp *fiber.App
 
 	fiberApp = newResourceAPITestApp()
+	var manager *db.User
+
+	manager = ensureResourceAPIUser(t, "viewer-resource-manager")
+	grantProjectRole(t, project.ID, manager.ID, db.ProjectRoleManager)
+	var managerToken string
+
+	managerToken = authenticateTestUser(t, manager.Username, false)
+	var resource map[string]any
+
+	resource = createResourceAPIResource(t, fiberApp, managerToken, project.ID, `{"name":"Protected VM","resourceType":"vm"}`)
+	var resourceID int
+
+	resourceID = int(resource["id"].(float64))
 	var resp *http.Response
 
 	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", `{"name":"Denied VM","resourceType":"vm"}`)
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("expected viewer resource create 403, got %d", resp.StatusCode)
 	}
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(resourceID), `{"name":"Denied update"}`)
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected viewer resource update 403, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "DELETE", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(resourceID), "")
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected viewer resource archive 403, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups", `{"name":"Denied group"}`)
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected viewer asset group create 403, got %d", resp.StatusCode)
+	}
 	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-assignments", `{"targetType":"resource","resourceID":1,"subjectType":"user","subjectRef":"nobody","roleID":1}`)
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("expected viewer assignment create 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestResourceOperationalStatusIsServerOwned(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var (
+		project  *db.Project
+		manager  *db.User
+		fiberApp *fiber.App
+		token    string
+	)
+
+	project = createResourceAPIProject(t, "Server Status")
+	manager = ensureResourceAPIUser(t, "server-status-manager")
+	grantProjectRole(t, project.ID, manager.ID, db.ProjectRoleManager)
+	token = authenticateTestUser(t, manager.Username, false)
+	fiberApp = newResourceAPITestApp()
+	var resp *http.Response
+
+	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", `{"name":"Forged VM","resourceType":"vm","status":"error"}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected client-selected create status 400, got %d", resp.StatusCode)
+	}
+	var resource map[string]any
+
+	resource = createResourceAPIResource(t, fiberApp, token, project.ID, `{"name":"Managed VM","resourceType":"vm"}`)
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(int(resource["id"].(float64))), `{"name":"Managed VM","status":"deleting"}`)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected client-selected update status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectManagerCanUpdateAndArchiveAssetGroup(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var (
+		project  *db.Project
+		manager  *db.User
+		fiberApp *fiber.App
+		token    string
+		err      error
+	)
+
+	project = createResourceAPIProject(t, "Managed Asset Groups")
+	manager = ensureResourceAPIUser(t, "asset-group-manager")
+	grantProjectRole(t, project.ID, manager.ID, db.ProjectRoleManager)
+	token = authenticateTestUser(t, manager.Username, false)
+	fiberApp = newResourceAPITestApp()
+	var resp *http.Response
+
+	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups", `{"name":"Lab One","description":"Before"}`)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected asset group create 201, got %d", resp.StatusCode)
+	}
+	var group map[string]any
+
+	if err = json.NewDecoder(resp.Body).Decode(&group); err != nil {
+		t.Fatalf("decode asset group: %v", err)
+	}
+	var groupID int
+
+	groupID = int(group["id"].(float64))
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups/"+strconv.Itoa(groupID), `{"name":"Lab One Updated","slug":"lab-one-updated","description":"After"}`)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected asset group update 200, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "DELETE", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups/"+strconv.Itoa(groupID), "")
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected asset group archive 204, got %d", resp.StatusCode)
+	}
+	var stored *db.AssetGroup
+
+	stored, err = db.AssetGroups.Select(groupID)
+	if err != nil || stored == nil || stored.ArchivedAt == nil {
+		t.Fatalf("expected archived asset group, group=%#v err=%v", stored, err)
+	}
+}
+
+func TestResourceEndpointsRejectCrossProjectIDs(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var (
+		firstProject  *db.Project
+		secondProject *db.Project
+		manager       *db.User
+		fiberApp      *fiber.App
+		token         string
+	)
+
+	firstProject = createResourceAPIProject(t, "First Resource Boundary")
+	secondProject = createResourceAPIProject(t, "Second Resource Boundary")
+	manager = ensureResourceAPIUser(t, "resource-boundary-manager")
+	grantProjectRole(t, firstProject.ID, manager.ID, db.ProjectRoleManager)
+	grantProjectRole(t, secondProject.ID, manager.ID, db.ProjectRoleManager)
+	token = authenticateTestUser(t, manager.Username, false)
+	fiberApp = newResourceAPITestApp()
+	var secondResource map[string]any
+
+	secondResource = createResourceAPIResource(t, fiberApp, token, secondProject.ID, `{"name":"Second VM","resourceType":"vm"}`)
+	var secondResourceID int
+
+	secondResourceID = int(secondResource["id"].(float64))
+	var resp *http.Response
+
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(firstProject.ID)+"/resources/"+strconv.Itoa(secondResourceID), `{"name":"Cross-project update"}`)
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected cross-project resource update 404, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "DELETE", "/api/v1/projects/"+strconv.Itoa(firstProject.ID)+"/resources/"+strconv.Itoa(secondResourceID), "")
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected cross-project resource archive 404, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(secondProject.ID)+"/asset-groups", `{"name":"Second Lab"}`)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected second asset group create 201, got %d", resp.StatusCode)
+	}
+	var group map[string]any
+	var err error
+
+	if err = json.NewDecoder(resp.Body).Decode(&group); err != nil {
+		t.Fatalf("decode asset group: %v", err)
+	}
+	var groupID int
+
+	groupID = int(group["id"].(float64))
+	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(firstProject.ID)+"/asset-groups/"+strconv.Itoa(groupID), `{"name":"Cross-project group"}`)
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected cross-project asset group update 404, got %d", resp.StatusCode)
+	}
+	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(firstProject.ID)+"/asset-groups/"+strconv.Itoa(groupID)+"/resources/"+strconv.Itoa(secondResourceID), "")
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected cross-project group resource add 404, got %d", resp.StatusCode)
 	}
 }
 
@@ -132,6 +290,119 @@ func TestProjectDeveloperCanCreateVMButCannotAssignRoles(t *testing.T) {
 	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-assignments", body)
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("expected developer assignment create 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestResourceDeletePermissionAllowsArchiveWithoutProjectManagement(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var (
+		project  *db.Project
+		manager  *db.User
+		deleter  *db.User
+		role     *db.Role
+		fiberApp *fiber.App
+		err      error
+	)
+
+	project = createResourceAPIProject(t, "Scoped Resource Delete")
+	manager = ensureResourceAPIUser(t, "scoped-delete-manager")
+	grantProjectRole(t, project.ID, manager.ID, db.ProjectRoleManager)
+	deleter = ensureResourceAPIUser(t, "scoped-resource-deleter")
+	role = createResourceAPIRole(t, "VM Deleter", project.ID, db.PermissionVMDelete)
+	if _, err = db.EnsureRoleBinding(role.ID, db.RoleBindingSubjectUser, deleter.ID, db.RoleBindingScopeProject, &project.ID); err != nil {
+		t.Fatalf("EnsureRoleBinding returned error: %v", err)
+	}
+	fiberApp = newResourceAPITestApp()
+	var resource map[string]any
+
+	resource = createResourceAPIResource(t, fiberApp, authenticateTestUser(t, manager.Username, false), project.ID, `{"name":"Disposable VM","resourceType":"vm"}`)
+	var resp *http.Response
+
+	resp = resourceAPIRequest(t, fiberApp, authenticateTestUser(t, deleter.Username, false), "DELETE", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(int(resource["id"].(float64))), "")
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected vm.delete resource archive 204, got %d", resp.StatusCode)
+	}
+}
+
+func TestProjectViewerCannotMutateAssetGroupsOrAssignments(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var (
+		project  *db.Project
+		manager  *db.User
+		viewer   *db.User
+		target   *db.User
+		role     *db.Role
+		fiberApp *fiber.App
+		err      error
+	)
+
+	project = createResourceAPIProject(t, "Protected Asset Group")
+	manager = ensureResourceAPIUser(t, "protected-group-manager")
+	viewer = ensureResourceAPIUser(t, "protected-group-viewer")
+	target = ensureResourceAPIUser(t, "protected-group-target")
+	grantProjectRole(t, project.ID, manager.ID, db.ProjectRoleManager)
+	grantProjectRole(t, project.ID, viewer.ID, db.ProjectRoleViewer)
+	role = createResourceAPIRole(t, "Protected VM User", project.ID, db.PermissionVMRead)
+	fiberApp = newResourceAPITestApp()
+	var managerToken string
+
+	managerToken = authenticateTestUser(t, manager.Username, false)
+	var resource map[string]any
+
+	resource = createResourceAPIResource(t, fiberApp, managerToken, project.ID, `{"name":"Protected Group VM","resourceType":"vm"}`)
+	var resourceID int
+
+	resourceID = int(resource["id"].(float64))
+	var resp *http.Response
+
+	resp = resourceAPIRequest(t, fiberApp, managerToken, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups", `{"name":"Protected Lab"}`)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected asset group create 201, got %d", resp.StatusCode)
+	}
+	var group map[string]any
+
+	if err = json.NewDecoder(resp.Body).Decode(&group); err != nil {
+		t.Fatalf("decode asset group: %v", err)
+	}
+	var groupID int
+
+	groupID = int(group["id"].(float64))
+	resp = resourceAPIRequest(t, fiberApp, managerToken, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-groups/"+strconv.Itoa(groupID)+"/resources/"+strconv.Itoa(resourceID), "")
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected asset group resource add 201, got %d", resp.StatusCode)
+	}
+	var body string
+
+	body = `{"targetType":"assetGroup","assetGroupID":` + strconv.Itoa(groupID) + `,"subjectType":"user","subjectRef":"` + target.Username + `","roleID":` + strconv.Itoa(role.ID) + `}`
+	resp = resourceAPIRequest(t, fiberApp, managerToken, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/asset-assignments", body)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected assignment create 201, got %d", resp.StatusCode)
+	}
+	var assignment map[string]any
+
+	if err = json.NewDecoder(resp.Body).Decode(&assignment); err != nil {
+		t.Fatalf("decode assignment: %v", err)
+	}
+	var viewerToken string
+
+	viewerToken = authenticateTestUser(t, viewer.Username, false)
+	var deniedRequests = []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{"PATCH", "/api/v1/projects/" + strconv.Itoa(project.ID) + "/asset-groups/" + strconv.Itoa(groupID), `{"name":"Denied"}`},
+		{"DELETE", "/api/v1/projects/" + strconv.Itoa(project.ID) + "/asset-groups/" + strconv.Itoa(groupID), ""},
+		{"DELETE", "/api/v1/projects/" + strconv.Itoa(project.ID) + "/asset-groups/" + strconv.Itoa(groupID) + "/resources/" + strconv.Itoa(resourceID), ""},
+		{"DELETE", "/api/v1/projects/" + strconv.Itoa(project.ID) + "/asset-assignments/" + strconv.Itoa(int(assignment["id"].(float64))), ""},
+	}
+	for _, deniedRequest := range deniedRequests {
+		resp = resourceAPIRequest(t, fiberApp, viewerToken, deniedRequest.method, deniedRequest.path, deniedRequest.body)
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("expected %s %s to return 403, got %d", deniedRequest.method, deniedRequest.path, resp.StatusCode)
+		}
 	}
 }
 
@@ -237,6 +508,8 @@ func newResourceAPITestApp() (fiberApp *fiber.App) {
 	fiberApp.Delete("/api/v1/projects/:id/resources/:resourceID", deleteProjectResource)
 	fiberApp.Get("/api/v1/projects/:id/asset-groups", getProjectAssetGroups)
 	fiberApp.Post("/api/v1/projects/:id/asset-groups", postCreateProjectAssetGroup)
+	fiberApp.Patch("/api/v1/projects/:id/asset-groups/:groupID", patchProjectAssetGroup)
+	fiberApp.Delete("/api/v1/projects/:id/asset-groups/:groupID", deleteProjectAssetGroup)
 	fiberApp.Post("/api/v1/projects/:id/asset-groups/:groupID/resources/:resourceID", postProjectAssetGroupResource)
 	fiberApp.Delete("/api/v1/projects/:id/asset-groups/:groupID/resources/:resourceID", deleteProjectAssetGroupResource)
 	fiberApp.Get("/api/v1/projects/:id/asset-assignments", getProjectAssetAssignments)

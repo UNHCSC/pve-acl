@@ -8,12 +8,20 @@ import (
 	"github.com/z46-dev/gosqlite"
 )
 
-type AssetGroupCreateInput struct {
-	ProjectID   int
-	Name        string
-	Slug        string
-	Description string
-}
+type (
+	AssetGroupCreateInput struct {
+		ProjectID   int
+		Name        string
+		Slug        string
+		Description string
+	}
+
+	AssetGroupUpdateInput struct {
+		Name        string
+		Slug        string
+		Description string
+	}
+)
 
 // CreateAssetGroup creates asset group.
 func CreateAssetGroup(input AssetGroupCreateInput) (assetGroupResult *AssetGroup, errResult error) {
@@ -96,6 +104,43 @@ func AssetGroupsForProject(projectID int) (itemsResult []*AssetGroup, errResult 
 		KeyCmp(AssetGroups.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
+// UpdateAssetGroup updates editable asset group fields.
+func UpdateAssetGroup(assetGroup *AssetGroup, input AssetGroupUpdateInput) (errResult error) {
+	if assetGroup == nil || assetGroup.ArchivedAt != nil {
+		return fmt.Errorf("asset group was not found")
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Slug = slugify(input.Slug)
+	if input.Slug == "" {
+		input.Slug = slugify(input.Name)
+	}
+	if input.Name == "" {
+		return fmt.Errorf("asset group name is required")
+	}
+	if input.Slug == "" {
+		return fmt.Errorf("asset group slug is required")
+	}
+	var (
+		existing []*AssetGroup
+		err      error
+	)
+
+	existing, err = AssetGroupsForProject(assetGroup.ProjectID)
+	if err != nil {
+		return err
+	}
+	for _, candidate := range existing {
+		if candidate.ID != assetGroup.ID && strings.EqualFold(candidate.Slug, input.Slug) {
+			return fmt.Errorf("asset group slug %q already exists in this project", candidate.Slug)
+		}
+	}
+	assetGroup.Name = input.Name
+	assetGroup.Slug = input.Slug
+	assetGroup.Description = strings.TrimSpace(input.Description)
+	assetGroup.UpdatedAt = time.Now().UTC()
+	return AssetGroups.Update(assetGroup)
+}
+
 // AssetGroupResourcesForGroup returns resources attached to an asset group.
 func AssetGroupResourcesForGroup(assetGroupID int) (itemsResult []*AssetGroupResource, errResult error) {
 	return AssetGroupResources.SelectAllWithFilter(gosqlite.NewFilter().
@@ -110,14 +155,20 @@ func EnsureAssetGroupResource(assetGroupID, resourceID int) (okResult bool, errR
 	)
 
 	assetGroup, err = AssetGroups.Select(assetGroupID)
-	if err != nil || assetGroup == nil {
+	if err != nil {
 		return false, err
+	}
+	if assetGroup == nil || assetGroup.ArchivedAt != nil {
+		return false, fmt.Errorf("asset group was not found")
 	}
 	var resource *Resource
 
 	resource, err = Resources.Select(resourceID)
-	if err != nil || resource == nil || resource.DeletedAt != nil {
+	if err != nil {
 		return false, err
+	}
+	if resource == nil || resource.DeletedAt != nil {
+		return false, fmt.Errorf("resource was not found")
 	}
 	if assetGroup.ProjectID != resource.ProjectID {
 		return false, fmt.Errorf("asset group and resource must belong to the same project")
@@ -189,6 +240,7 @@ func RemoveAssetGroupResource(assetGroupID, resourceID int) (errResult error) {
 func ArchiveAssetGroup(assetGroup *AssetGroup) (errResult error) {
 	var (
 		assignments []*AssetAssignment
+		resources   []*AssetGroupResource
 		err         error
 	)
 
@@ -203,6 +255,15 @@ func ArchiveAssetGroup(assetGroup *AssetGroup) (errResult error) {
 			if err = ArchiveAssetAssignment(assignment.ID); err != nil {
 				return err
 			}
+		}
+	}
+	resources, err = AssetGroupResourcesForGroup(assetGroup.ID)
+	if err != nil {
+		return err
+	}
+	for _, resource := range resources {
+		if err = RemoveAssetGroupResource(assetGroup.ID, resource.ResourceID); err != nil {
+			return err
 		}
 	}
 	if assetGroup.ArchivedAt == nil {
