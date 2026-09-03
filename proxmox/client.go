@@ -38,29 +38,30 @@ type apiResponse[T any] struct {
 }
 
 type apiResource struct {
-	ID       string  `json:"id"`
-	Node     string  `json:"node"`
-	Name     string  `json:"name"`
-	Status   string  `json:"status"`
-	Type     string  `json:"type"`
-	Tags     string  `json:"tags"`
-	Content  string  `json:"content"`
-	Storage  string  `json:"storage"`
-	OSType   string  `json:"ostype"`
-	Template int     `json:"template"`
-	Active   int     `json:"active"`
-	Shared   int     `json:"shared"`
-	CPU      float64 `json:"cpu"`
-	MaxCPU   int     `json:"maxcpu"`
-	Mem      int64   `json:"mem"`
-	MaxMem   int64   `json:"maxmem"`
-	Disk     int64   `json:"disk"`
-	MaxDisk  int64   `json:"maxdisk"`
-	Uptime   int64   `json:"uptime"`
-	VMID     int     `json:"vmid"`
-	Total    int64   `json:"total"`
-	Used     int64   `json:"used"`
-	Avail    int64   `json:"avail"`
+	ID        string  `json:"id"`
+	Node      string  `json:"node"`
+	Name      string  `json:"name"`
+	Status    string  `json:"status"`
+	QMPStatus string  `json:"qmpstatus"`
+	Type      string  `json:"type"`
+	Tags      string  `json:"tags"`
+	Content   string  `json:"content"`
+	Storage   string  `json:"storage"`
+	OSType    string  `json:"ostype"`
+	Template  int     `json:"template"`
+	Active    int     `json:"active"`
+	Shared    int     `json:"shared"`
+	CPU       float64 `json:"cpu"`
+	MaxCPU    int     `json:"maxcpu"`
+	Mem       int64   `json:"mem"`
+	MaxMem    int64   `json:"maxmem"`
+	Disk      int64   `json:"disk"`
+	MaxDisk   int64   `json:"maxdisk"`
+	Uptime    int64   `json:"uptime"`
+	VMID      int     `json:"vmid"`
+	Total     int64   `json:"total"`
+	Used      int64   `json:"used"`
+	Avail     int64   `json:"avail"`
 }
 
 type apiNetwork struct {
@@ -261,6 +262,14 @@ func (client *Client) GetGuest(ctx context.Context, node string, vmID int) (gues
 		if value, ok := config["tags"].(string); ok {
 			guest.Tags = ParseTags(value)
 		}
+		var current apiResource
+		if errResult = client.get(ctx, "/nodes/"+url.PathEscape(node)+"/"+guest.Kind+"/"+strconv.Itoa(vmID)+"/status/current", nil, &current); errResult != nil {
+			return Guest{}, errResult
+		}
+		guest.Status = current.Status
+		if current.QMPStatus == "paused" {
+			guest.Status = "paused"
+		}
 		return guest, nil
 	}
 	errResult = fmt.Errorf("guest %s/%d was not found", node, vmID)
@@ -284,6 +293,12 @@ func (client *Client) StopGuest(ctx context.Context, node string, vmID int) (str
 }
 func (client *Client) RebootGuest(ctx context.Context, node string, vmID int) (string, error) {
 	return client.guestAction(ctx, node, vmID, "reboot")
+}
+func (client *Client) PauseGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "suspend")
+}
+func (client *Client) ResumeGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "resume")
 }
 
 func (client *Client) GetTask(ctx context.Context, node, taskID string) (taskResult Task, errResult error) {

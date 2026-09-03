@@ -162,3 +162,14 @@ func TestConsoleSessionRejectsWrongUserAndExpiry(t *testing.T) {
 		t.Fatal("expected expired session rejection")
 	}
 }
+
+func TestPowerPermissionsIncludePauseAndResume(t *testing.T) {
+	var permission db.PermissionKey
+	var ok bool
+	if permission, ok = powerPermission("pause"); !ok || permission != db.PermissionVMStop {
+		t.Fatalf("pause permission=%q ok=%t", permission, ok)
+	}
+	if permission, ok = powerPermission("resume"); !ok || permission != db.PermissionVMStart {
+		t.Fatalf("resume permission=%q ok=%t", permission, ok)
+	}
+}

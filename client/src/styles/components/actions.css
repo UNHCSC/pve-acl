@@ -194,6 +194,16 @@
 
 .power-control.is-running .power-indicator { background: var(--color-success); }
 .power-control.is-stopped .power-indicator { background: var(--color-danger); }
+.power-control.is-paused .power-indicator { background: var(--color-warning); }
+
+.power-chevron {
+    align-items: center;
+    display: inline-flex;
+    height: 1em;
+    justify-content: center;
+    line-height: 1;
+    margin: 0 0 2px 1px;
+}
 
 .compact-button {
     min-height: 38px;

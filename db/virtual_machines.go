@@ -124,9 +124,13 @@ func ensureProxmoxNode(clusterID int, name string, now time.Time) (nodeResult *P
 
 // PowerStateFromProxmox maps a provider status string to the local power-state enum.
 func PowerStateFromProxmox(status string) (stateResult PowerState) {
-	stateResult = PowerStateStopped
+	stateResult = PowerStateUnknown
 	if strings.EqualFold(status, "running") {
 		stateResult = PowerStateRunning
+	} else if strings.EqualFold(status, "stopped") {
+		stateResult = PowerStateStopped
+	} else if strings.EqualFold(status, "paused") {
+		stateResult = PowerStatePaused
 	}
 	return
 }

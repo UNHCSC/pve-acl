@@ -23,6 +23,8 @@ type (
 		ShutdownGuest(ctx context.Context, node string, vmID int) (string, error)
 		StopGuest(ctx context.Context, node string, vmID int) (string, error)
 		RebootGuest(ctx context.Context, node string, vmID int) (string, error)
+		PauseGuest(ctx context.Context, node string, vmID int) (string, error)
+		ResumeGuest(ctx context.Context, node string, vmID int) (string, error)
 		GetTask(ctx context.Context, node, taskID string) (Task, error)
 		CreateConsoleTicket(ctx context.Context, node string, vmID int) (ConsoleTicket, error)
 	}

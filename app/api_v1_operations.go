@@ -48,8 +48,10 @@ func powerPermission(action string) (permissionResult db.PermissionKey, okResult
 	switch action {
 	case "start":
 		return db.PermissionVMStart, true
-	case "stop", "shutdown":
+	case "stop", "shutdown", "pause":
 		return db.PermissionVMStop, true
+	case "resume":
+		return db.PermissionVMStart, true
 	case "reboot":
 		return db.PermissionVMReboot, true
 	}
@@ -373,6 +375,10 @@ func consumeProxmoxAction(_ int, payload []byte) (result gasket.TaskConsumerResu
 		taskID, err = proxmoxIntegration.service.ShutdownGuest(context.Background(), guest.Node, guest.VMID)
 	case "reboot":
 		taskID, err = proxmoxIntegration.service.RebootGuest(context.Background(), guest.Node, guest.VMID)
+	case "pause":
+		taskID, err = proxmoxIntegration.service.PauseGuest(context.Background(), guest.Node, guest.VMID)
+	case "resume":
+		taskID, err = proxmoxIntegration.service.ResumeGuest(context.Background(), guest.Node, guest.VMID)
 	}
 	if err != nil {
 		_ = db.FailJob(job.ID, "provider_error", "Proxmox rejected the power action.", "transient")

@@ -35,6 +35,12 @@ func (service *FakeService) StopGuest(_ context.Context, node string, vmID int) 
 func (service *FakeService) RebootGuest(_ context.Context, node string, vmID int) (string, error) {
 	return service.action("reboot", node, vmID)
 }
+func (service *FakeService) PauseGuest(_ context.Context, node string, vmID int) (string, error) {
+	return service.action("pause", node, vmID)
+}
+func (service *FakeService) ResumeGuest(_ context.Context, node string, vmID int) (string, error) {
+	return service.action("resume", node, vmID)
+}
 func (service *FakeService) GetTask(_ context.Context, node, taskID string) (Task, error) {
 	return service.Tasks[taskID], nil
 }

@@ -661,12 +661,15 @@ function ProjectResourcesPanel(props: {
                                     {resource.resource_type_label === "vm" && powerState !== undefined && <RowActionMenu
                                         ariaLabel={`${resource.name} power actions`}
                                         buttonClassName={classNames("power-control", `is-${["running", "stopped", "paused", "unknown"][powerState] || "unknown"}`)}
-                                        buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span aria-hidden="true">⌄</span></>}
+                                        buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span className="power-chevron" aria-hidden="true">⌄</span></>}
                                         menuWidth={168}
                                     >
                                         <button type="button" role="menuitem" disabled={pending !== null || powerState === 0} onClick={() => power(resource, "start")}>Start</button>
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "stop")}>Stop now</button>
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "shutdown")}>Shutdown</button>
+                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "stop")}>Hard stop</button>
                                         <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "reboot")}>Reboot</button>
+										<button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "pause")}>Pause</button>
+										<button type="button" role="menuitem" disabled={pending !== null || powerState !== 2} onClick={() => power(resource, "resume")}>Resume</button>
                                         <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => openConsole(resource)}>Open console</button>
                                     </RowActionMenu>}
                                     <button className="button-secondary compact-button" type="button" aria-expanded={expandedResourceID === resource.id} onClick={() => setExpandedResourceID((current) => current === resource.id ? null : resource.id)}>Details</button>

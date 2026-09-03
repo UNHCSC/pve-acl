@@ -106,6 +106,16 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 		}()
 	}
 	guest = waitForGuestStatus(t, ctx, client, node, vmID, "running")
+	if taskID, err = client.PauseGuest(ctx, node, vmID); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+	waitForTask(t, ctx, client, node, taskID)
+	waitForGuestStatus(t, ctx, client, node, vmID, "paused")
+	if taskID, err = client.ResumeGuest(ctx, node, vmID); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	waitForTask(t, ctx, client, node, taskID)
+	waitForGuestStatus(t, ctx, client, node, vmID, "running")
 	var ticket proxmox.ConsoleTicket
 	if ticket, err = client.CreateConsoleTicket(ctx, node, vmID); err != nil {
 		t.Fatalf("create console ticket: %v", err)
