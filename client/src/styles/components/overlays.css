@@ -31,6 +31,8 @@
 .console-panel { background: #111; border-radius: 10px; display: grid; grid-template-rows: auto minmax(0, 1fr); height: min(82vh, 900px); overflow: hidden; width: min(92vw, 1280px); }
 .console-panel header { align-items: center; background: var(--color-panel); display: flex; justify-content: space-between; padding: 12px 16px; }
 .console-screen { min-height: 0; overflow: hidden; }
+.console-popup-body { background: #111; margin: 0; overflow: hidden; }
+.console-popup-root, .console-popup-root .console-panel { border-radius: 0; height: 100vh; width: 100vw; }
 
 .modal-form {
     display: grid;

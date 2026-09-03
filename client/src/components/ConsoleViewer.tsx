@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-export function ConsoleViewer({ path, password, onClose }: { path: string; password: string; onClose: () => void }) {
+export function ConsoleViewer({ path, password, targetWindow, onClose }: { path: string; password: string; targetWindow: Window; onClose: () => void }) {
     const screen = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState("Connecting…");
+    useEffect(() => {
+        targetWindow.document.title = "Organesson VM Console";
+        targetWindow.document.body.className = "console-popup-body";
+        if (!targetWindow.document.querySelector('link[data-organesson-console="styles"]')) {
+            const stylesheet = targetWindow.document.createElement("link");
+            stylesheet.rel = "stylesheet";
+            stylesheet.href = "/static/build/site.css";
+            stylesheet.dataset.organessonConsole = "styles";
+            targetWindow.document.head.appendChild(stylesheet);
+        }
+        targetWindow.addEventListener("beforeunload", onClose);
+        return () => targetWindow.removeEventListener("beforeunload", onClose);
+    }, [onClose, targetWindow]);
     useEffect(() => {
         if (!screen.current) {
             return;
@@ -27,9 +41,9 @@ export function ConsoleViewer({ path, password, onClose }: { path: string; passw
             disconnect();
         };
     }, [password, path]);
-    return (
-        <div className="modal-backdrop">
-            <section className="console-panel" role="dialog" aria-modal="true" aria-label="Virtual machine console">
+    return createPortal(
+        <div className="console-popup-root">
+            <section className="console-panel" aria-label="Virtual machine console">
                 <header>
                     <strong>Virtual machine console</strong>
                     <span>{status}</span>
@@ -37,6 +51,7 @@ export function ConsoleViewer({ path, password, onClose }: { path: string; passw
                 </header>
                 <div className="console-screen" ref={screen} />
             </section>
-        </div>
+        </div>,
+        targetWindow.document.body
     );
 }

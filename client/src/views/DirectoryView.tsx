@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "../components/common";
-import type { AssetAssignment, AssetGroup, AuditEvent, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectQuota, ProjectResource, Role, SecretMetadata, Selection } from "../types";
+import type { AssetAssignment, AssetGroup, AuditEvent, Group, Job, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectQuota, ProjectResource, Role, SecretMetadata, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
 import { apiFetch, requestKey } from "../api";
@@ -587,13 +587,27 @@ function ProjectResourcesPanel(props: {
     createAssetAssignment: () => void;
     deleteResource: (resource: ProjectResource) => void;
 }) {
+	const jobStatusNames = ["queued", "running", "succeeded", "failed", "cancelled"];
 	const [pending, setPending] = useState<string | null>(null);
-	const [consoleSession, setConsoleSession] = useState<{ path: string; password: string } | null>(null);
+	const [resourceJobs, setResourceJobs] = useState<Record<number, Job>>({});
+	const [consoleSession, setConsoleSession] = useState<{ path: string; password: string; targetWindow: Window } | null>(null);
 	const [operationError, setOperationError] = useState("");
+	const trackJob = async (resourceID: number, initial: Job) => {
+		let job = initial;
+		setResourceJobs((current) => ({ ...current, [resourceID]: job }));
+		while (job.status === 0 || job.status === 1) {
+			await new Promise((resolve) => window.setTimeout(resolve, 1000));
+			job = await apiFetch<Job>(`/api/v1/jobs/${job.id}`);
+			setResourceJobs((current) => ({ ...current, [resourceID]: job }));
+		}
+	};
 	const power = async (resource: ProjectResource, action: string) => {
 		setPending(`${resource.id}:${action}`);
 		setOperationError("");
-		try { await apiFetch(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": requestKey() } }); }
+		try {
+			const job = await apiFetch<Job>(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": requestKey() } });
+			await trackJob(resource.id, job);
+		}
 		catch (error) { setOperationError(error instanceof Error ? error.message : "Power action failed"); }
 		finally { setPending(null); }
 	};
@@ -602,13 +616,23 @@ function ProjectResourcesPanel(props: {
 			setOperationError("VM consoles require HTTPS. Configure web_server.tls_dir and open this site over https://.");
 			return;
 		}
+		const targetWindow = window.open("", `organesson-console-${resource.id}`, "popup=yes,width=1100,height=760,resizable=yes,scrollbars=no");
+		if (!targetWindow) {
+			setOperationError("The console window was blocked. Allow popups for this site and try again.");
+			return;
+		}
+		targetWindow.document.body.textContent = "Connecting to VM console…";
 		setPending(`${resource.id}:console`);
 		setOperationError("");
 		try {
 			const session = await apiFetch<{ websocket_path: string; console_password: string }>(`/api/v1/resources/${resource.id}/console-sessions`, { method: "POST" });
-			setConsoleSession({ path: session.websocket_path, password: session.console_password });
+			targetWindow.document.body.textContent = "";
+			setConsoleSession({ path: session.websocket_path, password: session.console_password, targetWindow });
 		}
-		catch (error) { setOperationError(error instanceof Error ? error.message : "Console request failed"); }
+		catch (error) {
+			targetWindow.close();
+			setOperationError(error instanceof Error ? error.message : "Console request failed");
+		}
 		finally { setPending(null); }
 	};
     return (
@@ -632,6 +656,7 @@ function ProjectResourcesPanel(props: {
                             <div className="project-access-actions">
                                 <span className="access-pill">{resource.status_label || "ready"}</span>
                                 {resource.power_state !== undefined && <span className="access-pill">{["running", "stopped", "paused", "unknown"][resource.power_state] || "unknown"}</span>}
+								{resourceJobs[resource.id] && <span className={`access-pill job-${jobStatusNames[resourceJobs[resource.id].status] || "unknown"}`}>{resourceJobs[resource.id].operation}: {jobStatusNames[resourceJobs[resource.id].status] || "unknown"} · {resourceJobs[resource.id].progress}%</span>}
                                 <span className="access-pill">{resource.assignment_count || 0} grants</span>
                                 <span className="access-pill">{resource.asset_group_count || 0} groups</span>
                                 {resource.resource_type_label === "vm" && resource.power_state !== undefined && <>
@@ -653,7 +678,7 @@ function ProjectResourcesPanel(props: {
                     ))}
                 </div>
             )}
-            {consoleSession && <ConsoleViewer path={consoleSession.path} password={consoleSession.password} onClose={() => setConsoleSession(null)} />}
+            {consoleSession && <ConsoleViewer path={consoleSession.path} password={consoleSession.password} targetWindow={consoleSession.targetWindow} onClose={() => { consoleSession.targetWindow.close(); setConsoleSession(null); }} />}
         </section>
     );
 }
