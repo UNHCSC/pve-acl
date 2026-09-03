@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,19 +52,35 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 			}
 			node = nodes[0].Name
 		}
-		if vmID, err = client.NextVMID(ctx); err != nil {
-			t.Fatalf("allocate test VMID: %v", err)
+		var guests []proxmox.Guest
+		if guests, err = client.ListGuests(ctx); err != nil {
+			t.Fatalf("find prior test fixture: %v", err)
 		}
-		var createTask string
-		if createTask, err = client.CreateTestGuest(ctx, node, vmID, "organesson-lifecycle-"+strconv.Itoa(vmID), config.Config.Proxmox.ManagedTag); err != nil {
-			t.Fatalf("create tagged test guest: %v", err)
+		for _, candidate := range guests {
+			if candidate.Node == node && strings.HasPrefix(candidate.Name, "organesson-lifecycle-") && proxmox.HasTag(candidate, config.Config.Proxmox.ManagedTag) && proxmox.HasTag(candidate, "organesson-test") {
+				if vmID != 0 {
+					t.Fatal("multiple Organesson lifecycle fixtures require manual cleanup")
+				}
+				vmID = candidate.VMID
+			}
 		}
-		waitForTask(t, ctx, client, node, createTask)
+		if vmID == 0 {
+			if vmID, err = client.NextVMID(ctx); err != nil {
+				t.Fatalf("allocate test VMID: %v", err)
+			}
+			var createTask string
+			if createTask, err = client.CreateTestGuest(ctx, node, vmID, "organesson-lifecycle-"+strconv.Itoa(vmID), config.Config.Proxmox.ManagedTag); err != nil {
+				t.Fatalf("create tagged test guest: %v", err)
+			}
+			waitForTask(t, ctx, client, node, createTask)
+		}
 		created = true
 		defer cleanupTestGuest(t, client, node, vmID, config.Config.Proxmox.ManagedTag)
 	}
 	var guest proxmox.Guest
-	if guest, err = client.GetGuest(ctx, node, vmID); err != nil {
+	if created {
+		guest = waitForGuestStatus(t, ctx, client, node, vmID, "stopped")
+	} else if guest, err = client.GetGuest(ctx, node, vmID); err != nil {
 		t.Fatalf("get test guest: %v", err)
 	}
 	if !proxmox.HasTag(guest, config.Config.Proxmox.ManagedTag) {
@@ -77,14 +94,18 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitForTask(t, ctx, client, node, taskID)
-	defer func() {
-		if taskID, err = client.ShutdownGuest(context.Background(), node, vmID); err == nil {
-			waitForTask(t, context.Background(), client, node, taskID)
-		}
-	}()
-	if guest, err = client.GetGuest(ctx, node, vmID); err != nil || guest.Status != "running" {
-		t.Fatalf("expected running guest, guest=%#v err=%v", guest, err)
+	if !created {
+		defer func() {
+			var shutdownContext context.Context
+			var shutdownCancel context.CancelFunc
+			shutdownContext, shutdownCancel = context.WithTimeout(context.Background(), time.Minute)
+			defer shutdownCancel()
+			if taskID, err = client.ShutdownGuest(shutdownContext, node, vmID); err == nil {
+				waitForTask(t, shutdownContext, client, node, taskID)
+			}
+		}()
 	}
+	guest = waitForGuestStatus(t, ctx, client, node, vmID, "running")
 	var ticket proxmox.ConsoleTicket
 	if ticket, err = client.CreateConsoleTicket(ctx, node, vmID); err != nil {
 		t.Fatalf("create console ticket: %v", err)
@@ -99,26 +120,49 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 
 func cleanupTestGuest(t *testing.T, client *proxmox.Client, node string, vmID int, managedTag string) {
 	t.Helper()
+	var cleanupContext context.Context
+	var cancel context.CancelFunc
+	cleanupContext, cancel = context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	var guest proxmox.Guest
 	var err error
-	if guest, err = client.GetGuest(context.Background(), node, vmID); err != nil {
+	if guest, err = client.GetGuest(cleanupContext, node, vmID); err != nil {
 		t.Errorf("inspect test guest for cleanup: %v", err)
 		return
 	}
 	if guest.Status != "stopped" {
 		var stopTask string
-		if stopTask, err = client.StopGuest(context.Background(), node, vmID); err != nil {
+		if stopTask, err = client.StopGuest(cleanupContext, node, vmID); err != nil {
 			t.Errorf("stop test guest for cleanup: %v", err)
 			return
 		}
-		waitForTask(t, context.Background(), client, node, stopTask)
+		waitForTask(t, cleanupContext, client, node, stopTask)
+		waitForGuestStatus(t, cleanupContext, client, node, vmID, "stopped")
 	}
 	var deleteTask string
-	if deleteTask, err = client.DeleteTestGuest(context.Background(), node, vmID, managedTag); err != nil {
+	if deleteTask, err = client.DeleteTestGuest(cleanupContext, node, vmID, managedTag); err != nil {
 		t.Errorf("delete test guest: %v", err)
 		return
 	}
-	waitForTask(t, context.Background(), client, node, deleteTask)
+	waitForTask(t, cleanupContext, client, node, deleteTask)
+}
+
+func waitForGuestStatus(t *testing.T, ctx context.Context, client *proxmox.Client, node string, vmID int, expected string) (guestResult proxmox.Guest) {
+	t.Helper()
+	for {
+		var err error
+		if guestResult, err = client.GetGuest(ctx, node, vmID); err != nil {
+			t.Fatalf("get test guest state: %v", err)
+		}
+		if guestResult.Status == expected {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("guest %d did not reach %s (last state %q)", vmID, expected, guestResult.Status)
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 func waitForTask(t *testing.T, ctx context.Context, client *proxmox.Client, node, taskID string) {
