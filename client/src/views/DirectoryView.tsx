@@ -661,7 +661,7 @@ function ProjectResourcesPanel(props: {
                                     {resource.resource_type_label === "vm" && powerState !== undefined && <RowActionMenu
                                         ariaLabel={`${resource.name} power actions`}
                                         buttonClassName={classNames("power-control", `is-${["running", "stopped", "paused", "unknown"][powerState] || "unknown"}`)}
-                                        buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span className="power-chevron" aria-hidden="true">⌄</span></>}
+                                        buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span className="power-chevron" aria-hidden="true" /></>}
                                         menuWidth={168}
                                     >
                                         <button type="button" role="menuitem" disabled={pending !== null || powerState === 0} onClick={() => power(resource, "start")}>Start</button>

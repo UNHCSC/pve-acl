@@ -197,12 +197,13 @@
 .power-control.is-paused .power-indicator { background: var(--color-warning); }
 
 .power-chevron {
-    align-items: center;
-    display: inline-flex;
-    height: 1em;
-    justify-content: center;
-    line-height: 1;
-    margin: 0 0 2px 1px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor;
+    display: block;
+    height: 0;
+    margin: 1px 0 0 2px;
+    width: 0;
 }
 
 .compact-button {
