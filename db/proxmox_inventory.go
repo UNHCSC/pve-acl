@@ -131,6 +131,20 @@ func SyncProxmoxInventory(ctx context.Context, service proxmox.Service, clusterI
 		if item, errResult = upsertProxmoxInventoryGuest(item, clusterIdentity, guest, driftState, "", now); errResult != nil {
 			return
 		}
+		if item.ResourceID != nil {
+			var machine *VirtualMachine
+			var found bool
+			if machine, found, errResult = VirtualMachineForResource(*item.ResourceID); errResult != nil {
+				return
+			}
+			if found {
+				machine.PowerState = PowerStateFromProxmox(guest.Status)
+				machine.UpdatedAt = now
+				if errResult = VirtualMachines.Update(machine); errResult != nil {
+					return
+				}
+			}
+		}
 		delete(existingByVMID, vmID)
 	}
 	for _, item := range existingByVMID {

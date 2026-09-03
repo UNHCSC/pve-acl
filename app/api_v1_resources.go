@@ -765,6 +765,19 @@ func projectResourceResponse(resources []*db.Resource) (itemsResult []fiber.Map,
 				return nil, err
 			}
 			if found {
+				if proxmoxIntegration.enabled && proxmoxIntegration.service != nil {
+					var refreshContext context.Context
+					var cancel context.CancelFunc
+					refreshContext, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+					var guest proxmox.Guest
+					if guest, err = managedMachineGuest(refreshContext, machine); err == nil {
+						if err = db.UpdateVirtualMachinePower(machine, db.PowerStateFromProxmox(guest.Status)); err != nil {
+							cancel()
+							return nil, err
+						}
+					}
+					cancel()
+				}
 				items[len(items)-1]["power_state"] = machine.PowerState
 				items[len(items)-1]["power_updated_at"] = machine.UpdatedAt
 				items[len(items)-1]["proxmox_vmid"] = machine.ProxmoxVMID

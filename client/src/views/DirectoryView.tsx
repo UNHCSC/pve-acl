@@ -590,7 +590,6 @@ function ProjectResourcesPanel(props: {
 	const jobStatusNames = ["queued", "running", "succeeded", "failed", "cancelled"];
 	const [pending, setPending] = useState<string | null>(null);
 	const [resourceJobs, setResourceJobs] = useState<Record<number, Job>>({});
-	const [powerStates, setPowerStates] = useState<Record<number, number>>({});
 	const [expandedResourceID, setExpandedResourceID] = useState<number | null>(null);
 	const [consoleSession, setConsoleSession] = useState<{ path: string; password: string; targetWindow: Window } | null>(null);
 	const [operationError, setOperationError] = useState("");
@@ -601,9 +600,6 @@ function ProjectResourcesPanel(props: {
 			await new Promise((resolve) => window.setTimeout(resolve, 1000));
 			job = await apiFetch<Job>(`/api/v1/jobs/${job.id}`);
 			setResourceJobs((current) => ({ ...current, [resourceID]: job }));
-		}
-		if (job.status === 2) {
-			setPowerStates((current) => ({ ...current, [resourceID]: job.operation === "vm.stop" || job.operation === "vm.shutdown" ? 1 : 0 }));
 		}
 	};
 	const power = async (resource: ProjectResource, action: string) => {
@@ -653,7 +649,7 @@ function ProjectResourcesPanel(props: {
             {!props.loading && props.resources.length > 0 && (
                 <div className="resource-list">
                     {props.resources.map((resource) => {
-						const powerState = powerStates[resource.id] ?? resource.power_state;
+						const powerState = resource.power_state;
 						return (
                         <article className="resource-card" key={resource.id}>
                             <div className="resource-card-main">

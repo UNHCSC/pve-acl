@@ -83,6 +83,7 @@ func TestCreateResourceImportsOnlyFreshTaggedGuest(t *testing.T) {
 	}
 	var app *fiber.App = newAuthenticatedFiberApp()
 	app.Post("/api/v1/projects/:id/resources", postCreateProjectResource)
+	app.Get("/api/v1/projects/:id/resources", getProjectResources)
 	var token string = authenticateTestUser(t, "import-admin", true)
 	var payload []byte
 	if payload, err = json.Marshal(map[string]any{"name": "Course VM", "resourceType": "vm", "proxmoxInventoryGuestID": syncResult.Guests[0].ID}); err != nil {
@@ -103,6 +104,16 @@ func TestCreateResourceImportsOnlyFreshTaggedGuest(t *testing.T) {
 	var found bool
 	if machine, found, err = db.VirtualMachineForResource(resource.ID); err != nil || !found || machine.ProxmoxVMID != 501 {
 		t.Fatalf("linked machine=%#v found=%t err=%v", machine, found, err)
+	}
+	fake.Guests[0].Status = "running"
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode != fiber.StatusOK {
+		t.Fatalf("refresh resources status=%d err=%v", response.StatusCode, err)
+	}
+	var resources []map[string]any
+	if err = json.NewDecoder(response.Body).Decode(&resources); err != nil || len(resources) != 1 || resources[0]["power_state"] != float64(db.PowerStateRunning) {
+		t.Fatalf("expected live running state, resources=%#v err=%v", resources, err)
 	}
 	fake.Guests = []proxmox.Guest{{VMID: 502, Node: "pve-a", Name: "lost-tag", Kind: "qemu", Tags: []string{proxmox.DefaultManagedTag}}}
 	if syncResult, err = db.SyncProxmoxInventory(t.Context(), fake, "test-cluster", proxmox.DefaultManagedTag); err != nil {

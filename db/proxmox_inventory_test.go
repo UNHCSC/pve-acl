@@ -61,13 +61,18 @@ func TestSyncProxmoxInventoryLinksExistingIdentityAndDetectsChange(t *testing.T)
 	if err = VirtualMachines.Insert(&VirtualMachine{ResourceID: resource.ID, ClusterID: cluster.ID, ProxmoxVMID: 1201, Name: "lab-vm", CPUCores: 2, MemoryMB: 2048, PowerState: PowerStateStopped, CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatalf("insert virtual machine: %v", err)
 	}
-	var fake *proxmox.FakeService = &proxmox.FakeService{Guests: []proxmox.Guest{{VMID: 1201, Node: "pve-a", Name: "lab-vm", Kind: "qemu", Tags: []string{"organesson-managed"}, CPUCores: 2}}}
+	var fake *proxmox.FakeService = &proxmox.FakeService{Guests: []proxmox.Guest{{VMID: 1201, Node: "pve-a", Name: "lab-vm", Kind: "qemu", Status: "running", Tags: []string{"organesson-managed"}, CPUCores: 2}}}
 	var result *ProxmoxInventorySyncResult
 	if result, err = SyncProxmoxInventory(context.Background(), fake, "test-cluster", "organesson-managed"); err != nil {
 		t.Fatalf("first sync returned error: %v", err)
 	}
 	if len(result.Guests) != 1 || result.Guests[0].ResourceID == nil || *result.Guests[0].ResourceID != resource.ID || result.Guests[0].DriftState != ProxmoxDriftInSync {
 		t.Fatalf("expected linked in-sync guest, got %#v", result.Guests)
+	}
+	var machine *VirtualMachine
+	var found bool
+	if machine, found, err = VirtualMachineForResource(resource.ID); err != nil || !found || machine.PowerState != PowerStateRunning {
+		t.Fatalf("expected sync to refresh linked power state, machine=%#v found=%t err=%v", machine, found, err)
 	}
 	fake.Guests[0].CPUCores = 4
 	if result, err = SyncProxmoxInventory(context.Background(), fake, "test-cluster", "organesson-managed"); err != nil {

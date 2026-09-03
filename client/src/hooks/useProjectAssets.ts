@@ -8,7 +8,8 @@ export function useProjectAssets(selectedProject: Project | null, showError: (me
     const resourcesQuery = useQuery({
         queryKey: ["projects", selectedProject?.id, "resources"],
         queryFn: () => apiFetch<ProjectResource[]>(`/api/v1/projects/${selectedProject?.id}/resources`),
-        enabled: Boolean(selectedProject?.id)
+        enabled: Boolean(selectedProject?.id),
+        refetchInterval: 3000
     });
     const assetGroupsQuery = useQuery({
         queryKey: ["projects", selectedProject?.id, "asset-groups"],

@@ -72,7 +72,7 @@ func ImportProxmoxGuest(input ProxmoxGuestImportInput) (resourceResult *Resource
 		var value int = int(input.Guest.DiskTotal / (1024 * 1024 * 1024))
 		diskGB = &value
 	}
-	var machine *VirtualMachine = &VirtualMachine{ResourceID: resourceResult.ID, ClusterID: cluster.ID, NodeID: &node.ID, ProxmoxVMID: input.Guest.VMID, Name: input.Guest.Name, CPUCores: input.Guest.CPUCores, MemoryMB: memoryMB, DiskGB: diskGB, OSType: input.Guest.OSType, PowerState: proxmoxPowerState(input.Guest.Status), CreatedAt: now, UpdatedAt: now}
+	var machine *VirtualMachine = &VirtualMachine{ResourceID: resourceResult.ID, ClusterID: cluster.ID, NodeID: &node.ID, ProxmoxVMID: input.Guest.VMID, Name: input.Guest.Name, CPUCores: input.Guest.CPUCores, MemoryMB: memoryMB, DiskGB: diskGB, OSType: input.Guest.OSType, PowerState: PowerStateFromProxmox(input.Guest.Status), CreatedAt: now, UpdatedAt: now}
 	if errResult = VirtualMachines.Insert(machine); errResult != nil {
 		_ = ArchiveResource(resourceResult)
 		return nil, errResult
@@ -122,7 +122,8 @@ func ensureProxmoxNode(clusterID int, name string, now time.Time) (nodeResult *P
 	return
 }
 
-func proxmoxPowerState(status string) (stateResult PowerState) {
+// PowerStateFromProxmox maps a provider status string to the local power-state enum.
+func PowerStateFromProxmox(status string) (stateResult PowerState) {
 	stateResult = PowerStateStopped
 	if strings.EqualFold(status, "running") {
 		stateResult = PowerStateRunning
