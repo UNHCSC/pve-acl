@@ -37,12 +37,6 @@ func TestNoopJobRunsThroughGasket(t *testing.T) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	go func() {
-		var err error
-		if err = service.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			t.Errorf("Run returned error: %v", err)
-		}
-	}()
 	var job *db.Job
 
 	job, err = db.CreateJob(db.JobCreateInput{
@@ -60,6 +54,8 @@ func TestNoopJobRunsThroughGasket(t *testing.T) {
 	if job.QueueID == "" {
 		t.Fatal("expected queue id to be recorded")
 	}
+	var runDone chan error = make(chan error, 1)
+	go func() { runDone <- service.Run(ctx) }()
 	var completed chan waitOutcome
 
 	completed = make(chan waitOutcome, 1)
@@ -81,6 +77,10 @@ func TestNoopJobRunsThroughGasket(t *testing.T) {
 	if !outcome.Result.Success {
 		t.Fatalf("expected successful result, got %#v", outcome.Result)
 	}
+	cancel()
+	if err = <-runDone; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	var found bool
 
 	job, found, err = db.GetJobByID(job.ID)
@@ -99,6 +99,51 @@ func TestNoopJobRunsThroughGasket(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("expected one scheduler log, got %#v", logs)
 	}
+}
+
+func TestMultiStepJobExposesProgressAndCancellation(t *testing.T) {
+	initSchedulerTestDB(t)
+	var service *Service
+	var err error
+	if service, err = New(ResolveDatabaseFile(config.Config.Database.File, "")); err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer service.Close()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	var job *db.Job
+	if job, err = db.CreateJob(db.JobCreateInput{JobType: db.JobTypeCleanup, Operation: "system.demo"}); err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	var task *gasket.TaskInfo
+	if task, err = service.EnqueueJobTask(job, TaskTypeSystemDemo, JobPayload{}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	var runDone chan error = make(chan error, 1)
+	go func() { runDone <- service.Run(ctx) }()
+	var deadline time.Time = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		job, _, err = db.GetJobByID(job.ID)
+		if job.Status == db.JobStatusRunning && job.Progress > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if job.Progress == 0 {
+		t.Fatal("job did not expose progress")
+	}
+	if _, err = db.RequestJobCancellation(job.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	_, _ = task.WaitForCompletion()
+	job, _, err = db.GetJobByID(job.ID)
+	if job.Status != db.JobStatusCancelled || job.CancelRequestedAt == nil {
+		t.Fatalf("expected cancelled job, got %#v", job)
+	}
+	cancel()
+	<-runDone
 }
 
 func initSchedulerTestDB(t *testing.T) {

@@ -30,3 +30,7 @@ The real-cluster smoke test is disabled by default and performs GET requests onl
 ```sh
 ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterReadOnlyInventory -v
 ```
+
+## Operation recovery
+
+Long-running work has a durable user-visible job separate from the scheduler's internal task record. API idempotency keys prevent repeated requests from creating duplicate jobs. Workers update progress, attempts, heartbeat, and a renewable lease; on startup an expired running lease is marked failed with `worker_abandoned` instead of being assumed successful or automatically repeated. Retrying a mutating operation therefore requires checking provider state first. Cancellation is cooperative and is confirmed only at a safe checkpoint. Logs and error summaries are redacted, and access follows requester or scoped `audit.read` permissions.

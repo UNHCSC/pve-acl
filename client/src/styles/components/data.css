@@ -225,6 +225,41 @@
     gap: 20px;
 }
 
+.operations-view {
+    display: grid;
+    gap: 20px;
+}
+
+.jobs-table .data-table-head,
+.jobs-table .data-table-row {
+    grid-template-columns: minmax(180px, 1fr) 140px 130px minmax(180px, .8fr);
+    text-align: left;
+    width: 100%;
+}
+
+.job-log {
+    background: var(--color-paper);
+    border-top: 1px solid var(--color-line);
+    font-family: var(--font-mono);
+}
+
+.job-log > div {
+    border-bottom: 1px solid var(--color-line);
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 190px minmax(0, 1fr);
+    padding: 10px 20px;
+}
+
+.job-log time {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+}
+
+.job-log code {
+    overflow-wrap: anywhere;
+}
+
 .infrastructure-grid {
     display: grid;
     gap: 20px;

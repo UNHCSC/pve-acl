@@ -59,6 +59,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 		apiV1Assets   fiber.Router = apiV1.Group("/assets")
 		apiV1ACL      fiber.Router = apiV1.Group("/acl")
 		apiV1Proxmox  fiber.Router = apiV1.Group("/proxmox")
+		apiV1Jobs     fiber.Router = apiV1.Group("/jobs")
 	)
 
 	// API v1 auth
@@ -81,6 +82,11 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Proxmox.Get("/health", getProxmoxHealth)
 	apiV1Proxmox.Get("/inventory", getProxmoxInventory)
 	apiV1Proxmox.Post("/inventory/sync", postProxmoxInventorySync)
+	apiV1Jobs.Get("/", getJobs)
+	apiV1Jobs.Post("/demo", postDemoJob)
+	apiV1Jobs.Get("/:id", getJob)
+	apiV1Jobs.Get("/:id/logs", getJobLogs)
+	apiV1Jobs.Post("/:id/cancel", postCancelJob)
 	apiV1.Get("/permissions", getPermissions)
 
 	// API v1 users

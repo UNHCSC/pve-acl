@@ -24,6 +24,7 @@ import { DirectoryView } from "./views/DirectoryView";
 import { HomePage } from "./views/HomePage";
 import { IdentityView } from "./views/IdentityView";
 import { InfrastructureView } from "./views/InfrastructureView";
+import { OperationsView } from "./views/OperationsView";
 import { LoginPage } from "./views/LoginPage";
 import { OverviewView } from "./views/OverviewView";
 import { PeopleView } from "./views/PeopleView";
@@ -719,6 +720,7 @@ function DashboardApp() {
                         />
                     )}
                     {view === "infrastructure" && summary?.capabilities.canManageProxmox && <InfrastructureView showToast={showToast} />}
+                    {view === "operations" && <OperationsView isSiteAdmin={Boolean(summary?.currentUser.isSiteAdmin)} showToast={showToast} />}
                     {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canImport={Boolean(summary.capabilities.canManageUsers)} openImport={() => openContextModal("import-users")} />}
                     {view === "identity" && <IdentityView summary={summary} myAccess={myAccess} />}
                 </main>
