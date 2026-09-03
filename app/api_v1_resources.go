@@ -155,6 +155,9 @@ func postCreateProjectResource(c *fiber.Ctx) (errResult error) {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load resource metadata"})
 	}
+	if err = auditRequest(c, "resource.create", "resource", &resource.ID, &project.ID, map[string]any{"name": resource.Name, "resourceType": resourceTypeLabel(resource.ResourceType)}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 	return c.Status(fiber.StatusCreated).JSON(items[0])
 }
 
@@ -202,6 +205,9 @@ func patchProjectResource(c *fiber.Ctx) (errResult error) {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load resource metadata"})
 	}
+	if err = auditRequest(c, "resource.update", "resource", &resource.ID, &project.ID, map[string]any{"name": resource.Name}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 	return c.JSON(items[0])
 }
 
@@ -240,6 +246,9 @@ func deleteProjectResource(c *fiber.Ctx) (errResult error) {
 	}
 	if err = db.ArchiveResource(resource); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete resource"})
+	}
+	if err = auditRequest(c, "resource.archive", "resource", &resource.ID, &project.ID, nil); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -606,6 +615,9 @@ func postCreateProjectAssetAssignment(c *fiber.Ctx) (errResult error) {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	if err = auditRequest(c, "access.assignment.create", "asset_assignment", &assignment.ID, &project.ID, map[string]any{"subjectType": req.SubjectType, "subjectID": subjectID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
+	}
 	var items []fiber.Map
 
 	items, err = assetAssignmentResponse([]*db.AssetAssignment{assignment})
@@ -650,6 +662,9 @@ func deleteProjectAssetAssignment(c *fiber.Ctx) (errResult error) {
 	}
 	if err = db.ArchiveAssetAssignment(assignment.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove asset assignment"})
+	}
+	if err = auditRequest(c, "access.assignment.archive", "asset_assignment", &assignment.ID, &project.ID, nil); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

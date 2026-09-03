@@ -117,13 +117,14 @@ func TestEnsureInitialSetupIsIdempotent(t *testing.T) {
 
 	counts = map[string]int64{}
 	for name, countFn := range map[string]func() (int64, error){
-		"organizations":    Organizations.Count,
-		"groups":           CloudGroups.Count,
-		"roles":            Roles.Count,
-		"permissions":      Permissions.Count,
-		"role_permissions": RolePermissions.Count,
-		"role_bindings":    RoleBindings.Count,
-		"audit_events":     AuditEvents.Count,
+		"organizations":      Organizations.Count,
+		"groups":             CloudGroups.Count,
+		"roles":              Roles.Count,
+		"permissions":        Permissions.Count,
+		"role_permissions":   RolePermissions.Count,
+		"role_bindings":      RoleBindings.Count,
+		"audit_events":       AuditEvents.Count,
+		"quota_reservations": QuotaReservations.Count,
 	} {
 		var (
 			count int64
@@ -145,13 +146,14 @@ func TestEnsureInitialSetupIsIdempotent(t *testing.T) {
 	}
 
 	for name, countFn := range map[string]func() (int64, error){
-		"organizations":    Organizations.Count,
-		"groups":           CloudGroups.Count,
-		"roles":            Roles.Count,
-		"permissions":      Permissions.Count,
-		"role_permissions": RolePermissions.Count,
-		"role_bindings":    RoleBindings.Count,
-		"audit_events":     AuditEvents.Count,
+		"organizations":      Organizations.Count,
+		"groups":             CloudGroups.Count,
+		"roles":              Roles.Count,
+		"permissions":        Permissions.Count,
+		"role_permissions":   RolePermissions.Count,
+		"role_bindings":      RoleBindings.Count,
+		"audit_events":       AuditEvents.Count,
+		"quota_reservations": QuotaReservations.Count,
 	} {
 		var (
 			count int64

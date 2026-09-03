@@ -229,6 +229,35 @@ export type AssetAssignment = {
     created_at?: string;
 };
 
+export type QuotaDimensions = {
+    vms: number;
+    containers: number;
+    vcpu: number;
+    memoryMB: number;
+    storageGB: number;
+    networks: number;
+    publicIPs: number;
+};
+
+export type ProjectQuota = {
+    policy: { name: string; max_vms?: number; max_vcpu?: number; max_memory_mb?: number; max_storage_gb?: number; max_networks?: number; max_public_ips?: number } | null;
+    usage: QuotaDimensions;
+};
+
+export type AuditEvent = {
+    id: number;
+    action: string;
+    target_type?: string;
+    created_at: string;
+};
+
+export type SecretMetadata = {
+    id: number;
+    name: string;
+    secret_type: number | string;
+    updated_at: string;
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {

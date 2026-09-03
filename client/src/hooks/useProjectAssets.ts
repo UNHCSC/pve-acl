@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
-import type { AssetAssignment, AssetGroup, Project, ProjectResource } from "../types";
+import type { AssetAssignment, AssetGroup, AuditEvent, Project, ProjectQuota, ProjectResource, SecretMetadata } from "../types";
 
 export function useProjectAssets(selectedProject: Project | null, showError: (message: string) => void) {
     const queryClient = useQueryClient();
@@ -18,6 +18,21 @@ export function useProjectAssets(selectedProject: Project | null, showError: (me
     const assetAssignmentsQuery = useQuery({
         queryKey: ["projects", selectedProject?.id, "asset-assignments"],
         queryFn: () => apiFetch<AssetAssignment[]>(`/api/v1/projects/${selectedProject?.id}/asset-assignments`),
+        enabled: Boolean(selectedProject?.id)
+    });
+    const quotaQuery = useQuery({
+        queryKey: ["projects", selectedProject?.id, "quota"],
+        queryFn: () => apiFetch<ProjectQuota>(`/api/v1/projects/${selectedProject?.id}/quota`),
+        enabled: Boolean(selectedProject?.id)
+    });
+    const auditQuery = useQuery({
+        queryKey: ["projects", selectedProject?.id, "audit"],
+        queryFn: () => apiFetch<AuditEvent[]>(`/api/v1/projects/${selectedProject?.id}/audit`),
+        enabled: Boolean(selectedProject?.id)
+    });
+    const secretsQuery = useQuery({
+        queryKey: ["projects", selectedProject?.id, "secrets"],
+        queryFn: () => apiFetch<SecretMetadata[]>(`/api/v1/projects/${selectedProject?.id}/secrets`),
         enabled: Boolean(selectedProject?.id)
     });
 
@@ -59,21 +74,29 @@ export function useProjectAssets(selectedProject: Project | null, showError: (me
         ]);
     };
 
+    const reloadProjectGuardrails = async () => {
+        await Promise.all([quotaQuery.refetch(), auditQuery.refetch(), secretsQuery.refetch()]);
+    };
+
     useEffect(() => {
-        const error = resourcesQuery.error || assetGroupsQuery.error || assetAssignmentsQuery.error;
+        const error = resourcesQuery.error || assetGroupsQuery.error || assetAssignmentsQuery.error || quotaQuery.error || auditQuery.error || secretsQuery.error;
         if (error) {
             showError(error instanceof Error ? error.message : "Failed to load project assets");
         }
-    }, [resourcesQuery.error, assetGroupsQuery.error, assetAssignmentsQuery.error]);
+    }, [resourcesQuery.error, assetGroupsQuery.error, assetAssignmentsQuery.error, quotaQuery.error, auditQuery.error, secretsQuery.error]);
 
     return {
         assetAssignments: assetAssignmentsQuery.data ?? [],
         assetGroups: assetGroupsQuery.data ?? [],
+        auditEvents: auditQuery.data ?? [],
         loadingProjectAssets: resourcesQuery.isLoading || assetGroupsQuery.isLoading || assetAssignmentsQuery.isLoading,
         projectResources: resourcesQuery.data ?? [],
+        projectQuota: quotaQuery.data ?? null,
         reloadProjectAssetAssignments,
         reloadProjectAssetGroups,
         reloadProjectAssets,
-        reloadProjectResources
+        reloadProjectGuardrails,
+        reloadProjectResources,
+        secrets: secretsQuery.data ?? []
     };
 }

@@ -22,6 +22,7 @@ func TestMVPTableRegistration(t *testing.T) {
 		"RoleBindings":            RoleBindings,
 		"QuotaPolicies":           QuotaPolicies,
 		"QuotaBindings":           QuotaBindings,
+		"QuotaReservations":       QuotaReservations,
 		"Resources":               Resources,
 		"ResourceOwners":          ResourceOwners,
 		"AssetGroups":             AssetGroups,

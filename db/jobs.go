@@ -77,6 +77,9 @@ func CreateJob(input JobCreateInput) (jobResult *Job, errResult error) {
 	if err = Jobs.Insert(job); err != nil {
 		return nil, err
 	}
+	if _, err = WriteAudit(AuditInput{ActorUserID: input.RequestedByUserID, Action: "job.create", TargetType: "job", TargetID: &job.ID, ProjectID: input.ProjectID}); err != nil {
+		return nil, err
+	}
 	return job, nil
 }
 
@@ -164,7 +167,7 @@ func SetJobQueueID(jobID int, queueID string) (errResult error) {
 
 // AppendJobLog appends a log line to a job.
 func AppendJobLog(jobID int, stream JobLogStream, message string) (errResult error) {
-	message = strings.TrimSpace(message)
+	message = strings.TrimSpace(RedactSensitiveText(message))
 	if message == "" {
 		return nil
 	}

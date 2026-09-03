@@ -22,6 +22,9 @@ func loadConfig(path string) (err error) {
 		err = fmt.Errorf("decode toml: %w", err)
 		return
 	}
+	if os.Getenv("ORGANESSON_SECRET_MASTER_KEY") != "" {
+		Config.Secrets.MasterKey = os.Getenv("ORGANESSON_SECRET_MASTER_KEY")
+	}
 
 	// Validate required fields
 	if err = validator.New(validator.WithRequiredStructEnabled()).Struct(Config); err != nil {

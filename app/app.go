@@ -161,6 +161,19 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Projects.Patch("/:id", patchProject)
 	apiV1Projects.Get("/:slug", getProjectBySlug)
 	apiV1Projects.Delete("/:slug", deleteProjectBySlug)
+	apiV1Projects.Get("/:id/quota", getProjectQuota)
+	apiV1Projects.Get("/:id/audit", getProjectAudit)
+	apiV1Projects.Get("/:id/secrets", getProjectSecrets)
+	apiV1Projects.Post("/:id/secrets", postProjectSecret)
+	apiV1Projects.Patch("/:id/secrets/:secretID", patchProjectSecret)
+	apiV1Projects.Delete("/:id/secrets/:secretID", deleteProjectSecret)
+
+	apiV1.Get("/quota-policies", getQuotaPolicies)
+	apiV1.Post("/quota-policies", postQuotaPolicy)
+	apiV1.Patch("/quota-policies/:policyID", patchQuotaPolicy)
+	apiV1.Delete("/quota-policies/:policyID", deleteQuotaPolicy)
+	apiV1.Post("/quota-policies/:policyID/bindings", postQuotaPolicyBinding)
+	apiV1.Delete("/quota-bindings/:bindingID", deleteQuotaPolicyBinding)
 
 	// API v1 assets
 	apiV1Assets.Get("/search", _noop)

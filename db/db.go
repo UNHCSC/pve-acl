@@ -34,6 +34,7 @@ var (
 	RoleBindings                   *gosqlite.RegisteredStruct[RoleBinding]
 	QuotaPolicies                  *gosqlite.RegisteredStruct[QuotaPolicy]
 	QuotaBindings                  *gosqlite.RegisteredStruct[QuotaBinding]
+	QuotaReservations              *gosqlite.RegisteredStruct[QuotaReservation]
 	Resources                      *gosqlite.RegisteredStruct[Resource]
 	ResourceOwners                 *gosqlite.RegisteredStruct[ResourceOwner]
 	AssetGroups                    *gosqlite.RegisteredStruct[AssetGroup]
@@ -53,6 +54,9 @@ var (
 // Init initializes this package.
 func Init(parentLog *golog.Logger) (err error) {
 	dbLog = parentLog.SpawnChild().Prefix("[DB]", golog.BoldGreen)
+	if err = ConfigureSecretEncryption(config.Config.Secrets.MasterKey); err != nil {
+		return err
+	}
 
 	if Driver, err = gosqlite.Begin(config.Config.Database.File); err != nil {
 		dbLog.Errorf("Failed to initialize database: %v\n", err)
@@ -147,6 +151,10 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("QuotaBindings", &QuotaBindings, QuotaBinding{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("QuotaReservations", &QuotaReservations, QuotaReservation{}, migrationOpts); err != nil {
 		return
 	}
 

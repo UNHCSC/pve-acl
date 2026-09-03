@@ -193,24 +193,32 @@ func UpdateProject(project *Project) (errResult error) {
 	if project.Slug == "" {
 		return fmt.Errorf("project slug is required")
 	}
+	var (
+		existing *Project
+		found    bool
+		err      error
+	)
+
+	existing, found, err = findProjectBySlug(project.Slug)
+	if err != nil {
+		return err
+	}
+	if found && existing.ID != project.ID {
+		return fmt.Errorf("project slug %q already exists", existing.Slug)
+	}
 	project.Description = strings.TrimSpace(project.Description)
 	project.UpdatedAt = time.Now().UTC()
 	return Projects.Update(project)
 }
 
-// DeleteProject deletes a project and its memberships.
-func DeleteProject(projectID int) (errResult error) {
-	{
-		var err error
-
-		if _, err = ProjectMemberships.DeleteWithFilter(
-			gosqlite.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID),
-		); err != nil {
-			return err
-		}
+// ArchiveProject disables a project while preserving its history and resources.
+func ArchiveProject(project *Project) (errResult error) {
+	if project == nil || !project.IsActive {
+		return fmt.Errorf("project was not found")
 	}
-
-	return Projects.Delete(projectID)
+	project.IsActive = false
+	project.UpdatedAt = time.Now().UTC()
+	return Projects.Update(project)
 }
 
 func findProjectBySlug(slug string) (projectResult *Project, okResult bool, errResult error) {

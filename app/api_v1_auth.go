@@ -11,6 +11,7 @@ import (
 
 	"github.com/UNHCSC/organesson/auth"
 	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/UNHCSC/organesson/internal/safefile"
 	"github.com/gofiber/fiber/v2"
 )
@@ -81,6 +82,9 @@ func postLogin(c *fiber.Ctx) (err error) {
 
 	if user, err = auth.Authenticate(username, password); err == nil {
 		if token, err = user.Token.SignedString(jwtSigningKey); err == nil {
+			if db.Driver != nil {
+				_, _ = db.WriteAudit(db.AuditInput{Action: "login.succeeded", TargetType: "user", SourceIP: c.IP(), UserAgent: c.Get("User-Agent"), Metadata: map[string]any{"username": username}})
+			}
 			c.Cookie(&fiber.Cookie{
 				Name:     "Authorization",
 				Value:    token,
@@ -94,6 +98,9 @@ func postLogin(c *fiber.Ctx) (err error) {
 			err = c.Redirect(redirect)
 			return
 		}
+	}
+	if db.Driver != nil {
+		_, _ = db.WriteAudit(db.AuditInput{Action: "login.failed", TargetType: "user", SourceIP: c.IP(), UserAgent: c.Get("User-Agent"), Metadata: map[string]any{"username": username}})
 	}
 
 	err = c.Render("login", fiber.Map{

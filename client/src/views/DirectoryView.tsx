@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "../components/common";
-import type { AssetAssignment, AssetGroup, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectResource, Role, Selection } from "../types";
+import type { AssetAssignment, AssetGroup, AuditEvent, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectQuota, ProjectResource, Role, SecretMetadata, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
 
@@ -29,6 +29,9 @@ type DirectoryViewProps = {
     projectResources: ProjectResource[];
     assetGroups: AssetGroup[];
     assetAssignments: AssetAssignment[];
+    projectQuota: ProjectQuota | null;
+    auditEvents: AuditEvent[];
+    secrets: SecretMetadata[];
     loadingOrg: boolean;
     loadingProject: boolean;
     openMenu: string | null;
@@ -41,6 +44,7 @@ type DirectoryViewProps = {
     moveProject: (project: Project, organizationID: number) => Promise<void> | void;
     deleteOrg: (org: Organization) => void;
     deleteProject: (project: Project) => void;
+    editProject: (project: Project) => void;
     addOrganizationMember: (subjectType: ProjectMemberSubject) => void;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
     createGroup: (context: Organization | Project) => void;
@@ -54,6 +58,9 @@ type DirectoryViewProps = {
     deleteRole: (role: Role) => void;
     deleteResource: (resource: ProjectResource) => void;
     deleteAssetAssignment: (assignment: AssetAssignment) => void;
+    createSecret: () => void;
+    rotateSecret: (secretID: number, name: string) => void;
+    deleteSecret: (secretID: number, name: string) => void;
     manageGroupMembers: (group: { id: number; name: string }) => void;
     updateOrganizationMemberRole: (membership: OrganizationMembership, roleID: number) => void;
     updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
@@ -226,12 +233,16 @@ export function DirectoryView(props: DirectoryViewProps) {
                     {props.selection?.type === "project" && props.selectedProject && (
                         <ProjectDetail
                             project={props.selectedProject}
+                            editProject={props.editProject}
                             memberships={props.memberships}
                             projectRoles={props.projectRoles}
                             projectGroups={props.projectGroups}
                             projectResources={props.projectResources}
                             assetGroups={props.assetGroups}
                             assetAssignments={props.assetAssignments}
+                            projectQuota={props.projectQuota}
+                            auditEvents={props.auditEvents}
+                            secrets={props.secrets}
                             loading={props.loadingProject}
                             addProjectMember={props.addProjectMember}
                             createProjectRole={() => props.openModal("role", props.selectedProject)}
@@ -246,6 +257,9 @@ export function DirectoryView(props: DirectoryViewProps) {
                             deleteRole={props.deleteRole}
                             deleteResource={props.deleteResource}
                             deleteAssetAssignment={props.deleteAssetAssignment}
+                            createSecret={props.createSecret}
+                            rotateSecret={props.rotateSecret}
+                            deleteSecret={props.deleteSecret}
                             manageGroupMembers={props.manageGroupMembers}
                             updateProjectMemberRole={props.updateProjectMemberRole}
                             deleteProjectMember={props.deleteProjectMember}
@@ -324,7 +338,7 @@ function ProjectTreeRow(props: DirectoryViewProps & { project: Project; depth: n
                 <span>{project.name}</span>
             </button>
             <RowActionMenu className="tree-actions" menuClassName="tree-inline-menu" open={props.openMenu === menuKey} setOpen={(open) => props.setOpenMenu(open ? menuKey : null)}>
-                <button type="button" className="danger-action" onClick={() => props.deleteProject(project)}>Delete</button>
+                <button type="button" className="danger-action" onClick={() => props.deleteProject(project)}>Archive</button>
             </RowActionMenu>
         </div>
     );
@@ -407,12 +421,16 @@ function OrgDetail(props: {
 
 function ProjectDetail(props: {
     project: Project;
+    editProject: (project: Project) => void;
     memberships: ProjectMembership[];
     projectRoles: Role[];
     projectGroups: Group[];
     projectResources: ProjectResource[];
     assetGroups: AssetGroup[];
     assetAssignments: AssetAssignment[];
+    projectQuota: ProjectQuota | null;
+    auditEvents: AuditEvent[];
+    secrets: SecretMetadata[];
     loading: boolean;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
     createProjectRole: () => void;
@@ -427,6 +445,9 @@ function ProjectDetail(props: {
     deleteRole: (role: Role) => void;
     deleteResource: (resource: ProjectResource) => void;
     deleteAssetAssignment: (assignment: AssetAssignment) => void;
+    createSecret: () => void;
+    rotateSecret: (secretID: number, name: string) => void;
+    deleteSecret: (secretID: number, name: string) => void;
     manageGroupMembers: (group: { id: number; name: string }) => void;
     updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
@@ -442,6 +463,7 @@ function ProjectDetail(props: {
                     </div>
                     <div className="project-detail-actions">
                         <span className="detail-status-pill">{props.project.is_active === false ? "inactive" : "active"}</span>
+                        {props.project.is_active !== false && <button className="button-secondary compact-button" type="button" onClick={() => props.editProject(props.project)}>Edit project</button>}
                     </div>
                 </header>
                 <ScopeSummaryStrip
@@ -483,6 +505,14 @@ function ProjectDetail(props: {
                     deleteAssetAssignment={props.deleteAssetAssignment}
                     loading={props.loading}
                 />
+                <ProjectGuardrailsPanel
+                    quota={props.projectQuota}
+                    auditEvents={props.auditEvents}
+                    secrets={props.secrets}
+                    createSecret={props.createSecret}
+                    rotateSecret={props.rotateSecret}
+                    deleteSecret={props.deleteSecret}
+                />
                 <ScopedMembershipPanel
                     className="access-panel-wide"
                     scopeLabel="Project"
@@ -511,6 +541,40 @@ function ProjectDetail(props: {
                 />
             </div>
         </article>
+    );
+}
+
+function ProjectGuardrailsPanel(props: {
+    quota: ProjectQuota | null;
+    auditEvents: AuditEvent[];
+    secrets: SecretMetadata[];
+    createSecret: () => void;
+    rotateSecret: (secretID: number, name: string) => void;
+    deleteSecret: (secretID: number, name: string) => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel access-panel-wide">
+            <PanelHeading label="Guardrails" title="Quota, secrets, and audit" action={<button className="button-secondary compact-button" type="button" onClick={props.createSecret}>New secret</button>} />
+            <div className="compact-list">
+                <div className="compact-list-row access-list-row">
+                    <AccessRowSubject title={props.quota?.policy?.name || "No effective quota"} meta={props.quota ? `${props.quota.usage.vms} VMs · ${props.quota.usage.vcpu} vCPU · ${props.quota.usage.memoryMB} MB RAM · ${props.quota.usage.networks} networks` : "No quota policy is bound to this project."} />
+                </div>
+                {props.secrets.map((secret) => (
+                    <div className="compact-list-row action-list-row access-list-row" key={`secret-${secret.id}`}>
+                        <AccessRowSubject title={secret.name} meta="Encrypted secret · value never returned" />
+                        <RowActionMenu ariaLabel={`${secret.name} secret actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                            <button type="button" role="menuitem" onClick={() => props.rotateSecret(secret.id, secret.name)}>Rotate</button>
+                            <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteSecret(secret.id, secret.name)}>Archive</button>
+                        </RowActionMenu>
+                    </div>
+                ))}
+                {props.auditEvents.slice(-5).reverse().map((event) => (
+                    <div className="compact-list-row access-list-row" key={`audit-${event.id}`}>
+                        <AccessRowSubject title={event.action} meta={`${event.target_type || "system"} · ${new Date(event.created_at).toLocaleString()}`} />
+                    </div>
+                ))}
+            </div>
+        </section>
     );
 }
 

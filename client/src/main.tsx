@@ -69,7 +69,7 @@ function DashboardApp() {
     const { expanded, orgTree, selectedOrg, selectedProject, selection, setSelection, toggleOrg } = useDirectorySelection(tree);
     const { loadingOrg, orgGroups, orgMemberships, orgRoles, reloadOrgGroups, reloadOrgMemberships, reloadOrgRoles } = useOrganizationAccess(selectedOrg, (message) => showToast(message, "warning"));
     const { activeProject, loadingProject, memberships, projectGroups, projectRoles, reloadMemberships, reloadProjectGroups, reloadProjectRoles } = useProjectMemberships(selectedProject, (message) => showToast(message, "warning"));
-    const { assetAssignments, assetGroups, loadingProjectAssets, projectResources, reloadProjectAssetAssignments, reloadProjectAssetGroups, reloadProjectAssets, reloadProjectResources } = useProjectAssets(activeProject || selectedProject, (message) => showToast(message, "warning"));
+    const { assetAssignments, assetGroups, auditEvents, loadingProjectAssets, projectQuota, projectResources, reloadProjectAssetAssignments, reloadProjectAssetGroups, reloadProjectAssets, reloadProjectGuardrails, reloadProjectResources, secrets } = useProjectAssets(activeProject || selectedProject, (message) => showToast(message, "warning"));
     const counts = summary?.counts || {};
 
     useEffect(() => {
@@ -407,6 +407,42 @@ function DashboardApp() {
         showToast("Asset assignment removed", "success");
     };
 
+    const createSecret = async () => {
+        if (!activeProject) {
+            return;
+        }
+        const name = window.prompt("Secret name");
+        const value = name ? window.prompt(`Value for ${name}`) : null;
+        if (!name || !value) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/secrets`, { method: "POST", body: JSON.stringify({ name, value, secretType: "password" }) });
+        await reloadProjectGuardrails();
+        showToast("Secret encrypted and stored", "success");
+    };
+
+    const rotateSecret = async (secretID: number, name: string) => {
+        if (!activeProject) {
+            return;
+        }
+        const value = window.prompt(`New value for ${name}`);
+        if (!value) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/secrets/${secretID}`, { method: "PATCH", body: JSON.stringify({ value }) });
+        await reloadProjectGuardrails();
+        showToast("Secret rotated", "success");
+    };
+
+    const deleteSecret = async (secretID: number, name: string) => {
+        if (!activeProject || !window.confirm(`Archive ${name}?`)) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/secrets/${secretID}`, { method: "DELETE" });
+        await reloadProjectGuardrails();
+        showToast("Secret archived", "success");
+    };
+
     const moveOrg = async (org: Organization, parentOrgID: number | null) => {
         await apiFetch(`/api/v1/organizations/${org.id}`, { method: "PATCH", body: JSON.stringify({ parentOrgID }) });
         await loadTree();
@@ -430,13 +466,31 @@ function DashboardApp() {
     };
 
     const deleteProject = async (project: Project) => {
-        if (!window.confirm(`Delete ${project.name}?`)) {
+        if (!window.confirm(`Archive ${project.name}? Resources, assignments, jobs, and audit history will be preserved.`)) {
             return;
         }
         await apiFetch(`/api/v1/projects/${encodeURIComponent(project.slug)}`, { method: "DELETE" });
         await Promise.all([loadTree(), loadSummary()]);
         setSelection((previous) => (previous?.type === "project" && previous.id === project.id ? null : previous));
-        showToast("Project deleted", "success");
+        showToast("Project archived", "success");
+    };
+
+    const editProject = async (project: Project) => {
+        const name = window.prompt("Project name", project.name);
+        if (!name) {
+            return;
+        }
+        const slug = window.prompt("Project slug", project.slug);
+        if (!slug) {
+            return;
+        }
+        const description = window.prompt("Project description", project.description || "");
+        if (description === null) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${project.id}`, { method: "PATCH", body: JSON.stringify({ name, slug, description }) });
+        await loadTree();
+        showToast("Project updated", "success");
     };
 
     const mutateWithToast = async (operation: () => Promise<void>) => {
@@ -564,6 +618,9 @@ function DashboardApp() {
                             projectResources={projectResources}
                             assetGroups={assetGroups}
                             assetAssignments={assetAssignments}
+                            projectQuota={projectQuota}
+                            auditEvents={auditEvents}
+                            secrets={secrets}
                             loadingOrg={loadingOrg}
                             loadingProject={loadingProject || loadingProjectAssets}
                             openMenu={openMenu}
@@ -576,6 +633,7 @@ function DashboardApp() {
                             moveProject={(project, organizationID) => mutateWithToast(() => moveProject(project, organizationID))}
                             deleteOrg={(org) => mutateWithToast(() => deleteOrg(org))}
                             deleteProject={(project) => mutateWithToast(() => deleteProject(project))}
+                            editProject={(project) => mutateWithToast(() => editProject(project))}
                             addOrganizationMember={(subjectType) => {
                                 setProjectMemberSubjectType(subjectType);
                                 openContextModal("project-member", selectedOrg);
@@ -601,6 +659,9 @@ function DashboardApp() {
                             createAssetAssignment={() => openContextModal("asset-assignment", activeProject || selectedProject)}
                             deleteResource={(resource) => mutateWithToast(() => deleteResource(resource))}
                             deleteAssetAssignment={(assignment) => mutateWithToast(() => deleteAssetAssignment(assignment))}
+                            createSecret={() => mutateWithToast(createSecret)}
+                            rotateSecret={(secretID, name) => mutateWithToast(() => rotateSecret(secretID, name))}
+                            deleteSecret={(secretID, name) => mutateWithToast(() => deleteSecret(secretID, name))}
                             manageGroupMembers={(group) => {
                                 setGroupMembersContext(group);
                                 openContextModal("group-members");

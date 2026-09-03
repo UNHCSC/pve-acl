@@ -28,6 +28,10 @@ type Configuration struct {
 		DatabaseFile string `toml:"database_file" default:""` // Path to the gasket task database. Empty uses the application database path with ".tasks" appended.
 	} `toml:"scheduler"` // Embedded task scheduler configuration
 
+	Secrets struct {
+		MasterKey string `toml:"master_key" default:""` // Base64-encoded 32-byte application encryption key.
+	} `toml:"secrets"`
+
 	Proxmox struct {
 		Enabled  bool   `toml:"enabled" default:"false"`           // Enable Proxmox VE integration
 		Hostname string `toml:"hostname" default:""`               // Proxmox VE server hostname or IP address (e.g. "proxmox.cyber.lab")

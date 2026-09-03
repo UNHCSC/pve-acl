@@ -165,6 +165,12 @@ const (
 )
 
 const (
+	QuotaReservationPending QuotaReservationState = iota
+	QuotaReservationCommitted
+	QuotaReservationReleased
+)
+
+const (
 	MembershipRoleMember MembershipRole = iota
 	MembershipRoleManager
 	MembershipRoleOwner

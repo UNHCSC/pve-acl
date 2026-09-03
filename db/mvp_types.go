@@ -3,24 +3,25 @@ package db
 import "time"
 
 type (
-	GroupType            uint8
-	RoleBindingSubject   uint8
-	RoleBindingScope     uint8
-	ProjectType          uint8
-	ProjectMemberSubject uint8
-	ProjectRole          uint8
-	OwnerSubjectType     uint8
-	OwnerType            uint8
-	ResourceType         uint8
-	ResourceStatus       uint8
-	NetworkType          uint8
-	PowerState           uint8
-	JobType              uint8
-	JobStatus            uint8
-	JobLogStream         uint8
-	SecretType           uint8
-	SecretOwnerType      uint8
-	MembershipRole       uint8
+	GroupType             uint8
+	RoleBindingSubject    uint8
+	RoleBindingScope      uint8
+	ProjectType           uint8
+	ProjectMemberSubject  uint8
+	ProjectRole           uint8
+	OwnerSubjectType      uint8
+	OwnerType             uint8
+	ResourceType          uint8
+	ResourceStatus        uint8
+	NetworkType           uint8
+	PowerState            uint8
+	JobType               uint8
+	JobStatus             uint8
+	JobLogStream          uint8
+	SecretType            uint8
+	SecretOwnerType       uint8
+	QuotaReservationState uint8
+	MembershipRole        uint8
 
 	User struct {
 		ID            int       `gosqlite:"id,primary,increment" json:"id"`
@@ -142,18 +143,19 @@ type (
 	}
 
 	QuotaPolicy struct {
-		ID            int       `gosqlite:"id,primary,increment" json:"id"`
-		Name          string    `gosqlite:"name,notnull" json:"name"`
-		Description   string    `gosqlite:"description" json:"description"`
-		MaxVMs        *int      `gosqlite:"max_vms" json:"max_vms,omitempty"`
-		MaxContainers *int      `gosqlite:"max_containers" json:"max_containers,omitempty"`
-		MaxVCPU       *int      `gosqlite:"max_vcpu" json:"max_vcpu,omitempty"`
-		MaxMemoryMB   *int      `gosqlite:"max_memory_mb" json:"max_memory_mb,omitempty"`
-		MaxStorageGB  *int      `gosqlite:"max_storage_gb" json:"max_storage_gb,omitempty"`
-		MaxNetworks   *int      `gosqlite:"max_networks" json:"max_networks,omitempty"`
-		MaxPublicIPs  *int      `gosqlite:"max_public_ips" json:"max_public_ips,omitempty"`
-		CreatedAt     time.Time `gosqlite:"created_at,notnull" json:"created_at"`
-		UpdatedAt     time.Time `gosqlite:"updated_at,notnull" json:"updated_at"`
+		ID            int        `gosqlite:"id,primary,increment" json:"id"`
+		Name          string     `gosqlite:"name,notnull" json:"name"`
+		Description   string     `gosqlite:"description" json:"description"`
+		MaxVMs        *int       `gosqlite:"max_vms" json:"max_vms,omitempty"`
+		MaxContainers *int       `gosqlite:"max_containers" json:"max_containers,omitempty"`
+		MaxVCPU       *int       `gosqlite:"max_vcpu" json:"max_vcpu,omitempty"`
+		MaxMemoryMB   *int       `gosqlite:"max_memory_mb" json:"max_memory_mb,omitempty"`
+		MaxStorageGB  *int       `gosqlite:"max_storage_gb" json:"max_storage_gb,omitempty"`
+		MaxNetworks   *int       `gosqlite:"max_networks" json:"max_networks,omitempty"`
+		MaxPublicIPs  *int       `gosqlite:"max_public_ips" json:"max_public_ips,omitempty"`
+		CreatedAt     time.Time  `gosqlite:"created_at,notnull" json:"created_at"`
+		UpdatedAt     time.Time  `gosqlite:"updated_at,notnull" json:"updated_at"`
+		ArchivedAt    *time.Time `gosqlite:"archived_at" json:"archived_at,omitempty"`
 	}
 
 	QuotaBinding struct {
@@ -162,6 +164,24 @@ type (
 		SubjectType   RoleBindingScope `gosqlite:"subject_type,notnull" json:"subject_type"`
 		SubjectID     int              `gosqlite:"subject_id,notnull" json:"subject_id"`
 		CreatedAt     time.Time        `gosqlite:"created_at,notnull" json:"created_at"`
+	}
+
+	QuotaReservation struct {
+		ID         int                   `gosqlite:"id,primary,increment" json:"id"`
+		ProjectID  int                   `gosqlite:"project_id,fkey:Project.id,notnull" json:"project_id"`
+		JobID      *int                  `gosqlite:"job_id,fkey:Job.id" json:"job_id,omitempty"`
+		Deployment string                `gosqlite:"deployment" json:"deployment"`
+		VMs        int                   `gosqlite:"vms,notnull" json:"vms"`
+		Containers int                   `gosqlite:"containers,notnull" json:"containers"`
+		VCPU       int                   `gosqlite:"vcpu,notnull" json:"vcpu"`
+		MemoryMB   int                   `gosqlite:"memory_mb,notnull" json:"memory_mb"`
+		StorageGB  int                   `gosqlite:"storage_gb,notnull" json:"storage_gb"`
+		Networks   int                   `gosqlite:"networks,notnull" json:"networks"`
+		PublicIPs  int                   `gosqlite:"public_ips,notnull" json:"public_ips"`
+		State      QuotaReservationState `gosqlite:"state,notnull" json:"state"`
+		ExpiresAt  time.Time             `gosqlite:"expires_at,notnull" json:"expires_at"`
+		CreatedAt  time.Time             `gosqlite:"created_at,notnull" json:"created_at"`
+		UpdatedAt  time.Time             `gosqlite:"updated_at,notnull" json:"updated_at"`
 	}
 
 	Resource struct {
@@ -340,5 +360,6 @@ type (
 		OwnerID        *int            `gosqlite:"owner_id" json:"owner_id,omitempty"`
 		CreatedAt      time.Time       `gosqlite:"created_at,notnull" json:"created_at"`
 		UpdatedAt      time.Time       `gosqlite:"updated_at,notnull" json:"updated_at"`
+		ArchivedAt     *time.Time      `gosqlite:"archived_at" json:"archived_at,omitempty"`
 	}
 )
