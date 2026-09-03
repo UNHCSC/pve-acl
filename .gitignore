@@ -24,6 +24,7 @@ obj/
 node_modules/
 build/
 package-lock.json
+playwright/test-results/
 
 # IDE/editor specific ignores
 .codex

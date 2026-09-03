@@ -195,6 +195,10 @@ export type ProjectResource = {
     memory_mb?: number;
     disk_gb?: number;
     os_type?: string;
+    can_start?: boolean;
+    can_stop?: boolean;
+    can_reboot?: boolean;
+    can_console?: boolean;
     created_at?: string;
     updated_at?: string;
 };

@@ -664,13 +664,13 @@ function ProjectResourcesPanel(props: {
                                         buttonContent={<><span className="power-indicator" />{["Running", "Stopped", "Paused", "Unknown"][powerState] || "Unknown"}<span className="power-chevron" aria-hidden="true" /></>}
                                         menuWidth={168}
                                     >
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 0} onClick={() => power(resource, "start")}>Start</button>
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "shutdown")}>Shutdown</button>
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "stop")}>Hard stop</button>
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "reboot")}>Reboot</button>
-										<button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "pause")}>Pause</button>
-										<button type="button" role="menuitem" disabled={pending !== null || powerState !== 2} onClick={() => power(resource, "resume")}>Resume</button>
-                                        <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => openConsole(resource)}>Open console</button>
+                                        {resource.can_start && <button type="button" role="menuitem" disabled={pending !== null || powerState === 0} onClick={() => power(resource, "start")}>Start</button>}
+                                        {resource.can_stop && <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "shutdown")}>Shutdown</button>}
+                                        {resource.can_stop && <button type="button" role="menuitem" disabled={pending !== null || powerState === 1} onClick={() => power(resource, "stop")}>Hard stop</button>}
+                                        {resource.can_reboot && <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "reboot")}>Reboot</button>}
+                                        {resource.can_stop && <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => power(resource, "pause")}>Pause</button>}
+                                        {resource.can_start && <button type="button" role="menuitem" disabled={pending !== null || powerState !== 2} onClick={() => power(resource, "resume")}>Resume</button>}
+                                        {resource.can_console && <button type="button" role="menuitem" disabled={pending !== null || powerState !== 0} onClick={() => openConsole(resource)}>Open console</button>}
                                     </RowActionMenu>}
                                     <button className="button-secondary compact-button" type="button" aria-expanded={expandedResourceID === resource.id} onClick={() => setExpandedResourceID((current) => current === resource.id ? null : resource.id)}>Details</button>
                                     <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">

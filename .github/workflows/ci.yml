@@ -18,7 +18,7 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -28,6 +28,9 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install gopls
         run: go install golang.org/x/tools/gopls@latest
@@ -62,6 +65,20 @@ jobs:
 
       - name: Run Go tests with race detector
         run: go test -race ./...
+
+      - name: Build browser client
+        working-directory: client
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run build
+
+      - name: Run browser resource workflows
+        working-directory: playwright
+        run: |
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
+          bun run test
 
   vulnerability-scan:
     name: Vulnerability scan

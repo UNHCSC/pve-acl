@@ -116,6 +116,15 @@ func TestRealClusterTaggedGuestPowerLifecycle(t *testing.T) {
 	}
 	waitForTask(t, ctx, client, node, taskID)
 	waitForGuestStatus(t, ctx, client, node, vmID, "running")
+	if !created {
+		if taskID, err = client.RebootGuest(ctx, node, vmID); err != nil {
+			t.Fatalf("reboot: %v", err)
+		}
+		waitForTask(t, ctx, client, node, taskID)
+		waitForGuestStatus(t, ctx, client, node, vmID, "running")
+	} else {
+		t.Log("skipping guest-driven reboot for the diskless fixture; provide a bootable ORGANESSON_PROXMOX_TEST_VMID to test reboot")
+	}
 	var ticket proxmox.ConsoleTicket
 	if ticket, err = client.CreateConsoleTicket(ctx, node, vmID); err != nil {
 		t.Fatalf("create console ticket: %v", err)

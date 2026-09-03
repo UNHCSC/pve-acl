@@ -87,7 +87,30 @@ func getProjectResources(c *fiber.Ctx) (errResult error) {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load resource metadata"})
 	}
+	if err = addResourceCapabilities(c, project, visible, items); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "permission check failed"})
+	}
 	return c.JSON(items)
+}
+
+func addResourceCapabilities(c *fiber.Ctx, project *db.Project, resources []*db.Resource, items []fiber.Map) (errResult error) {
+	var permissions []db.PermissionKey = []db.PermissionKey{db.PermissionVMStart, db.PermissionVMStop, db.PermissionVMReboot, db.PermissionVMConsole}
+	var names []string = []string{"can_start", "can_stop", "can_reboot", "can_console"}
+	for index, resource := range resources {
+		for permissionIndex, permission := range permissions {
+			var allowed bool
+			if allowed, errResult = currentUserCan(c, permission, db.RoleBindingScopeResource, &resource.ID); errResult != nil {
+				return
+			}
+			if !allowed {
+				if allowed, errResult = currentUserCan(c, permission, db.RoleBindingScopeProject, &project.ID); errResult != nil {
+					return
+				}
+			}
+			items[index][names[permissionIndex]] = allowed
+		}
+	}
+	return
 }
 
 // postCreateProjectResource creates a local inventory resource.
