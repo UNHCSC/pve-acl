@@ -1,12 +1,18 @@
 package app
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/UNHCSC/organesson/auth"
 	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
+
+// testFiberRequest runs an in-process request without Fiber's race-build-sensitive one-second timeout.
+func testFiberRequest(fiberApp *fiber.App, request *http.Request) (responseResult *http.Response, errResult error) {
+	return fiberApp.Test(request, -1)
+}
 
 func authenticateTestUser(t *testing.T, username string, admin bool) (valueResult string) {
 	t.Helper()

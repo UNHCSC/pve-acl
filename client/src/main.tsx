@@ -8,14 +8,15 @@ import { apiFetch } from "./api";
 import { RolePermissionModal } from "./components/RolePermissionModal";
 import { ThemeSettings } from "./components/ThemeSettings";
 import { ToastStack } from "./components/common";
-import { GroupMembersModal, GroupModal, ImportUsersModal, OrgModal, ProjectMemberModal, ProjectModal, RoleModal } from "./components/modals";
+import { AssetAssignmentModal, AssetGroupModal, AssetGroupResourcesModal, GroupMembersModal, GroupModal, ImportUsersModal, OrgModal, ProjectMemberModal, ProjectModal, ResourceModal, RoleModal } from "./components/modals";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDirectorySelection } from "./hooks/useDirectorySelection";
 import { useOrganizationAccess } from "./hooks/useOrganizationAccess";
+import { useProjectAssets } from "./hooks/useProjectAssets";
 import { useProjectMemberships } from "./hooks/useProjectMemberships";
 import { useToasts } from "./hooks/useToasts";
 import "./styles/site.css";
-import type { Group, ModalKey, Organization, Project, Role, RolePermissionGrant, ThemeKey, UserImportResponse, ViewKey } from "./types";
+import type { AssetAssignment, AssetGroup, Group, ModalKey, Organization, Project, ProjectResource, Role, RolePermissionGrant, ThemeKey, UserImportResponse, ViewKey } from "./types";
 import { applyTheme, readStoredTheme } from "./theme";
 import { viewTitles } from "./types";
 import { classNames, displayUser, initialView, initials } from "./ui-helpers";
@@ -59,6 +60,7 @@ function DashboardApp() {
     const [theme, setTheme] = useState<ThemeKey>(readStoredTheme);
     const [projectMemberSubjectType, setProjectMemberSubjectType] = useState<"user" | "group">("user");
     const [groupMembersContext, setGroupMembersContext] = useState<{ id: number; name: string } | null>(null);
+    const [assetGroupResourceContext, setAssetGroupResourceContext] = useState<AssetGroup | null>(null);
     const [editingRole, setEditingRole] = useState<{ role: Role; context: Organization | Project } | null>(null);
 
     const { toasts, showToast } = useToasts();
@@ -66,6 +68,7 @@ function DashboardApp() {
     const { expanded, orgTree, selectedOrg, selectedProject, selection, setSelection, toggleOrg } = useDirectorySelection(tree);
     const { loadingOrg, orgGroups, orgMemberships, orgRoles, reloadOrgGroups, reloadOrgMemberships, reloadOrgRoles } = useOrganizationAccess(selectedOrg, (message) => showToast(message, "warning"));
     const { activeProject, loadingProject, memberships, projectGroups, projectRoles, reloadMemberships, reloadProjectGroups, reloadProjectRoles } = useProjectMemberships(selectedProject, (message) => showToast(message, "warning"));
+    const { assetAssignments, assetGroups, loadingProjectAssets, projectResources, reloadProjectAssetAssignments, reloadProjectAssetGroups, reloadProjectAssets, reloadProjectResources } = useProjectAssets(activeProject || selectedProject, (message) => showToast(message, "warning"));
     const counts = summary?.counts || {};
 
     useEffect(() => {
@@ -322,6 +325,69 @@ function DashboardApp() {
         showToast("Project member added", "success");
     };
 
+    const createResource = async (values: { name: string; slug: string; resourceType: string; status: string }) => {
+        if (!activeProject) {
+            return;
+        }
+        await apiFetch<ProjectResource>(`/api/v1/projects/${activeProject.id}/resources`, { method: "POST", body: JSON.stringify(values) });
+        await reloadProjectAssets();
+        showToast("Resource created", "success");
+    };
+
+    const deleteResource = async (resource: ProjectResource) => {
+        if (!activeProject || !window.confirm(`Delete ${resource.name}? Assignments for this resource will be removed.`)) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/resources/${resource.id}`, { method: "DELETE" });
+        await reloadProjectAssets();
+        showToast("Resource deleted", "success");
+    };
+
+    const createAssetGroup = async (values: { name: string; slug: string; description: string }) => {
+        if (!activeProject) {
+            return;
+        }
+        await apiFetch<AssetGroup>(`/api/v1/projects/${activeProject.id}/asset-groups`, { method: "POST", body: JSON.stringify(values) });
+        await reloadProjectAssetGroups();
+        showToast("Asset group created", "success");
+    };
+
+    const addAssetGroupResource = async (group: AssetGroup, resourceID: number) => {
+        if (!activeProject) {
+            return;
+        }
+        await apiFetch<AssetGroup>(`/api/v1/projects/${activeProject.id}/asset-groups/${group.id}/resources/${resourceID}`, { method: "POST" });
+        await reloadProjectAssets();
+        showToast("Resource attached", "success");
+    };
+
+    const removeAssetGroupResource = async (group: AssetGroup, resourceID: number) => {
+        if (!activeProject || !window.confirm("Remove this resource from the asset group?")) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/asset-groups/${group.id}/resources/${resourceID}`, { method: "DELETE" });
+        await reloadProjectAssets();
+        showToast("Resource removed", "success");
+    };
+
+    const createAssetAssignment = async (values: { targetType: string; resourceID?: number; assetGroupID?: number; subjectType: string; subjectRef: string; roleID: number }) => {
+        if (!activeProject) {
+            return;
+        }
+        await apiFetch<AssetAssignment>(`/api/v1/projects/${activeProject.id}/asset-assignments`, { method: "POST", body: JSON.stringify(values) });
+        await reloadProjectAssets();
+        showToast("Asset assignment created", "success");
+    };
+
+    const deleteAssetAssignment = async (assignment: AssetAssignment) => {
+        if (!activeProject || !window.confirm("Remove this asset assignment?")) {
+            return;
+        }
+        await apiFetch(`/api/v1/projects/${activeProject.id}/asset-assignments/${assignment.id}`, { method: "DELETE" });
+        await reloadProjectAssets();
+        showToast("Asset assignment removed", "success");
+    };
+
     const moveOrg = async (org: Organization, parentOrgID: number | null) => {
         await apiFetch(`/api/v1/organizations/${org.id}`, { method: "PATCH", body: JSON.stringify({ parentOrgID }) });
         await loadTree();
@@ -476,8 +542,11 @@ function DashboardApp() {
                             memberships={memberships}
                             projectRoles={projectRoles}
                             projectGroups={projectGroups}
+                            projectResources={projectResources}
+                            assetGroups={assetGroups}
+                            assetAssignments={assetAssignments}
                             loadingOrg={loadingOrg}
-                            loadingProject={loadingProject}
+                            loadingProject={loadingProject || loadingProjectAssets}
                             openMenu={openMenu}
                             setOpenMenu={setOpenMenu}
                             toggleOrg={toggleOrg}
@@ -499,6 +568,15 @@ function DashboardApp() {
                             createGroup={(context) => openContextModal("group", context)}
                             editRole={(role, context) => setEditingRole({ role, context })}
                             deleteRole={(role) => mutateWithToast(() => deleteRole(role))}
+                            createResource={() => openContextModal("resource", activeProject || selectedProject)}
+                            createAssetGroup={() => openContextModal("asset-group", activeProject || selectedProject)}
+                            manageAssetGroupResources={(group) => {
+                                setAssetGroupResourceContext(group);
+                                openContextModal("asset-group-resources", activeProject || selectedProject);
+                            }}
+                            createAssetAssignment={() => openContextModal("asset-assignment", activeProject || selectedProject)}
+                            deleteResource={(resource) => mutateWithToast(() => deleteResource(resource))}
+                            deleteAssetAssignment={(assignment) => mutateWithToast(() => deleteAssetAssignment(assignment))}
                             manageGroupMembers={(group) => {
                                 setGroupMembersContext(group);
                                 openContextModal("group-members");
@@ -622,6 +700,39 @@ function DashboardApp() {
                     group={groupMembersContext}
                     onError={(message) => showToast(message, "warning")}
                     onClose={() => setModal(null)}
+                />
+            )}
+            {modal === "resource" && activeProject && (
+                <ResourceModal
+                    project={activeProject}
+                    onClose={() => setModal(null)}
+                    onSubmit={(values) => submitModalMutation(() => createResource(values))}
+                />
+            )}
+            {modal === "asset-group" && activeProject && (
+                <AssetGroupModal
+                    project={activeProject}
+                    onClose={() => setModal(null)}
+                    onSubmit={(values) => submitModalMutation(() => createAssetGroup(values))}
+                />
+            )}
+            {modal === "asset-group-resources" && assetGroupResourceContext && (
+                <AssetGroupResourcesModal
+                    group={assetGroups.find((group) => group.id === assetGroupResourceContext.id) || assetGroupResourceContext}
+                    resources={projectResources}
+                    onClose={() => setModal(null)}
+                    onAdd={(resourceID) => addAssetGroupResource(assetGroupResourceContext, resourceID)}
+                    onRemove={(resourceID) => removeAssetGroupResource(assetGroupResourceContext, resourceID)}
+                />
+            )}
+            {modal === "asset-assignment" && activeProject && (
+                <AssetAssignmentModal
+                    project={activeProject}
+                    resources={projectResources}
+                    assetGroups={assetGroups}
+                    roles={projectRoles}
+                    onClose={() => setModal(null)}
+                    onSubmit={(values) => submitModalMutation(() => createAssetAssignment(values))}
                 />
             )}
             {editingRole && (

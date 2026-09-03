@@ -1,11 +1,11 @@
 package db
 
-import "github.com/z46-dev/gomysql"
+import "github.com/z46-dev/gosqlite"
 
 // GroupsForUser returns local group names for a username.
 func GroupsForUser(username string) (groupnames []string, err error) {
 	var (
-		filter  *gomysql.Filter = gomysql.NewFilter().KeyCmp(LocalGroupMembershipsByUser.FieldBySQLName("username"), gomysql.OpEqual, username)
+		filter  *gosqlite.Filter = gosqlite.NewFilter().KeyCmp(LocalGroupMembershipsByUser.FieldBySQLName("username"), gosqlite.OpEqual, username)
 		members []*LocalGroupMembership
 	)
 
@@ -24,7 +24,7 @@ func GroupsForUser(username string) (groupnames []string, err error) {
 // UsersForGroup returns local usernames for a group name.
 func UsersForGroup(groupname string) (usernames []string, err error) {
 	var (
-		filter  *gomysql.Filter = gomysql.NewFilter().KeyCmp(LocalGroupMembershipsByUser.FieldBySQLName("groupname"), gomysql.OpEqual, groupname)
+		filter  *gosqlite.Filter = gosqlite.NewFilter().KeyCmp(LocalGroupMembershipsByUser.FieldBySQLName("groupname"), gosqlite.OpEqual, groupname)
 		members []*LocalGroupMembership
 	)
 
@@ -43,7 +43,7 @@ func UsersForGroup(groupname string) (usernames []string, err error) {
 // AssetIDsForUser returns Proxmox asset ids assigned directly to a user.
 func AssetIDsForUser(username string) (assetIDs []string, err error) {
 	var (
-		filter      *gomysql.Filter = gomysql.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByUser.FieldBySQLName("username"), gomysql.OpEqual, username)
+		filter      *gosqlite.Filter = gosqlite.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByUser.FieldBySQLName("username"), gosqlite.OpEqual, username)
 		assignments []*ProxmoxAssetAssignmentByUser
 	)
 
@@ -62,7 +62,7 @@ func AssetIDsForUser(username string) (assetIDs []string, err error) {
 // AssetIDsForGroup returns Proxmox asset ids assigned to a group.
 func AssetIDsForGroup(groupname string) (assetIDs []string, err error) {
 	var (
-		filter      *gomysql.Filter = gomysql.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByGroup.FieldBySQLName("groupname"), gomysql.OpEqual, groupname)
+		filter      *gosqlite.Filter = gosqlite.NewFilter().KeyCmp(ProxmoxAssetAssignmentsByGroup.FieldBySQLName("groupname"), gosqlite.OpEqual, groupname)
 		assignments []*ProxmoxAssetAssignmentByGroup
 	)
 

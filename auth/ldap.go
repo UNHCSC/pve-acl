@@ -2,46 +2,121 @@ package auth
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/internal/safefile"
 	"github.com/go-ldap/ldap/v3"
 )
 
-const LDAP_USER = "uid=%s,cn=%s,cn=accounts,dc=%s,dc=%s"
+const ldapUserDNFormat = "uid=%s,cn=%s,cn=accounts,dc=%s,dc=%s"
 
-var ErrUnauthorized error = fmt.Errorf("unauthorized")
+var ErrUnauthorized error = errors.New("unauthorized")
 
 func getUsername(s string) (valueResult string) {
-	return fmt.Sprintf(LDAP_USER, s, config.Config.LDAP.UsersCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
+	return fmt.Sprintf(
+		ldapUserDNFormat,
+		ldap.EscapeDN(s),
+		ldap.EscapeDN(config.Config.LDAP.UsersCN),
+		ldap.EscapeDN(config.Config.LDAP.DomainSLD),
+		ldap.EscapeDN(config.Config.LDAP.DomainTLD),
+	)
 }
 
 func getGroupName(s string) (valueResult string) {
-	return fmt.Sprintf("cn=%s,cn=%s,cn=accounts,dc=%s,dc=%s", s, config.Config.LDAP.GroupsCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
+	return fmt.Sprintf(
+		"cn=%s,cn=%s,cn=accounts,dc=%s,dc=%s",
+		ldap.EscapeDN(s),
+		ldap.EscapeDN(config.Config.LDAP.GroupsCN),
+		ldap.EscapeDN(config.Config.LDAP.DomainSLD),
+		ldap.EscapeDN(config.Config.LDAP.DomainTLD),
+	)
 }
 
 func getFilter() (valueResult string) {
-	return fmt.Sprintf("cn=%s,cn=accounts,dc=%s,dc=%s", config.Config.LDAP.UsersCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
+	return fmt.Sprintf(
+		"cn=%s,cn=accounts,dc=%s,dc=%s",
+		ldap.EscapeDN(config.Config.LDAP.UsersCN),
+		ldap.EscapeDN(config.Config.LDAP.DomainSLD),
+		ldap.EscapeDN(config.Config.LDAP.DomainTLD),
+	)
 }
 
 func getGroupsFilter() (valueResult string) {
-	return fmt.Sprintf("cn=%s,cn=accounts,dc=%s,dc=%s", config.Config.LDAP.GroupsCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD)
+	return fmt.Sprintf(
+		"cn=%s,cn=accounts,dc=%s,dc=%s",
+		ldap.EscapeDN(config.Config.LDAP.GroupsCN),
+		ldap.EscapeDN(config.Config.LDAP.DomainSLD),
+		ldap.EscapeDN(config.Config.LDAP.DomainTLD),
+	)
+}
+
+// dialLDAP opens an LDAP connection using verified TLS and an optional custom CA bundle.
+func dialLDAP() (connResult *ldap.Conn, errResult error) {
+	var address *url.URL
+
+	if address, errResult = url.Parse(config.Config.LDAP.Address); errResult != nil {
+		errResult = fmt.Errorf("parse LDAP address: %w", errResult)
+		return
+	}
+
+	if address.Scheme != "ldaps" {
+		errResult = fmt.Errorf("LDAP address must use ldaps:// to protect credentials")
+		return
+	}
+
+	var tlsConfig *tls.Config = &tls.Config{MinVersion: tls.VersionTLS12}
+
+	if config.Config.LDAP.CAFile != "" {
+		var (
+			certificatePool *x509.CertPool
+			certificatePEM  []byte
+		)
+
+		if certificatePool, errResult = x509.SystemCertPool(); errResult != nil {
+			errResult = fmt.Errorf("load system certificate pool: %w", errResult)
+			return
+		}
+
+		if certificatePEM, errResult = safefile.Read(config.Config.LDAP.CAFile); errResult != nil {
+			errResult = fmt.Errorf("load LDAP CA file: %w", errResult)
+			return
+		}
+
+		if !certificatePool.AppendCertsFromPEM(certificatePEM) {
+			errResult = fmt.Errorf("LDAP CA file contains no valid certificates")
+			return
+		}
+
+		tlsConfig.RootCAs = certificatePool
+	}
+
+	if connResult, errResult = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(tlsConfig)); errResult != nil {
+		errResult = fmt.Errorf("connect to LDAP: %w", errResult)
+	}
+
+	return
 }
 
 // UserExists reports whether an LDAP user exists.
 func UserExists(username string) (exists bool, err error) {
 	var conn *ldap.Conn
-	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+	if conn, err = dialLDAP(); err != nil {
 		return
 	}
 
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	var result *ldap.SearchResult
 	if result, err = conn.Search(ldap.NewSearchRequest(
-		fmt.Sprintf(getFilter(), config.Config.LDAP.UsersCN, config.Config.LDAP.DomainSLD, config.Config.LDAP.DomainTLD),
+		getFilter(),
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false,
-		fmt.Sprintf("(uid=%s)", username),
+		fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(username)),
 		[]string{"dn"},
 		nil,
 	)); err != nil {
@@ -74,10 +149,12 @@ type (
 func LookupUser(username string) (lDAPUserResult *LDAPUser, okResult bool, errResult error) {
 	var conn *ldap.Conn
 	var err error
-	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+	if conn, err = dialLDAP(); err != nil {
 		return nil, false, err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	var result *ldap.SearchResult
 	if result, err = conn.Search(ldap.NewSearchRequest(
@@ -123,10 +200,12 @@ func LookupUser(username string) (lDAPUserResult *LDAPUser, okResult bool, errRe
 func LookupGroup(name string) (lDAPGroupResult *LDAPGroup, okResult bool, errResult error) {
 	var conn *ldap.Conn
 	var err error
-	if conn, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+	if conn, err = dialLDAP(); err != nil {
 		return nil, false, err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	var result *ldap.SearchResult
 	if result, err = conn.Search(ldap.NewSearchRequest(
@@ -153,7 +232,7 @@ func LookupGroup(name string) (lDAPGroupResult *LDAPGroup, okResult bool, errRes
 // NewLDAPConn opens and binds an LDAP connection for a user.
 func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {
 	var socket *ldap.Conn
-	if socket, err = ldap.DialURL(config.Config.LDAP.Address, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})); err != nil {
+	if socket, err = dialLDAP(); err != nil {
 		return
 	}
 
@@ -167,10 +246,12 @@ func NewLDAPConn(username, password string) (conn *LDAPConn, err error) {
 }
 
 // Close releases the underlying LDAP connection.
-func (l *LDAPConn) Close() {
+func (l *LDAPConn) Close() (errResult error) {
 	if l.conn != nil {
-		l.conn.Close()
+		errResult = l.conn.Close()
 	}
+
+	return
 }
 
 // WhoAmI returns the LDAP authorization identity for the connection.
@@ -222,7 +303,7 @@ func (l *LDAPConn) GetAttributes(attrs ...string) (attributes map[string]string,
 	var result *ldap.SearchResult
 	if result, err = l.conn.Search(ldap.NewSearchRequest(
 		getFilter(), ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false,
-		fmt.Sprintf("(uid=%s)", l.Username), attrs, nil,
+		fmt.Sprintf("(uid=%s)", ldap.EscapeFilter(l.Username)), attrs, nil,
 	)); err != nil {
 		return
 	}

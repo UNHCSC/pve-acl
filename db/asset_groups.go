@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 type AssetGroupCreateInput struct {
@@ -90,16 +90,16 @@ func CreateAssetGroup(input AssetGroupCreateInput) (assetGroupResult *AssetGroup
 
 // AssetGroupsForProject returns active asset groups for a project.
 func AssetGroupsForProject(projectID int) (itemsResult []*AssetGroup, errResult error) {
-	return AssetGroups.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(AssetGroups.FieldBySQLName("project_id"), gomysql.OpEqual, projectID).
+	return AssetGroups.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetGroups.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID).
 		And().
-		KeyCmp(AssetGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+		KeyCmp(AssetGroups.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
 // AssetGroupResourcesForGroup returns resources attached to an asset group.
 func AssetGroupResourcesForGroup(assetGroupID int) (itemsResult []*AssetGroupResource, errResult error) {
-	return AssetGroupResources.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID))
+	return AssetGroupResources.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, assetGroupID))
 }
 
 // EnsureAssetGroupResource ensures asset group resource exists.
@@ -116,18 +116,18 @@ func EnsureAssetGroupResource(assetGroupID, resourceID int) (okResult bool, errR
 	var resource *Resource
 
 	resource, err = Resources.Select(resourceID)
-	if err != nil || resource == nil {
+	if err != nil || resource == nil || resource.DeletedAt != nil {
 		return false, err
 	}
 	if assetGroup.ProjectID != resource.ProjectID {
 		return false, fmt.Errorf("asset group and resource must belong to the same project")
 	}
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, assetGroupID).
 		And().
-		KeyCmp(AssetGroupResources.FieldBySQLName("resource_id"), gomysql.OpEqual, resourceID)
+		KeyCmp(AssetGroupResources.FieldBySQLName("resource_id"), gosqlite.OpEqual, resourceID)
 	var existing []*AssetGroupResource
 
 	existing, err = AssetGroupResources.SelectAllWithFilter(filter.Limit(1))
@@ -156,6 +156,63 @@ func EnsureAssetGroupResource(assetGroupID, resourceID int) (okResult bool, errR
 		}
 	}
 	return true, nil
+}
+
+// RemoveAssetGroupResource removes a resource from an asset group.
+func RemoveAssetGroupResource(assetGroupID, resourceID int) (errResult error) {
+	var (
+		assignments []*AssetAssignment
+		err         error
+	)
+
+	assignments, err = AssetAssignmentsForAssetGroup(assetGroupID)
+	if err != nil {
+		return err
+	}
+	for _, assignment := range assignments {
+		{
+			var err error
+
+			if err = RemoveResourceRoleBindingsForSource(resourceID, RoleBindingSourceAssetAssignment, assignment.ID); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = AssetGroupResources.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetGroupResources.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, assetGroupID).
+		And().
+		KeyCmp(AssetGroupResources.FieldBySQLName("resource_id"), gosqlite.OpEqual, resourceID))
+	return err
+}
+
+// ArchiveAssetGroup archives an asset group and its active assignments.
+func ArchiveAssetGroup(assetGroup *AssetGroup) (errResult error) {
+	var (
+		assignments []*AssetAssignment
+		err         error
+	)
+
+	assignments, err = AssetAssignmentsForAssetGroup(assetGroup.ID)
+	if err != nil {
+		return err
+	}
+	for _, assignment := range assignments {
+		{
+			var err error
+
+			if err = ArchiveAssetAssignment(assignment.ID); err != nil {
+				return err
+			}
+		}
+	}
+	if assetGroup.ArchivedAt == nil {
+		var now time.Time
+
+		now = time.Now().UTC()
+		assetGroup.ArchivedAt = &now
+	}
+	assetGroup.UpdatedAt = time.Now().UTC()
+	return AssetGroups.Update(assetGroup)
 }
 
 type AssetAssignmentInput struct {
@@ -189,7 +246,7 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *A
 		)
 
 		resource, err = Resources.Select(*input.ResourceID)
-		if err != nil || resource == nil {
+		if err != nil || resource == nil || resource.DeletedAt != nil {
 			return nil, false, err
 		}
 		if resource.ProjectID != input.ProjectID {
@@ -203,34 +260,34 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *A
 		)
 
 		assetGroup, err = AssetGroups.Select(*input.AssetGroupID)
-		if err != nil || assetGroup == nil {
+		if err != nil || assetGroup == nil || assetGroup.ArchivedAt != nil {
 			return nil, false, err
 		}
 		if assetGroup.ProjectID != input.ProjectID {
 			return nil, false, fmt.Errorf("asset group is not owned by the assignment project")
 		}
 	}
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(AssetAssignments.FieldBySQLName("project_id"), gomysql.OpEqual, input.ProjectID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(AssetAssignments.FieldBySQLName("project_id"), gosqlite.OpEqual, input.ProjectID).
 		And().
-		KeyCmp(AssetAssignments.FieldBySQLName("subject_type"), gomysql.OpEqual, input.SubjectType).
+		KeyCmp(AssetAssignments.FieldBySQLName("subject_type"), gosqlite.OpEqual, input.SubjectType).
 		And().
-		KeyCmp(AssetAssignments.FieldBySQLName("subject_id"), gomysql.OpEqual, input.SubjectID).
+		KeyCmp(AssetAssignments.FieldBySQLName("subject_id"), gosqlite.OpEqual, input.SubjectID).
 		And().
-		KeyCmp(AssetAssignments.FieldBySQLName("role_id"), gomysql.OpEqual, input.RoleID).
+		KeyCmp(AssetAssignments.FieldBySQLName("role_id"), gosqlite.OpEqual, input.RoleID).
 		And().
-		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil).
+		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil).
 		And()
 	if input.ResourceID != nil {
-		filter = filter.KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gomysql.OpEqual, *input.ResourceID).
+		filter = filter.KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gosqlite.OpEqual, *input.ResourceID).
 			And().
-			KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gomysql.OpIsNull, nil)
+			KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gosqlite.OpIsNull, nil)
 	} else {
-		filter = filter.KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gomysql.OpEqual, *input.AssetGroupID).
+		filter = filter.KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, *input.AssetGroupID).
 			And().
-			KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gomysql.OpIsNull, nil)
+			KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gosqlite.OpIsNull, nil)
 	}
 	var (
 		existing []*AssetAssignment
@@ -246,10 +303,13 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *A
 			var scopeID int
 
 			scopeID = *input.ResourceID
+			var sourceID int
+
+			sourceID = existing[0].ID
 			{
 				var err error
 
-				if _, err = ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
+				if _, err = ensureRoleBindingWithSource(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, RoleBindingSourceAssetAssignment, &sourceID, time.Now().UTC()); err != nil {
 					return nil, false, err
 				}
 			}
@@ -287,10 +347,13 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *A
 		var scopeID int
 
 		scopeID = *input.ResourceID
+		var sourceID int
+
+		sourceID = assignment.ID
 		{
 			var err error
 
-			if _, err = ensureRoleBinding(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, time.Now().UTC()); err != nil {
+			if _, err = ensureRoleBindingWithSource(input.RoleID, input.SubjectType, input.SubjectID, RoleBindingScopeResource, &scopeID, RoleBindingSourceAssetAssignment, &sourceID, time.Now().UTC()); err != nil {
 				return nil, false, err
 			}
 		}
@@ -304,6 +367,93 @@ func EnsureAssetAssignment(input AssetAssignmentInput) (assetAssignmentResult *A
 		}
 	}
 	return assignment, true, nil
+}
+
+// AssetAssignmentsForProject returns active asset assignments for a project.
+func AssetAssignmentsForProject(projectID int) (itemsResult []*AssetAssignment, errResult error) {
+	return AssetAssignments.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetAssignments.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID).
+		And().
+		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
+}
+
+// AssetAssignmentsForResource returns active direct asset assignments for a resource.
+func AssetAssignmentsForResource(resourceID int) (itemsResult []*AssetAssignment, errResult error) {
+	return AssetAssignments.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetAssignments.FieldBySQLName("resource_id"), gosqlite.OpEqual, resourceID).
+		And().
+		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
+}
+
+// AssetAssignmentsForAssetGroup returns active asset assignments for an asset group.
+func AssetAssignmentsForAssetGroup(assetGroupID int) (itemsResult []*AssetAssignment, errResult error) {
+	return AssetAssignments.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, assetGroupID).
+		And().
+		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
+}
+
+// ArchiveAssetAssignment archives an assignment and removes only its derived role bindings.
+func ArchiveAssetAssignment(assignmentID int) (errResult error) {
+	var (
+		assignment *AssetAssignment
+		err        error
+	)
+
+	assignment, err = AssetAssignments.Select(assignmentID)
+	if err != nil || assignment == nil {
+		return err
+	}
+	if assignment.ArchivedAt == nil {
+		var now time.Time
+
+		now = time.Now().UTC()
+		assignment.ArchivedAt = &now
+		if err = AssetAssignments.Update(assignment); err != nil {
+			return err
+		}
+	}
+	return RemoveRoleBindingsForSource(RoleBindingSourceAssetAssignment, assignment.ID)
+}
+
+// ArchiveAssetAssignmentsForResource archives direct assignments for a resource.
+func ArchiveAssetAssignmentsForResource(resourceID int) (errResult error) {
+	var (
+		assignments []*AssetAssignment
+		err         error
+	)
+
+	assignments, err = AssetAssignmentsForResource(resourceID)
+	if err != nil {
+		return err
+	}
+	for _, assignment := range assignments {
+		{
+			var err error
+
+			if err = ArchiveAssetAssignment(assignment.ID); err != nil {
+				return err
+			}
+		}
+	}
+	var links []*AssetGroupResource
+
+	links, err = AssetGroupResourcesForResource(resourceID)
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if err = RemoveAssetGroupResource(link.AssetGroupID, resourceID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssetGroupResourcesForResource returns asset group links for a resource.
+func AssetGroupResourcesForResource(resourceID int) (itemsResult []*AssetGroupResource, errResult error) {
+	return AssetGroupResources.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetGroupResources.FieldBySQLName("resource_id"), gosqlite.OpEqual, resourceID))
 }
 
 func ensureAssetGroupAssignmentRoleBindings(assetGroupID int, assignment *AssetAssignment) (errResult error) {
@@ -323,10 +473,13 @@ func ensureAssetGroupAssignmentRoleBindings(assetGroupID int, assignment *AssetA
 		var scopeID int
 
 		scopeID = resource.ResourceID
+		var sourceID int
+
+		sourceID = assignment.ID
 		{
 			var err error
 
-			if _, err = ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
+			if _, err = ensureRoleBindingWithSource(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, RoleBindingSourceAssetAssignment, &sourceID, now); err != nil {
 				return err
 			}
 		}
@@ -340,10 +493,10 @@ func ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID 
 		err         error
 	)
 
-	assignments, err = AssetAssignments.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gomysql.OpEqual, assetGroupID).
+	assignments, err = AssetAssignments.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(AssetAssignments.FieldBySQLName("asset_group_id"), gosqlite.OpEqual, assetGroupID).
 		And().
-		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+		KeyCmp(AssetAssignments.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 	if err != nil {
 		return err
 	}
@@ -354,10 +507,13 @@ func ensureAssetGroupAssignmentRoleBindingsForResource(assetGroupID, resourceID 
 		var scopeID int
 
 		scopeID = resourceID
+		var sourceID int
+
+		sourceID = assignment.ID
 		{
 			var err error
 
-			if _, err = ensureRoleBinding(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, now); err != nil {
+			if _, err = ensureRoleBindingWithSource(assignment.RoleID, assignment.SubjectType, assignment.SubjectID, RoleBindingScopeResource, &scopeID, RoleBindingSourceAssetAssignment, &sourceID, now); err != nil {
 				return err
 			}
 		}

@@ -89,7 +89,7 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 
 	groupReq.Header.Set("Authorization", "Bearer "+token)
 
-	if groupResp, err = fiberApp.Test(groupReq); err != nil {
+	if groupResp, err = testFiberRequest(fiberApp, groupReq); err != nil {
 		t.Fatalf("groups route returned error: %v", err)
 	}
 	if groupResp.StatusCode != fiber.StatusOK {
@@ -112,7 +112,7 @@ func TestACLGroupAndUserLookupRoutes(t *testing.T) {
 
 	userReq.Header.Set("Authorization", "Bearer "+token)
 
-	if userResp, err = fiberApp.Test(userReq); err != nil {
+	if userResp, err = testFiberRequest(fiberApp, userReq); err != nil {
 		t.Fatalf("users route returned error: %v", err)
 	}
 

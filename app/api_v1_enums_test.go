@@ -31,7 +31,7 @@ func TestEnumRoutes(t *testing.T) {
 				err  error
 			)
 
-			if resp, err = fiberApp.Test(httptest.NewRequest("GET", path, nil)); err != nil {
+			if resp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", path, nil)); err != nil {
 				t.Fatalf("app.Test returned error: %v", err)
 			}
 

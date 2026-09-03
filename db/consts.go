@@ -48,6 +48,10 @@ const (
 )
 
 const (
+	RoleBindingSourceAssetAssignment = "asset_assignment"
+)
+
+const (
 	ProjectTypeAdmin       ProjectType = 0
 	ProjectTypeClub        ProjectType = 1
 	ProjectTypeCompetition ProjectType = 2

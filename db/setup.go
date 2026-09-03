@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/UNHCSC/organesson/config"
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 const (
@@ -370,12 +370,12 @@ func EnsureCloudGroup(name, slug string, groupType GroupType) (cloudGroupResult 
 
 // EnsureCloudGroupMembership ensures cloud group membership exists.
 func EnsureCloudGroupMembership(userID, groupID int, role MembershipRole) (okResult bool, errResult error) {
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gosqlite.OpEqual, userID).
 		And().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID)
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gosqlite.OpEqual, groupID)
 	var (
 		existing []*CloudGroupMembership
 		err      error
@@ -463,12 +463,12 @@ func ensurePermission(name string) (permissionResult *Permission, okResult bool,
 }
 
 func ensureRolePermission(roleID, permissionID int) (okResult bool, errResult error) {
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID).
 		And().
-		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gomysql.OpEqual, permissionID)
+		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gosqlite.OpEqual, permissionID)
 	var (
 		count int64
 		err   error
@@ -486,21 +486,36 @@ func ensureRolePermission(roleID, permissionID int) (okResult bool, errResult er
 }
 
 func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int, now time.Time) (okResult bool, errResult error) {
-	var filter *gomysql.Filter
+	return ensureRoleBindingWithSource(roleID, subjectType, subjectID, scopeType, scopeID, "", nil, now)
+}
 
-	filter = gomysql.NewFilter().
-		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
+func ensureRoleBindingWithSource(roleID int, subjectType RoleBindingSubject, subjectID int, scopeType RoleBindingScope, scopeID *int, sourceType string, sourceID *int, now time.Time) (okResult bool, errResult error) {
+	var filter *gosqlite.Filter
+
+	filter = gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID).
 		And().
-		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
+		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gosqlite.OpEqual, subjectType).
 		And().
-		KeyCmp(RoleBindings.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID).
+		KeyCmp(RoleBindings.FieldBySQLName("subject_id"), gosqlite.OpEqual, subjectID).
 		And().
-		KeyCmp(RoleBindings.FieldBySQLName("scope_type"), gomysql.OpEqual, scopeType)
+		KeyCmp(RoleBindings.FieldBySQLName("scope_type"), gosqlite.OpEqual, scopeType)
 
 	if scopeID == nil {
-		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gomysql.OpIsNull, nil)
+		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gosqlite.OpIsNull, nil)
 	} else {
-		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gomysql.OpEqual, scopeID)
+		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gosqlite.OpEqual, scopeID)
+	}
+	if sourceType == "" {
+		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("source_id"), gosqlite.OpIsNull, nil)
+	} else if sourceID == nil {
+		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("source_type"), gosqlite.OpEqual, sourceType).
+			And().
+			KeyCmp(RoleBindings.FieldBySQLName("source_id"), gosqlite.OpIsNull, nil)
+	} else {
+		filter = filter.And().KeyCmp(RoleBindings.FieldBySQLName("source_type"), gosqlite.OpEqual, sourceType).
+			And().
+			KeyCmp(RoleBindings.FieldBySQLName("source_id"), gosqlite.OpEqual, sourceID)
 	}
 	var (
 		count int64
@@ -518,6 +533,8 @@ func ensureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int
 		SubjectID:   subjectID,
 		ScopeType:   scopeType,
 		ScopeID:     scopeID,
+		SourceType:  sourceType,
+		SourceID:    sourceID,
 		CreatedAt:   now,
 	})
 }
@@ -538,13 +555,13 @@ func findPermissionByName(name string) (permissionResult *Permission, okResult b
 	return findOneByStringField(Permissions, Permissions.FieldBySQLName("name"), name)
 }
 
-func findOneByStringField[T any](table *gomysql.RegisteredStruct[T], field *gomysql.RegisteredStructField, value string) (tResult *T, okResult bool, errResult error) {
+func findOneByStringField[T any](table *gosqlite.RegisteredStruct[T], field *gosqlite.RegisteredStructField, value string) (tResult *T, okResult bool, errResult error) {
 	var (
 		items []*T
 		err   error
 	)
 
-	items, err = table.SelectAllWithFilter(gomysql.NewFilter().KeyCmp(field, gomysql.OpEqual, value).Limit(1))
+	items, err = table.SelectAllWithFilter(gosqlite.NewFilter().KeyCmp(field, gosqlite.OpEqual, value).Limit(1))
 	if err != nil {
 		return nil, false, err
 	}

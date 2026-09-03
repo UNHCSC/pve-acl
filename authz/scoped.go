@@ -54,7 +54,7 @@ func NewScopedEnforcer(scopeMatcher ScopeMatcher) (enforcerResult *casbin.Enforc
 }
 
 func scopeMatchFunc(scopeMatcher ScopeMatcher) (expressionFunctionResult govaluate.ExpressionFunction) {
-	return func(args ...interface{}) (interface{}, error) {
+	return func(args ...any) (any, error) {
 		if len(args) != 2 {
 			return false, fmt.Errorf("scopeMatch expects 2 arguments")
 		}

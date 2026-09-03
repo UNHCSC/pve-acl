@@ -37,7 +37,7 @@ func TestProjectAPIListAndCreate(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create route returned error: %v", err)
 	}
 	if createResp.StatusCode != fiber.StatusCreated {
@@ -46,7 +46,7 @@ func TestProjectAPIListAndCreate(t *testing.T) {
 
 	listReq = httptest.NewRequest("GET", "/api/v1/projects", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
-	if listResp, err = fiberApp.Test(listReq); err != nil {
+	if listResp, err = testFiberRequest(fiberApp, listReq); err != nil {
 		t.Fatalf("list route returned error: %v", err)
 	}
 	if listResp.StatusCode != fiber.StatusOK {
@@ -95,7 +95,7 @@ func TestProjectAPIDeniesNonAdminCreate(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(createReq); err != nil {
+	if resp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusForbidden {
@@ -132,7 +132,7 @@ func TestProjectAPISiteAdminCanViewAnyProject(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/projects/"+project.Slug, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("project detail route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -157,7 +157,7 @@ func TestProjectAPINotFoundIsNotUnauthorized(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/projects/missing-project", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("project detail route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusNotFound {
@@ -186,7 +186,7 @@ func TestProjectAPICreatorCanViewCreatedProject(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create route returned error: %v", err)
 	}
 	if createResp.StatusCode != fiber.StatusCreated {
@@ -196,7 +196,7 @@ func TestProjectAPICreatorCanViewCreatedProject(t *testing.T) {
 	viewReq = httptest.NewRequest("GET", "/api/v1/projects/csc-team", nil)
 	viewReq.Header.Set("Authorization", "Bearer "+token)
 
-	if viewResp, err = fiberApp.Test(viewReq); err != nil {
+	if viewResp, err = testFiberRequest(fiberApp, viewReq); err != nil {
 		t.Fatalf("view route returned error: %v", err)
 	}
 	if viewResp.StatusCode != fiber.StatusOK {
@@ -240,7 +240,7 @@ func TestProjectAPIOwnerMembershipCanViewProject(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/projects/"+project.Slug, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("view route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -285,7 +285,7 @@ func TestProjectMembershipsIncludeHumanReadableSubjects(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("membership route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -353,7 +353,7 @@ func TestProjectManagerCanAddProjectMembershipByRef(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("membership route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusCreated {
@@ -424,7 +424,7 @@ func TestProjectManagerCanAddProjectGroupByExternalRef(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("membership route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusCreated {
@@ -510,7 +510,7 @@ func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
 	ownerReq.Header.Set("Authorization", "Bearer "+token)
 	ownerReq.Header.Set("Content-Type", "application/json")
 
-	if ownerResp, err = fiberApp.Test(ownerReq); err != nil {
+	if ownerResp, err = testFiberRequest(fiberApp, ownerReq); err != nil {
 		t.Fatalf("patch owner membership route returned error: %v", err)
 	}
 	if ownerResp.StatusCode != fiber.StatusForbidden {
@@ -523,7 +523,7 @@ func TestProjectManagerCanPatchProjectMembershipRole(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("patch membership route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -596,7 +596,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 	createRoleReq = httptest.NewRequest("POST", "/api/v1/roles", bytes.NewBufferString(createRoleBody))
 	createRoleReq.Header.Set("Authorization", "Bearer "+token)
 	createRoleReq.Header.Set("Content-Type", "application/json")
-	if createRoleResp, err = fiberApp.Test(createRoleReq); err != nil {
+	if createRoleResp, err = testFiberRequest(fiberApp, createRoleReq); err != nil {
 		t.Fatalf("create scoped role route returned error: %v", err)
 	}
 	if createRoleResp.StatusCode != fiber.StatusCreated {
@@ -613,7 +613,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 	grantReq = httptest.NewRequest("POST", "/api/v1/roles/"+strconv.Itoa(roleID)+"/permissions", bytes.NewBufferString(`{"permissionID":`+strconv.Itoa(vmRead.ID)+`}`))
 	grantReq.Header.Set("Authorization", "Bearer "+token)
 	grantReq.Header.Set("Content-Type", "application/json")
-	if grantResp, err = fiberApp.Test(grantReq); err != nil {
+	if grantResp, err = testFiberRequest(fiberApp, grantReq); err != nil {
 		t.Fatalf("grant scoped permission route returned error: %v", err)
 	}
 	if grantResp.StatusCode != fiber.StatusCreated {
@@ -626,7 +626,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 	deniedGrantReq = httptest.NewRequest("POST", "/api/v1/roles/"+strconv.Itoa(roleID)+"/permissions", bytes.NewBufferString(`{"permissionID":`+strconv.Itoa(userManage.ID)+`}`))
 	deniedGrantReq.Header.Set("Authorization", "Bearer "+token)
 	deniedGrantReq.Header.Set("Content-Type", "application/json")
-	if deniedGrantResp, err = fiberApp.Test(deniedGrantReq); err != nil {
+	if deniedGrantResp, err = testFiberRequest(fiberApp, deniedGrantReq); err != nil {
 		t.Fatalf("grant denied scoped permission route returned error: %v", err)
 	}
 	if deniedGrantResp.StatusCode != fiber.StatusForbidden {
@@ -635,7 +635,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 
 	rolesReq = httptest.NewRequest("GET", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/roles", nil)
 	rolesReq.Header.Set("Authorization", "Bearer "+token)
-	if rolesResp, err = fiberApp.Test(rolesReq); err != nil {
+	if rolesResp, err = testFiberRequest(fiberApp, rolesReq); err != nil {
 		t.Fatalf("project roles route returned error: %v", err)
 	}
 	if rolesResp.StatusCode != fiber.StatusOK {
@@ -660,7 +660,7 @@ func TestProjectManagerCanCreateScopedRoleAndAssignOnlyContainedPermissions(t *t
 	memberReq = httptest.NewRequest("POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/memberships", bytes.NewBufferString(memberBody))
 	memberReq.Header.Set("Authorization", "Bearer "+token)
 	memberReq.Header.Set("Content-Type", "application/json")
-	if memberResp, err = fiberApp.Test(memberReq); err != nil {
+	if memberResp, err = testFiberRequest(fiberApp, memberReq); err != nil {
 		t.Fatalf("project member route returned error: %v", err)
 	}
 	if memberResp.StatusCode != fiber.StatusCreated {
@@ -706,7 +706,7 @@ func TestProjectAPIDeleteRemovesProject(t *testing.T) {
 	req = httptest.NewRequest("DELETE", "/api/v1/projects/"+project.Slug, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("delete route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusNoContent {
@@ -777,7 +777,7 @@ func TestProjectAPIDeleteAllowsOrgScopedProjectManager(t *testing.T) {
 	req = httptest.NewRequest("DELETE", "/api/v1/projects/"+project.Slug, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("delete route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusNoContent {
@@ -818,7 +818,7 @@ func TestOrganizationAPIDeleteArchivesEmptyOrganization(t *testing.T) {
 
 	req = httptest.NewRequest("DELETE", "/api/v1/organizations/"+strconv.Itoa(org.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("delete organization route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusNoContent {
@@ -834,7 +834,7 @@ func TestOrganizationAPIDeleteArchivesEmptyOrganization(t *testing.T) {
 
 	treeReq = httptest.NewRequest("GET", "/api/v1/projects/tree", nil)
 	treeReq.Header.Set("Authorization", "Bearer "+token)
-	if treeResp, err = fiberApp.Test(treeReq); err != nil {
+	if treeResp, err = testFiberRequest(fiberApp, treeReq); err != nil {
 		t.Fatalf("project tree route returned error: %v", err)
 	}
 	if treeResp.StatusCode != fiber.StatusOK {
@@ -881,7 +881,7 @@ func TestOrganizationAPIDeniesSecondRootCreateAndRootMove(t *testing.T) {
 	createReq = httptest.NewRequest("POST", "/api/v1/organizations", bytes.NewBufferString(`{"name":"Second Root","slug":"second-root"}`))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create organization route returned error: %v", err)
 	}
 	if createResp.StatusCode != fiber.StatusBadRequest {
@@ -891,7 +891,7 @@ func TestOrganizationAPIDeniesSecondRootCreateAndRootMove(t *testing.T) {
 	moveReq = httptest.NewRequest("PATCH", "/api/v1/organizations/"+strconv.Itoa(child.ID), bytes.NewBufferString(`{"parentOrgID":null}`))
 	moveReq.Header.Set("Authorization", "Bearer "+token)
 	moveReq.Header.Set("Content-Type", "application/json")
-	if moveResp, err = fiberApp.Test(moveReq); err != nil {
+	if moveResp, err = testFiberRequest(fiberApp, moveReq); err != nil {
 		t.Fatalf("patch organization route returned error: %v", err)
 	}
 	if moveResp.StatusCode != fiber.StatusBadRequest {
@@ -935,7 +935,7 @@ func TestOrganizationAPIDeleteStillRejectsOrganizationsWithProjects(t *testing.T
 
 	req = httptest.NewRequest("DELETE", "/api/v1/organizations/"+strconv.Itoa(org.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("delete busy organization route returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {

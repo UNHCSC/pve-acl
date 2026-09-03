@@ -36,7 +36,7 @@ func TestPostLoginSetsSiteWideCookie(t *testing.T) {
 	req = httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("login route returned error: %v", err)
 	}
 

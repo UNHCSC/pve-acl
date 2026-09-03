@@ -26,14 +26,14 @@ func TestInitAndListenProtectsAPIExceptAuthRoutes(t *testing.T) {
 		t.Fatalf("InitAndListen returned error: %v", err)
 	}
 
-	if authResp, err = fiberApp.Test(httptest.NewRequest("GET", "/api/v1/auth/status", nil)); err != nil {
+	if authResp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", "/api/v1/auth/status", nil)); err != nil {
 		t.Fatalf("auth status route returned error: %v", err)
 	}
 	if authResp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected public auth status route to return auth result 401, got %d", authResp.StatusCode)
 	}
 
-	if enumResp, err = fiberApp.Test(httptest.NewRequest("GET", "/api/v1/enums/asset-types", nil)); err != nil {
+	if enumResp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", "/api/v1/enums/asset-types", nil)); err != nil {
 		t.Fatalf("enum route returned error: %v", err)
 	}
 	if enumResp.StatusCode != fiber.StatusUnauthorized {
@@ -55,7 +55,7 @@ func TestInitAndListenSetsSecurityHeaders(t *testing.T) {
 		t.Fatalf("InitAndListen returned error: %v", err)
 	}
 
-	if resp, err = fiberApp.Test(httptest.NewRequest("GET", "/dashboard", nil)); err != nil {
+	if resp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", "/dashboard", nil)); err != nil {
 		t.Fatalf("dashboard route returned error: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestPageTemplatesRenderReactRoots(t *testing.T) {
 			body []byte
 		)
 
-		if resp, err = fiberApp.Test(httptest.NewRequest("GET", path, nil)); err != nil {
+		if resp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", path, nil)); err != nil {
 			t.Fatalf("%s route returned error: %v", path, err)
 		}
 		if body, err = io.ReadAll(resp.Body); err != nil {

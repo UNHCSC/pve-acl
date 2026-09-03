@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 type OrganizationCreateInput struct {
@@ -108,8 +108,8 @@ func CreateOrganization(input OrganizationCreateInput) (organizationResult *Orga
 
 // ListOrganizations lists active organizations.
 func ListOrganizations() (itemsResult []*Organization, errResult error) {
-	return Organizations.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(Organizations.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+	return Organizations.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(Organizations.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
 // ActiveRootOrganizationExists reports whether an active root organization exists.
@@ -127,10 +127,10 @@ func ActiveRootOrganizationExists() (okResult bool, errResult error) {
 }
 
 func rootOrganizations() (itemsResult []*Organization, errResult error) {
-	return Organizations.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(Organizations.FieldBySQLName("parent_org_id"), gomysql.OpIsNull, nil).
+	return Organizations.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(Organizations.FieldBySQLName("parent_org_id"), gosqlite.OpIsNull, nil).
 		And().
-		KeyCmp(Organizations.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+		KeyCmp(Organizations.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
 // GetOrganizationByID returns an organization by id.
@@ -206,20 +206,20 @@ func ArchiveOrganization(org *Organization) (errResult error) {
 // OrganizationMembershipsForOrganization returns memberships for an organization.
 func OrganizationMembershipsForOrganization(orgID int) (itemsResult []*OrganizationMembership, errResult error) {
 	return OrganizationMemberships.SelectAllWithFilter(
-		gomysql.NewFilter().KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID),
+		gosqlite.NewFilter().KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gosqlite.OpEqual, orgID),
 	)
 }
 
 // EnsureOrganizationMembership ensures organization membership exists.
 func EnsureOrganizationMembership(orgID int, subjectType ProjectMemberSubject, subjectID int, role MembershipRole) (okResult bool, errResult error) {
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gomysql.OpEqual, orgID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(OrganizationMemberships.FieldBySQLName("organization_id"), gosqlite.OpEqual, orgID).
 		And().
-		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
+		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_type"), gosqlite.OpEqual, subjectType).
 		And().
-		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+		KeyCmp(OrganizationMemberships.FieldBySQLName("subject_id"), gosqlite.OpEqual, subjectID)
 	var (
 		existing []*OrganizationMembership
 		err      error

@@ -35,7 +35,12 @@ func loadConfig(path string) (err error) {
 // generateDefaultConfig writes a config.toml with all default values filled in.
 // It will overwrite any existing file at path.
 func generateDefaultConfig(path string) (err error) {
-	var cfg Configuration
+	var (
+		cfg          Configuration
+		absolutePath string
+		root         *os.Root
+		file         *os.File
+	)
 
 	// 1. Apply struct defaults
 	if err = defaults.Set(&cfg); err != nil {
@@ -48,14 +53,36 @@ func generateDefaultConfig(path string) (err error) {
 	// it's just a template for the user to fill in.
 	// Validation happens in LoadConfig() when we actually load the file.
 
-	// 2. Create / truncate the file
-	var file *os.File
-	if file, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644); err != nil {
-		err = fmt.Errorf("create config file: %w", err)
+	// 2. Create / truncate the file within its explicitly configured parent.
+	if absolutePath, err = filepath.Abs(path); err != nil {
+		err = fmt.Errorf("resolve config path: %w", err)
 		return
 	}
 
-	defer file.Close()
+	if root, err = os.OpenRoot(filepath.Dir(absolutePath)); err != nil {
+		err = fmt.Errorf("open config directory: %w", err)
+		return
+	}
+	defer func() {
+		_ = root.Close()
+	}()
+
+	if file, err = root.OpenFile(filepath.Base(absolutePath), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600); err != nil {
+		err = fmt.Errorf("create config file: %w", err)
+		return
+	}
+	defer func() {
+		var closeErr error
+
+		if closeErr = file.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close config file: %w", closeErr)
+		}
+	}()
+
+	if err = file.Chmod(0600); err != nil {
+		err = fmt.Errorf("secure config file permissions: %w", err)
+		return
+	}
 
 	// 3. Encode as TOML
 	var encoder *toml.Encoder = toml.NewEncoder(file)

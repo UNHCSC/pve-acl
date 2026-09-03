@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+
 	"github.com/UNHCSC/organesson/app"
 	"github.com/UNHCSC/organesson/auth"
 	"github.com/UNHCSC/organesson/config"
 	"github.com/UNHCSC/organesson/db"
+	jobscheduler "github.com/UNHCSC/organesson/scheduler"
 	"github.com/gofiber/fiber/v2"
 	"github.com/z46-dev/golog"
 )
@@ -30,6 +33,22 @@ func main() {
 	if err = auth.Init(log); err != nil {
 		log.Panicf("Failed to initialize auth: %v\n", err)
 	}
+
+	var schedulerService *jobscheduler.Service
+	var schedulerDatabaseFile string
+
+	schedulerDatabaseFile = jobscheduler.ResolveDatabaseFile(config.Config.Database.File, config.Config.Scheduler.DatabaseFile)
+	if schedulerService, err = jobscheduler.Init(schedulerDatabaseFile); err != nil {
+		log.Panicf("Failed to initialize scheduler: %v\n", err)
+	}
+	defer schedulerService.Close()
+
+	go func() {
+		var runErr error
+		if runErr = schedulerService.Run(context.Background()); runErr != nil {
+			log.Errorf("Scheduler stopped: %v\n", runErr)
+		}
+	}()
 
 	var fiberApp *fiber.App
 	if fiberApp, err = app.InitAndListen(log); err != nil {

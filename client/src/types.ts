@@ -1,7 +1,7 @@
 export type ToastKind = "info" | "success" | "warning";
 export type ViewKey = "overview" | "directory" | "people" | "identity";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
-export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | null;
+export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | "resource" | "asset-group" | "asset-group-resources" | "asset-assignment" | null;
 export type Selection =
     | { type: "org"; id: number }
     | { type: "project"; id: number; slug: string }
@@ -172,6 +172,61 @@ export type GroupMembership = {
     membership_role: number | string;
     membership_role_label?: string;
     user?: { id: number; username: string; display_name?: string; email?: string; label?: string };
+};
+
+export type ProjectResource = {
+    id: number;
+    uuid?: string;
+    project_id: number;
+    name: string;
+    slug: string;
+    resource_type: number | string;
+    resource_type_label?: "vm" | "container" | "network" | string;
+    status: number | string;
+    status_label?: "ready" | "unknown" | "error" | "deleted" | string;
+    asset_group_count?: number;
+    assignment_count?: number;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type AssetGroupResourceSummary = {
+    id: number;
+    name: string;
+    slug: string;
+    resource_type?: number | string;
+    resource_type_label?: string;
+    status_label?: string;
+};
+
+export type AssetGroup = {
+    id: number;
+    uuid?: string;
+    project_id: number;
+    name: string;
+    slug: string;
+    description?: string;
+    resource_count?: number;
+    assignment_count?: number;
+    resources?: AssetGroupResourceSummary[];
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type AssetAssignment = {
+    id: number;
+    project_id: number;
+    target_type: "resource" | "assetGroup" | string;
+    resource_id?: number | null;
+    asset_group_id?: number | null;
+    target?: { id: number; name?: string; slug?: string; label?: string; resource_type_label?: string };
+    subject_type: number | string;
+    subject_type_label?: "user" | "group" | string;
+    subject_id: number;
+    subject?: { label?: string; name?: string; username?: string; slug?: string; meta?: string };
+    role_id: number;
+    role?: Role;
+    created_at?: string;
 };
 
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };

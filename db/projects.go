@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 type ProjectCreateInput struct {
@@ -140,20 +140,20 @@ func GetProjectByID(id int) (projectResult *Project, okResult bool, errResult er
 // ProjectMembershipsForProject returns all memberships for a project.
 func ProjectMembershipsForProject(projectID int) (itemsResult []*ProjectMembership, errResult error) {
 	return ProjectMemberships.SelectAllWithFilter(
-		gomysql.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID),
+		gosqlite.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID),
 	)
 }
 
 // EnsureProjectMembership ensures project membership exists.
 func EnsureProjectMembership(projectID int, subjectType ProjectMemberSubject, subjectID int) (okResult bool, errResult error) {
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID).
+	filter = gosqlite.NewFilter().
+		KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID).
 		And().
-		KeyCmp(ProjectMemberships.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
+		KeyCmp(ProjectMemberships.FieldBySQLName("subject_type"), gosqlite.OpEqual, subjectType).
 		And().
-		KeyCmp(ProjectMemberships.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID)
+		KeyCmp(ProjectMemberships.FieldBySQLName("subject_id"), gosqlite.OpEqual, subjectID)
 	var (
 		existing []*ProjectMembership
 		err      error
@@ -204,7 +204,7 @@ func DeleteProject(projectID int) (errResult error) {
 		var err error
 
 		if _, err = ProjectMemberships.DeleteWithFilter(
-			gomysql.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gomysql.OpEqual, projectID),
+			gosqlite.NewFilter().KeyCmp(ProjectMemberships.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID),
 		); err != nil {
 			return err
 		}

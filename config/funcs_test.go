@@ -22,12 +22,17 @@ func TestInitGeneratesDefaultConfigWhenMissing(t *testing.T) {
 	if !strings.Contains(err.Error(), "created a default config") {
 		t.Fatalf("expected default-config error, got %v", err)
 	}
-	{
-		var statErr error
+	var (
+		info    os.FileInfo
+		statErr error
+	)
 
-		if _, statErr = os.Stat(path); statErr != nil {
-			t.Fatalf("expected generated config at %s: %v", path, statErr)
-		}
+	if info, statErr = os.Stat(path); statErr != nil {
+		t.Fatalf("expected generated config at %s: %v", path, statErr)
+	}
+
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("expected generated config permissions 0600, got %04o", info.Mode().Perm())
 	}
 }
 

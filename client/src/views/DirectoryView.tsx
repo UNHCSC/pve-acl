@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "../components/common";
-import type { Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, Role, Selection } from "../types";
+import type { AssetAssignment, AssetGroup, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectResource, Role, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
 
@@ -26,6 +26,9 @@ type DirectoryViewProps = {
     memberships: ProjectMembership[];
     projectRoles: Role[];
     projectGroups: Group[];
+    projectResources: ProjectResource[];
+    assetGroups: AssetGroup[];
+    assetAssignments: AssetAssignment[];
     loadingOrg: boolean;
     loadingProject: boolean;
     openMenu: string | null;
@@ -41,8 +44,14 @@ type DirectoryViewProps = {
     addOrganizationMember: (subjectType: ProjectMemberSubject) => void;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
     createGroup: (context: Organization | Project) => void;
+    createResource: () => void;
+    createAssetGroup: () => void;
+    manageAssetGroupResources: (group: AssetGroup) => void;
+    createAssetAssignment: () => void;
     editRole: (role: Role, context: Organization | Project) => void;
     deleteRole: (role: Role) => void;
+    deleteResource: (resource: ProjectResource) => void;
+    deleteAssetAssignment: (assignment: AssetAssignment) => void;
     manageGroupMembers: (group: { id: number; name: string }) => void;
     updateOrganizationMemberRole: (membership: OrganizationMembership, roleID: number) => void;
     updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
@@ -218,12 +227,21 @@ export function DirectoryView(props: DirectoryViewProps) {
                             memberships={props.memberships}
                             projectRoles={props.projectRoles}
                             projectGroups={props.projectGroups}
+                            projectResources={props.projectResources}
+                            assetGroups={props.assetGroups}
+                            assetAssignments={props.assetAssignments}
                             loading={props.loadingProject}
                             addProjectMember={props.addProjectMember}
                             createProjectRole={() => props.openModal("role", props.selectedProject)}
                             createProjectGroup={() => props.createGroup(props.selectedProject!)}
+                            createResource={props.createResource}
+                            createAssetGroup={props.createAssetGroup}
+                            manageAssetGroupResources={props.manageAssetGroupResources}
+                            createAssetAssignment={props.createAssetAssignment}
                             editRole={(role) => props.editRole(role, props.selectedProject!)}
                             deleteRole={props.deleteRole}
+                            deleteResource={props.deleteResource}
+                            deleteAssetAssignment={props.deleteAssetAssignment}
                             manageGroupMembers={props.manageGroupMembers}
                             updateProjectMemberRole={props.updateProjectMemberRole}
                             deleteProjectMember={props.deleteProjectMember}
@@ -388,12 +406,21 @@ function ProjectDetail(props: {
     memberships: ProjectMembership[];
     projectRoles: Role[];
     projectGroups: Group[];
+    projectResources: ProjectResource[];
+    assetGroups: AssetGroup[];
+    assetAssignments: AssetAssignment[];
     loading: boolean;
     addProjectMember: (subjectType: ProjectMemberSubject) => void;
     createProjectRole: () => void;
     createProjectGroup: () => void;
+    createResource: () => void;
+    createAssetGroup: () => void;
+    manageAssetGroupResources: (group: AssetGroup) => void;
+    createAssetAssignment: () => void;
     editRole: (role: Role) => void;
     deleteRole: (role: Role) => void;
+    deleteResource: (resource: ProjectResource) => void;
+    deleteAssetAssignment: (assignment: AssetAssignment) => void;
     manageGroupMembers: (group: { id: number; name: string }) => void;
     updateProjectMemberRole: (membership: ProjectMembership, roleID: number) => void;
     deleteProjectMember: (membership: ProjectMembership) => void;
@@ -413,10 +440,12 @@ function ProjectDetail(props: {
                 </header>
                 <ScopeSummaryStrip
                     items={[
+                        { label: "Resources", value: props.projectResources.length },
+                        { label: "Asset groups", value: props.assetGroups.length },
+                        { label: "Assignments", value: props.assetAssignments.length },
                         { label: "Members", value: props.memberships.length },
                         { label: "Owned groups", value: props.projectGroups.length },
-                        { label: "Roles", value: props.projectRoles.length },
-                        { label: "State", value: props.project.is_active === false ? "Inactive" : "Active" }
+                        { label: "Roles", value: props.projectRoles.length }
                     ]}
                 />
                 <dl className="detail-list expanded-detail-list scope-detail-list">
@@ -426,6 +455,26 @@ function ProjectDetail(props: {
                 </dl>
             </section>
             <div className="access-panel-grid">
+                <ProjectResourcesPanel
+                    resources={props.projectResources}
+                    createResource={props.createResource}
+                    createAssetAssignment={props.createAssetAssignment}
+                    deleteResource={props.deleteResource}
+                    loading={props.loading}
+                />
+                <ProjectAssetGroupsPanel
+                    groups={props.assetGroups}
+                    createAssetGroup={props.createAssetGroup}
+                    manageResources={props.manageAssetGroupResources}
+                    createAssetAssignment={props.createAssetAssignment}
+                    loading={props.loading}
+                />
+                <ProjectAssetAssignmentsPanel
+                    assignments={props.assetAssignments}
+                    createAssetAssignment={props.createAssetAssignment}
+                    deleteAssetAssignment={props.deleteAssetAssignment}
+                    loading={props.loading}
+                />
                 <ScopedMembershipPanel
                     className="access-panel-wide"
                     scopeLabel="Project"
@@ -454,6 +503,141 @@ function ProjectDetail(props: {
                 />
             </div>
         </article>
+    );
+}
+
+function ProjectResourcesPanel(props: {
+    resources: ProjectResource[];
+    loading: boolean;
+    createResource: () => void;
+    createAssetAssignment: () => void;
+    deleteResource: (resource: ProjectResource) => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel">
+            <PanelHeading
+                label="Inventory"
+                title="Resources"
+                action={<button className="button-secondary compact-button" type="button" onClick={props.createResource}>New resource</button>}
+            />
+            {props.loading && <EmptyState>Loading resources...</EmptyState>}
+            {!props.loading && props.resources.length === 0 && <EmptyState>No local resources have been created.</EmptyState>}
+            {!props.loading && props.resources.length > 0 && (
+                <div className="compact-list">
+                    {props.resources.map((resource) => (
+                        <div className="compact-list-row action-list-row access-list-row asset-list-row" key={resource.id}>
+                            <AccessRowSubject
+                                title={resource.name}
+                                meta={`${resource.slug} / ${resource.resource_type_label || "resource"}`}
+                            />
+                            <div className="project-access-actions">
+                                <span className="access-pill">{resource.status_label || "ready"}</span>
+                                <span className="access-pill">{resource.assignment_count || 0} grants</span>
+                                <span className="access-pill">{resource.asset_group_count || 0} groups</span>
+                                <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                    <button type="button" role="menuitem" onClick={props.createAssetAssignment}>
+                                        Assign
+                                    </button>
+                                    <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>
+                                        Delete resource
+                                    </button>
+                                </RowActionMenu>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ProjectAssetGroupsPanel(props: {
+    groups: AssetGroup[];
+    loading: boolean;
+    createAssetGroup: () => void;
+    manageResources: (group: AssetGroup) => void;
+    createAssetAssignment: () => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel">
+            <PanelHeading
+                label="Inventory"
+                title="Asset groups"
+                action={<button className="button-secondary compact-button" type="button" onClick={props.createAssetGroup}>New group</button>}
+            />
+            {props.loading && <EmptyState>Loading asset groups...</EmptyState>}
+            {!props.loading && props.groups.length === 0 && <EmptyState>No asset groups have been created.</EmptyState>}
+            {!props.loading && props.groups.length > 0 && (
+                <div className="compact-list">
+                    {props.groups.map((group) => (
+                        <div className="compact-list-row action-list-row access-list-row asset-list-row" key={group.id}>
+                            <AccessRowSubject
+                                title={group.name}
+                                meta={group.description || group.slug}
+                            />
+                            <div className="project-access-actions">
+                                <span className="access-pill">{group.resource_count || 0} resources</span>
+                                <span className="access-pill">{group.assignment_count || 0} grants</span>
+                                <RowActionMenu ariaLabel={`${group.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                    <button type="button" role="menuitem" onClick={() => props.manageResources(group)}>
+                                        Manage resources
+                                    </button>
+                                    <button type="button" role="menuitem" onClick={props.createAssetAssignment}>
+                                        Assign group
+                                    </button>
+                                </RowActionMenu>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function ProjectAssetAssignmentsPanel(props: {
+    assignments: AssetAssignment[];
+    loading: boolean;
+    createAssetAssignment: () => void;
+    deleteAssetAssignment: (assignment: AssetAssignment) => void;
+}) {
+    return (
+        <section className="dashboard-panel project-members-panel access-panel-wide">
+            <PanelHeading
+                label="Inventory"
+                title="Asset assignments"
+                action={<button className="button-primary compact-button" type="button" onClick={props.createAssetAssignment}>New assignment</button>}
+            />
+            {props.loading && <EmptyState>Loading asset assignments...</EmptyState>}
+            {!props.loading && props.assignments.length === 0 && <EmptyState>No resource or asset group assignments yet.</EmptyState>}
+            {!props.loading && props.assignments.length > 0 && (
+                <div className="compact-list">
+                    {props.assignments.map((assignment) => {
+                        const targetLabel = assignment.target?.label || assignment.target?.name || (assignment.target_type === "assetGroup" ? `Asset group ${assignment.asset_group_id}` : `Resource ${assignment.resource_id}`);
+                        const subjectLabel = assignment.subject?.label || assignment.subject?.name || assignment.subject?.username || `Subject ${assignment.subject_id}`;
+                        const subjectKind = assignment.subject_type_label || subjectTypeLabel(assignment.subject_type);
+                        const roleLabel = assignment.role?.name || `Role ${assignment.role_id}`;
+                        return (
+                            <div className="compact-list-row action-list-row access-list-row asset-assignment-row" key={assignment.id}>
+                                <AccessRowSubject
+                                    title={targetLabel}
+                                    meta={`${assignment.target_type === "assetGroup" ? "asset group" : assignment.target?.resource_type_label || "resource"} / ${roleLabel}`}
+                                />
+                                <div className="project-access-actions">
+                                    <span className="access-pill">{subjectKind}</span>
+                                    <span className="access-pill asset-subject-pill">{subjectLabel}</span>
+                                    <RowActionMenu ariaLabel={`${targetLabel} assignment actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                        <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteAssetAssignment(assignment)}>
+                                            Remove assignment
+                                        </button>
+                                    </RowActionMenu>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
     );
 }
 

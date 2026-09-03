@@ -2,13 +2,14 @@ package db
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/UNHCSC/organesson/authz"
 	"github.com/casbin/casbin/v2"
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 type (
@@ -120,10 +121,10 @@ func HasPermission(check PermissionCheck) (okResult bool, errResult error) {
 }
 
 func roleBindingsForSubject(subjectType RoleBindingSubject, subjectID int) (itemsResult []*RoleBinding, errResult error) {
-	return RoleBindings.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gomysql.OpEqual, subjectType).
+	return RoleBindings.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("subject_type"), gosqlite.OpEqual, subjectType).
 		And().
-		KeyCmp(RoleBindings.FieldBySQLName("subject_id"), gomysql.OpEqual, subjectID))
+		KeyCmp(RoleBindings.FieldBySQLName("subject_id"), gosqlite.OpEqual, subjectID))
 }
 
 // RoleBindingsForSubject returns role bindings for a subject.
@@ -203,8 +204,8 @@ func DeleteRole(roleID int) (errResult error) {
 	{
 		var err error
 
-		if _, err = RolePermissions.DeleteWithFilter(gomysql.NewFilter().
-			KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID)); err != nil {
+		if _, err = RolePermissions.DeleteWithFilter(gosqlite.NewFilter().
+			KeyCmp(RolePermissions.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID)); err != nil {
 			return err
 		}
 	}
@@ -218,8 +219,8 @@ func RoleBindingCountForRole(roleID int) (countResult int, errResult error) {
 		err   error
 	)
 
-	count, err = RoleBindings.CountWithFilter(gomysql.NewFilter().
-		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gomysql.OpEqual, roleID))
+	count, err = RoleBindings.CountWithFilter(gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID))
 	return int(count), err
 }
 
@@ -242,17 +243,17 @@ func EnsureRolePermission(roleID, permissionID int) (okResult bool, errResult er
 func RemoveRolePermission(roleID, permissionID int) (errResult error) {
 	var err error
 
-	_, err = RolePermissions.DeleteWithFilter(gomysql.NewFilter().
-		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID).
+	_, err = RolePermissions.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID).
 		And().
-		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gomysql.OpEqual, permissionID))
+		KeyCmp(RolePermissions.FieldBySQLName("permission_id"), gosqlite.OpEqual, permissionID))
 	return err
 }
 
 // RolePermissionsForRole returns permission grants for a role.
 func RolePermissionsForRole(roleID int) (itemsResult []*RolePermission, errResult error) {
-	return RolePermissions.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gomysql.OpEqual, roleID))
+	return RolePermissions.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(RolePermissions.FieldBySQLName("role_id"), gosqlite.OpEqual, roleID))
 }
 
 // PermissionKeysForRole returns permission keys granted to a role.
@@ -304,6 +305,32 @@ func EnsureRoleBinding(roleID int, subjectType RoleBindingSubject, subjectID int
 // RemoveRoleBinding removes role binding.
 func RemoveRoleBinding(roleBindingID int) (errResult error) {
 	return RoleBindings.Delete(roleBindingID)
+}
+
+// RemoveRoleBindingsForSource removes bindings derived from a source.
+func RemoveRoleBindingsForSource(sourceType string, sourceID int) (errResult error) {
+	var err error
+
+	_, err = RoleBindings.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("source_type"), gosqlite.OpEqual, sourceType).
+		And().
+		KeyCmp(RoleBindings.FieldBySQLName("source_id"), gosqlite.OpEqual, sourceID))
+	return err
+}
+
+// RemoveResourceRoleBindingsForSource removes source-derived bindings for one resource.
+func RemoveResourceRoleBindingsForSource(resourceID int, sourceType string, sourceID int) (errResult error) {
+	var err error
+
+	_, err = RoleBindings.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("scope_type"), gosqlite.OpEqual, RoleBindingScopeResource).
+		And().
+		KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gosqlite.OpEqual, resourceID).
+		And().
+		KeyCmp(RoleBindings.FieldBySQLName("source_type"), gosqlite.OpEqual, sourceType).
+		And().
+		KeyCmp(RoleBindings.FieldBySQLName("source_id"), gosqlite.OpEqual, sourceID))
+	return err
 }
 
 // RoleBindingsForUserAndGroups returns role bindings for a user and their groups.
@@ -432,12 +459,7 @@ func scopeDomainMatches(policyDomain, requestDomain string) (okResult bool) {
 		if err != nil {
 			return false
 		}
-		for _, orgID := range orgIDs {
-			if orgID == policyID {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(orgIDs, policyID)
 	}
 
 	if policyType == RoleBindingScopeProject && requestType == RoleBindingScopeResource {

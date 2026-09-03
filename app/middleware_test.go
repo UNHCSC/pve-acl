@@ -23,7 +23,7 @@ func TestRequireAPIAuthRejectsMissingToken(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	if resp, err = fiberApp.Test(httptest.NewRequest("GET", "/api/v1/protected", nil)); err != nil {
+	if resp, err = testFiberRequest(fiberApp, httptest.NewRequest("GET", "/api/v1/protected", nil)); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusUnauthorized {
@@ -122,7 +122,7 @@ func TestRequireAPIAuthSetsCurrentUser(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {

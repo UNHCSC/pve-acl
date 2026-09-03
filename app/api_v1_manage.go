@@ -2188,6 +2188,8 @@ func roleBindingResponse(bindings []*db.RoleBinding) (itemsResult []fiber.Map, e
 			"scope_type":         binding.ScopeType,
 			"scope_type_label":   roleBindingScopeLabel(binding.ScopeType),
 			"scope_id":           binding.ScopeID,
+			"source_type":        binding.SourceType,
+			"source_id":          binding.SourceID,
 			"created_at":         binding.CreatedAt,
 		}
 		if role != nil {
@@ -2768,6 +2770,36 @@ func currentUserCanViewProject(c *fiber.Ctx, project *db.Project) (okResult bool
 	if err != nil || allowed {
 		return allowed, err
 	}
+	allowed, err = currentUserCan(c, db.PermissionCTRead, db.RoleBindingScopeProject, &project.ID)
+	if err != nil || allowed {
+		return allowed, err
+	}
+	allowed, err = currentUserCan(c, db.PermissionNetworkRead, db.RoleBindingScopeProject, &project.ID)
+	if err != nil || allowed {
+		return allowed, err
+	}
+	var resources []*db.Resource
+
+	resources, err = db.ResourcesForProject(project.ID)
+	if err != nil {
+		return false, err
+	}
+	for _, resource := range resources {
+		var permission db.PermissionKey
+
+		switch resource.ResourceType {
+		case db.ResourceTypeCT:
+			permission = db.PermissionCTRead
+		case db.ResourceTypeNetwork:
+			permission = db.PermissionNetworkRead
+		default:
+			permission = db.PermissionVMRead
+		}
+		allowed, err = currentUserCan(c, permission, db.RoleBindingScopeResource, &resource.ID)
+		if err != nil || allowed {
+			return allowed, err
+		}
+	}
 	var dbUser *db.User
 
 	dbUser = currentDBUser(c)
@@ -3007,6 +3039,8 @@ func roleOwnerAllowsScope(role *db.Role, scopeType db.RoleBindingScope, scopeID 
 			ancestors, err = db.OrganizationAncestorIDs(*scopeID)
 		case db.RoleBindingScopeProject:
 			ancestors, err = db.ProjectOrganizationAncestorIDs(*scopeID)
+		case db.RoleBindingScopeResource:
+			ancestors, err = db.ResourceOrganizationAncestorIDs(*scopeID)
 		default:
 			return false
 		}
@@ -3018,6 +3052,21 @@ func roleOwnerAllowsScope(role *db.Role, scopeType db.RoleBindingScope, scopeID 
 				return true
 			}
 		}
+	}
+	if role.OwnerScopeType == db.RoleBindingScopeProject && scopeType == db.RoleBindingScopeResource {
+		if role.OwnerScopeID == nil || scopeID == nil {
+			return false
+		}
+		var (
+			resource *db.Resource
+			found    bool
+			err      error
+		)
+		resource, found, err = db.GetResourceByID(*scopeID)
+		if err != nil || !found {
+			return false
+		}
+		return resource.ProjectID == *role.OwnerScopeID
 	}
 	return false
 }

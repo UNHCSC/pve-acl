@@ -38,9 +38,10 @@ func runHttpRedirectServer(address string, targetAddress string, useTLS bool) (e
 	})
 
 	go func() {
-		var err error
-		if err = redirectApp.Listen(address); err != nil {
-			panic(err)
+		var listenErr error
+
+		if listenErr = redirectApp.Listen(address); listenErr != nil {
+			appLog.Errorf("HTTP redirect server on %s stopped: %v\n", address, listenErr)
 		}
 	}()
 
@@ -56,7 +57,9 @@ func trimIPv6HostBrackets(host string) (valueResult string) {
 func StartApp(app *fiber.App) (err error) {
 	if len(config.Config.WebServer.RedirectServerAddresses) > 0 && len(config.Config.WebServer.RedirectServerAddresses[0]) > 0 {
 		for _, redirectAddress := range config.Config.WebServer.RedirectServerAddresses {
-			runHttpRedirectServer(redirectAddress, config.Config.WebServer.Address, config.Config.WebServer.TLSDir != "")
+			if err = runHttpRedirectServer(redirectAddress, config.Config.WebServer.Address, config.Config.WebServer.TLSDir != ""); err != nil {
+				return
+			}
 		}
 	}
 

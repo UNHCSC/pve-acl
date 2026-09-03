@@ -1,1506 +1,649 @@
-# Proxmox Cloud Manager Charter
+# Classroom Lab Delivery Plan
 
-## 1. Purpose
+## 1. Outcome
 
-Organesson Cloud is a self-service cloud control plane for managing shared virtualization infrastructure backed by Proxmox. Its goal is to provide AWS-like organization, ownership, quotas, permissions, automation, and repeatable deployment workflows while preserving raw Proxmox access for trusted infrastructure administrators.
+Turn Organesson Cloud from its current identity, RBAC, local resource-registry, and scheduler foundation into a reasonably reliable classroom control plane for the lab in `goal.md`.
 
-The system exists to support:
+At the classroom-ready cutoff, an instructor or TA must be able to:
 
-- Lab-wide infrastructure administration
-- Cybersecurity club infrastructure
-- Competition team environments
-- Teaching and training lab environments represented as org subtrees
-- Per-student and per-group VM/CT ownership
-- Bulk provisioning of repeatable lab topologies
-- Terraform/OpenTofu and Ansible-backed deployments
+1. Create a course project, import students, and arrange them into groups of one or more.
+2. Deploy one isolated copy of the lab for every group from a versioned blueprint.
+3. See deployment progress and useful logs.
+4. Assign each lab to its group without transferring project ownership.
+5. Let students see, start, stop, reboot, and open consoles only for their lab VMs.
+6. Run configuration and grading workflows against one or many labs.
+7. Reset, redeploy, archive, and destroy labs safely.
+8. Diagnose failures using job history, audit history, and reconciliation state.
 
-## 2. Design Philosophy
+Each deployment must contain the eight devices from `goal.md`: pfSense, two ArubaOS-CX switches, Active Directory, Windows 11, Fedora, a DMZ web server, and an Ubuntu DMZ client. It must support the discovery, firewall, VLAN, management-network, domain-join, Fedora-upgrade, public-web, segmentation, IPv6, and grading exercises described there.
 
-Proxmox remains the hypervisor and infrastructure backend.
+“Classroom ready” means suitable for a supervised course on a known Proxmox cluster. It does not mean public-cloud-grade availability or arbitrary untrusted users.
 
-Organesson Cloud owns the higher-level cloud concepts:
+## 2. Current Starting Point
 
-- Organizations
-- Projects
-- Groups
-- Memberships
-- Roles
-- Quotas
-- Ownership
-- Templates
-- Automation jobs
-- Audit history
+Already present:
 
-The application should not attempt to replace Proxmox for low-level administration. Instead, it should provide a safer, multi-tenant interface for normal users while allowing lab administrators to use raw Proxmox directly when needed.
+- LDAP/JWT authentication and local user synchronization.
+- Organizations, projects, groups, memberships, roles, permissions, and scoped RBAC.
+- Organization/project inheritance and resource-scoped grants.
+- Local resource, asset-group, and asset-assignment database models.
+- In-progress project resource, asset-group, and assignment APIs and UI.
+- Proxmox inventory, quota, job, audit, and secret schema foundations.
+- An embedded `gasket` scheduler with job status/log helpers and a tested no-op consumer.
+- Passing Go tests, TypeScript checks, and client production build.
 
-## 3. Core Goals
+Not yet present:
 
-### 3.1 Multi-Tenant Organization
+- A working Proxmox service or live Proxmox operations.
+- Inventory reconciliation.
+- Job APIs, job UI, cancellation, or real task consumers.
+- Terraform/OpenTofu or Ansible runners, modules, playbooks, or inventories.
+- Lab blueprint/deployment models or collision-free network allocation.
+- Browser console brokering.
+- Consistent quotas, auditing, encrypted secret handling, and operational runbooks.
 
-The system must support a deep organization tree. Organizations are the only tenant hierarchy primitive: each organization may contain projects and any number of child organizations. Use child organizations to model clubs, teams, classes, semesters, sections, student cohorts, or any other nested administrative boundary.
+The current uncommitted work is the input to Slice 0. Do not discard or rewrite it wholesale.
 
-- Lab administration
-- Cybersecurity club
-- Competition team
-- Teaching programs
-- Semester or cohort instances
-- Student groups
-- Project groups
+## 3. Recommended Decisions
 
-Example hierarchy only:
+### Ownership
 
-```text
-Lab
-├── Admins
-├── Club
-│   ├── Officers
-│   └── Members
-├── Competition
-│   ├── Coaches
-│   └── Members
-└── Teaching
-    └── IT666-Fall2026
-        ├── Instructors
-        ├── TAs
-        ├── Students
-        └── Groups
-```
+- One course/semester is an organization; one section or lab offering is a project.
+- One student team is a local cloud group.
+- One deployed lab is an asset group owned by the project and assigned to the student group.
+- VMs and networks remain project-owned.
+- Instructors/TAs receive project-scoped roles; students receive resource access through their lab assignment.
 
-Access control must follow this tree. There is exactly one root organization. A role granted through membership on an organization applies to that organization, all descendant organizations, and projects attached anywhere below it. A project-scoped grant applies only to that project and its owned resources unless a higher org grant supplies the same permission through inheritance.
+### Provisioning
 
-### 3.2 Ownership
+- Prefer OpenTofu-compatible Terraform and call it “Terraform/OpenTofu” in the UI.
+- Use it to clone and wire all eight VMs and create/select virtual networks.
+- Use Ansible after provisioning for baseline setup, exercise preparation/reset, facts, and grading.
+- Never execute infrastructure tooling in an HTTP handler. Every run is a queued job.
+- Pin provider, module, template, playbook, and blueprint versions for a course run.
 
-Every managed resource should have a clear lifecycle owner. In the MVP cloud model, projects own resources for quota, billing, audit, and lifecycle. Users and user groups may receive assignments to individual resources or asset groups, but those assignments do not transfer project ownership.
+### Networking
 
-Examples only:
+- Reserve a configured WAN IPv4/IPv6 pool on the cybersecurity network.
+- Give each lab unique WAN allocations and isolated LAN/DMZ virtual networks.
+- Reuse private LAN/DMZ prefixes only if Proxmox networking guarantees isolation.
+- Prefer a preconfigured SDN zone, bridge, or VLAN-aware trunk as the trusted substrate. Create per-lab VNets/VLANs/VXLANs only inside that boundary.
+- Store allocations in the application database and enforce uniqueness transactionally.
+- Make public web access an explicit blueprint option with deterministic NAT or routed allocation.
 
-```text
-VM 1201 is owned by IT666-Fall2026 and assigned to alice
-VM 1301 is owned by IT666-Fall2026 and assigned to IT666-Fall2026 Group 03
-Network it666-lab1-g03 is owned by IT666-Fall2026
-Template ubuntu-24.04-base is owned by Lab Infrastructure
-```
+### Templates and secrets
 
-### 3.3 Role-Based Access Control
+- Validate golden templates for all eight devices before a course release.
+- Identify them by cluster/template ID plus an immutable application version.
+- Use cloud-init where supported and documented first-boot mechanisms elsewhere.
+- Encrypt stored secrets with a deployment-provided master key.
+- Never put secrets in job metadata, API responses, exposed Terraform state, or logs.
 
-The system must support local roles and permissions. Roles are first-class, editable collections of permission grants. The application should ship with a small set of system roles needed to bootstrap the environment, but administrators must be able to create custom roles, add or remove permissions from those roles, and grant those roles to users or groups through org/project memberships and asset assignments.
+### Safety
 
-The MVP access model should stay intentionally small:
+- Permission-check mutations in the API and validate immutable identity/ownership again in workers.
+- Require explicit confirmation for destructive bulk actions.
+- Mutate/destroy only resources tagged with the expected Organesson deployment and project UUIDs.
+- Block destroy when identity, tags, or state ownership is ambiguous.
+- Use one Terraform state lock domain per deployment.
+- Configure global and per-node concurrency to prevent class-wide clone storms.
 
-* Groups answer "who is in this set?"
-* Roles answer "what permissions does this grant?"
-* Membership and assignment grants answer "who receives which role, and where?"
+## 4. Branch Rules
 
-Group membership roles such as `member`, `manager`, and `owner` are only for administering that group itself. They should not be treated as infrastructure permissions. Infrastructure permissions should come from scoped membership/assignment role grants so there is one primary access path to reason about.
-
-Scoped administrators must be able to manage access at the point where they own work. A project or organization administrator should be able to create local custom roles, assign those roles to users or groups through scoped memberships, create local-only groups owned by their scope, and maintain those local group memberships from the project or organization screens. The system must prevent privilege escalation: a delegated administrator may not create, grant, or assign a role containing permissions they do not already have at that scope. LDAP-backed group import and synchronization remains a system-administration capability even when a delegated project or organization administrator owns the group locally.
-
-There is no global Access tab in the MVP. Day-to-day access work belongs on the org, project, group, role, and future asset pages where the scoped object already exists. A future site-admin inventory can summarize access paths and deep-link to those pages, but it should not become the main workflow.
-
-Example roles only:
-
-* LabAdmin
-* OrgAdmin
-* Instructor
-* TeachingAssistant
-* ClubOfficer
-* CompetitionCoach
-* Student
-* GroupMember
-* Viewer
-
-Admin permissions supersede lower-level memberships.
-
-Example only:
+Each numbered slice is one reviewable branch, based on the preceding slice:
 
 ```text
-A user may be both:
-- LabAdmin
-- IT666-Fall2026 TeachingAssistant
-
-The LabAdmin role should grant full system-level authority regardless of lower org role.
+classroom/00-foundation-hardening
+classroom/01-quota-audit-secrets
+classroom/02-proxmox-inventory
+classroom/03-jobs-operations
+classroom/04-vm-console
+classroom/05-lab-blueprints
+classroom/06-runner-foundation
+classroom/07-lab-provisioning
+classroom/08-lab-configuration
+classroom/09-student-experience
+classroom/10-grading-reset
+classroom/11-pilot-hardening
+classroom/12-honors-attacks
 ```
 
-### 3.4 Resource Quotas
-
-The system must support resource limits at multiple levels:
-
-* User quota
-* Group quota
-* Project quota
-* Organization quota
-
-Quota-controlled resources should include:
-
-* vCPU count
-* RAM
-* Disk/storage
-* Number of VMs
-* Number of containers
-* Number of networks
-* Network bandwidth policy
-* Public IP assignments, if applicable
-
-### 3.5 Bulk Provisioning
-
-The system must support bulk deployment workflows.
-
-Examples only:
-
-* Create one VM per student
-* Create one isolated lab network per student
-* Create a multi-VM topology per group
-* Deploy an entire org/project lab from a template
-* Destroy or archive all resources for a completed lab
-
-### 3.6 VM/CT Management
-
-Users should be able to manage resources they are permitted to access.
-
-Supported VM/CT operations should include:
-
-* View
-* Start
-* Stop
-* Reboot
-* Console
-* Snapshot
-* Clone
-* Resize, if allowed
-* Reconfigure CPU/RAM/disk/network, if allowed
-* Delete, if allowed
-
-### 3.7 Virtual Network Management
-
-The system should support virtual network creation and assignment.
-
-Network models may include:
-
-* Shared org/project network
-* Per-student isolated network
-* Per-group isolated network
-* Competition team network
-* Admin infrastructure network
-* Internet-restricted network
-* Internal-only network
-
-### 3.8 Terraform/OpenTofu Support
-
-The system should be able to generate, store, and execute Terraform/OpenTofu deployments.
-
-Terraform/OpenTofu support should include:
-
-* Template-based generation
-* Workspace/state tracking
-* Plan/apply/destroy jobs
-* Output capture
-* Logs
-* Approval gates, if needed
-
-### 3.9 Ansible Support
-
-The system should support Ansible automation.
-
-Ansible support should include:
-
-* Inventory generation
-* Playbook execution
-* Per-resource or per-lab runs
-* Logs
-* Result status
-* SSH credential handling
-* Post-provision configuration workflows
-
-### 3.10 Console Access
-
-The system should support browser-based VM/CT console access.
-
-Console access must be permission-checked through the application before connecting to Proxmox.
-
-### 3.11 Auditability
-
-The system must keep an audit trail of important actions.
-
-Examples:
-
-* User login
-* VM created
-* VM deleted
-* VM console opened
-* VM reconfigured
-* Quota changed
-* Role assigned
-* Terraform applied
-* Ansible playbook run
-* Network created
-* Template changed
-
-## 4. Non-Goals
-
-The system is not intended to:
-
-* Replace Proxmox for trusted lab administrators
-* Become a full public cloud
-* Support arbitrary untrusted internet users
-* Hide all Proxmox concepts from administrators
-* Reimplement every Proxmox feature immediately
-* Require Kubernetes or OpenStack for the MVP
-
-## 5. Recommended System Architecture
-
-```text
-Browser UI
-  ↓
-Go/Fiber Web App
-  ↓
-Application Services
-  ├── Auth Service
-  ├── RBAC Service
-  ├── Quota Service
-  ├── Proxmox Service
-  ├── Network Service
-  ├── Terraform/OpenTofu Service
-  ├── Ansible Service
-  └── Audit Service
-  ↓
-Job Queue
-  ↓
-Workers
-  ├── Proxmox Worker
-  ├── Terraform/OpenTofu Worker
-  └── Ansible Worker
-  ↓
-Proxmox Cluster
-```
-
-## 6. Recommended Database Structure
-
-The database should store cloud-level state. Proxmox remains the source of truth for actual VM execution state, but the application should maintain ownership, intent, permissions, quota, and audit data.
-
-The schema blocks below are planning references for the data model. Application code should not use hand-written direct SQL strings for normal database operations; it should use the Go `gomysql` library and its query/build/execution APIs so database access stays consistent, reviewable, and reusable.
-
-Identity and access data is application-owned. Initial setup should create the main lab organization, the configured administrator group or groups, and the built-in administrator role. It should not import every LDAP group into the application. LDAP groups should enter the cloud access model only when they are configured as bootstrap admin groups or when an administrator creates a cloud group and explicitly marks its membership as synced from LDAP. Local-only groups remain entirely managed inside the application.
-
-## 7. Core Tables
-
-### 7.1 users
-
-Stores local and external users.
-
-```sql
-users
------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-username            VARCHAR(128) UNIQUE NOT NULL
-display_name        VARCHAR(255)
-email               VARCHAR(255)
-auth_source         ENUM('local', 'ldap', 'oidc') NOT NULL
-external_id         VARCHAR(255)
-is_active           BOOLEAN NOT NULL DEFAULT TRUE
-is_system_admin     BOOLEAN NOT NULL DEFAULT FALSE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 7.2 groups
-
-Represents local groups, LDAP-synced groups, staff groups, teams, officer groups, project cohorts, and other collections that can be used as ACL subjects. A group is a collection of people today and should be able to grow into a collection of people, assets, projects, and other application-managed subjects as the platform matures.
-
-```sql
-groups
-------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-name                VARCHAR(255) NOT NULL
-slug                VARCHAR(255) UNIQUE NOT NULL
-description         TEXT
-group_type          ENUM('admin', 'club', 'competition', 'student_group', 'project', 'custom') NOT NULL
-parent_group_id     BIGINT NULL
-sync_source         ENUM('local', 'ldap') NOT NULL DEFAULT 'local'
-external_id         VARCHAR(255)
-sync_membership     BOOLEAN NOT NULL DEFAULT FALSE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-Example groups only:
-
-```text
-admins
-club
-club-officers
-competition
-competition-coaches
-teaching
-it666-fall2026-staff
-it666-fall2026-students
-it666-fall2026-group-03
-```
-
-LDAP import policy:
-
-* During initial setup, create/sync only the configured administrator groups needed to bootstrap site access.
-* Do not import all LDAP groups by default during login.
-* Additional LDAP-backed groups should be created in the application with `sync_source = 'ldap'`, `external_id` set to the LDAP group name, and `sync_membership = TRUE`.
-* Local-only groups should use `sync_source = 'local'` and should be managed entirely through application membership tools.
-
-### 7.3 group_memberships
-
-Maps users into groups. The `membership_role` field is for group administration only: `manager` and `owner` can maintain group membership, but resource and project permissions still come from role bindings.
-
-```sql
-group_memberships
------------------
-id                  BIGINT PRIMARY KEY
-user_id             BIGINT NOT NULL
-group_id            BIGINT NOT NULL
-membership_role     ENUM('member', 'manager', 'owner') NOT NULL DEFAULT 'member'
-created_at          DATETIME NOT NULL
-
-UNIQUE(user_id, group_id)
-```
-
-### 7.4 roles
-
-Defines reusable permission roles. System roles are seeded by the application and protected from accidental removal. Custom roles are administrator-managed permission bundles and can be bound to any number of users or groups.
-
-```sql
-roles
------
-id                  BIGINT PRIMARY KEY
-name                VARCHAR(128) UNIQUE NOT NULL
-description         TEXT
-is_system_role      BOOLEAN NOT NULL DEFAULT FALSE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-Example roles:
-
-```text
-LabAdmin
-OrgAdmin
-Instructor
-TeachingAssistant
-Student
-GroupMember
-VMViewer
-VMOperator
-VMOwner
-NetworkManager
-TemplateManager
-AutomationRunner
-```
-
-### 7.5 permissions
-
-Defines atomic permissions.
-
-```sql
-permissions
------------
-id                  BIGINT PRIMARY KEY
-name                VARCHAR(128) UNIQUE NOT NULL
-description         TEXT
-```
-
-Example permissions:
-
-```text
-vm.read
-vm.create
-vm.start
-vm.stop
-vm.reboot
-vm.console
-vm.snapshot
-vm.clone
-vm.resize
-vm.reconfigure
-vm.delete
-
-ct.read
-ct.create
-ct.start
-ct.stop
-ct.console
-ct.delete
-
-network.read
-network.create
-network.update
-network.delete
-network.attach
-
-template.read
-template.create
-template.update
-template.delete
-template.clone
-
-terraform.plan
-terraform.apply
-terraform.destroy
-
-ansible.run
-
-quota.read
-quota.update
-
-user.manage
-group.manage
-role.manage
-audit.read
-```
-
-### 7.6 role_permissions
-
-Maps roles to permission grants. Editing a custom role means adding and removing rows here; role bindings do not need to change when the permission bundle changes.
-
-```sql
-role_permissions
-----------------
-id                  BIGINT PRIMARY KEY
-role_id             BIGINT NOT NULL
-permission_id       BIGINT NOT NULL
-
-UNIQUE(role_id, permission_id)
-```
-
-### 7.7 role_bindings
-
-Stores the derived role grant for a user or group at a scope. Org/project membership and asset-assignment workflows are the primary source of these rows; UI should present the source membership or assignment rather than making administrators hunt through raw bindings.
-
-```sql
-role_bindings
--------------
-id                  BIGINT PRIMARY KEY
-role_id             BIGINT NOT NULL
-
-subject_type        ENUM('user', 'group') NOT NULL
-subject_id          BIGINT NOT NULL
-
-scope_type          ENUM('global', 'org', 'project', 'group', 'resource') NOT NULL
-scope_id            BIGINT NULL
-
-created_by_user_id  BIGINT
-created_at          DATETIME NOT NULL
-```
-
-Example:
-
-```text
-Group admins has LabAdmin on global
-Group it666-fall2026-staff has TeachingAssistant on org /Teaching/IT666-Fall2026
-Group it666-fall2026-group-03 has GroupMember on project it666-lab1-group-03
-```
-
-## 8. Tenant and Project Tables
-
-Aside from the initial system setup step that creates the primary lab organization and its initial administrator group, organizations, sub-organizations, projects, and their related groups should be normal application-managed entities. Users with the appropriate OrgAdmin or delegated admin permissions must be able to create, modify, archive, and reorganize them at any time without requiring a database migration or manual operator intervention.
-
-### 8.1 organizations
-
-Logical tenant tree nodes. Organizations may be roots or children of another organization. Projects attach directly to an organization; teaching programs, semesters, clubs, teams, and cohorts are all modeled as organization nodes rather than separate structural tables.
-
-```sql
-organizations
--------------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-name                VARCHAR(255) NOT NULL
-slug                VARCHAR(255) UNIQUE NOT NULL
-description         TEXT
-parent_org_id       BIGINT NULL
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-Example organizations only:
-
-```text
-lab-admin
-club
-competition
-teaching
-teaching/it666-fall2026
-```
-
-### 8.2 projects
-
-A project is the primary ownership and isolation boundary.
-
-```sql
-projects
---------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-organization_id     BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-slug                VARCHAR(255) UNIQUE NOT NULL
-project_type        ENUM('admin', 'club', 'competition', 'student', 'group', 'lab', 'custom') NOT NULL
-description         TEXT
-is_active           BOOLEAN NOT NULL DEFAULT TRUE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-Example projects only:
-
-```text
-it666-fall2026-alice
-it666-fall2026-group-03
-it666-fall2026-lab1
-competition-practice-blue-team
-club-web-infra
-```
-
-### 8.4 project_memberships
-
-Maps users/groups to projects. For the MVP this table can remain a project-local convenience layer for showing collaborators and simple project roles. Long-term infrastructure permissions should converge on scoped role bindings so project membership does not become a second, conflicting RBAC system.
-
-```sql
-project_memberships
--------------------
-id                  BIGINT PRIMARY KEY
-project_id          BIGINT NOT NULL
-subject_type        ENUM('user', 'group') NOT NULL
-subject_id          BIGINT NOT NULL
-project_role        ENUM('viewer', 'operator', 'developer', 'manager', 'owner') NOT NULL
-created_at          DATETIME NOT NULL
-
-UNIQUE(project_id, subject_type, subject_id)
-```
-
-## 9. Resource Tables
-
-### 9.1 resources
-
-Generic base table for all managed resources.
-
-```sql
-resources
----------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-project_id          BIGINT NOT NULL
-owner_type          ENUM('user', 'group', 'project', 'organization') NOT NULL
-owner_id            BIGINT NOT NULL
-resource_type       ENUM('vm', 'ct', 'network', 'template', 'volume', 'secret', 'terraform_workspace', 'ansible_inventory') NOT NULL
-name                VARCHAR(255) NOT NULL
-slug                VARCHAR(255)
-status              ENUM('creating', 'ready', 'updating', 'deleting', 'deleted', 'error', 'unknown') NOT NULL
-created_by_user_id  BIGINT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-deleted_at          DATETIME NULL
-```
-
-### 9.2 proxmox_clusters
-
-Stores Proxmox cluster definitions.
-
-```sql
-proxmox_clusters
-----------------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-name                VARCHAR(255) NOT NULL
-api_url             VARCHAR(512) NOT NULL
-verify_tls          BOOLEAN NOT NULL DEFAULT TRUE
-credential_secret_id BIGINT
-is_active           BOOLEAN NOT NULL DEFAULT TRUE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 9.3 proxmox_nodes
-
-Stores known Proxmox nodes.
-
-```sql
-proxmox_nodes
--------------
-id                  BIGINT PRIMARY KEY
-cluster_id          BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-status              VARCHAR(64)
-cpu_total           INT
-memory_total_mb     BIGINT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-
-UNIQUE(cluster_id, name)
-```
-
-### 9.4 virtual_machines
-
-Cloud-managed QEMU VMs.
-
-```sql
-virtual_machines
-----------------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-cluster_id          BIGINT NOT NULL
-node_id             BIGINT
-proxmox_vmid        INT NOT NULL
-name                VARCHAR(255) NOT NULL
-cpu_cores           INT NOT NULL
-memory_mb           BIGINT NOT NULL
-disk_gb             BIGINT
-os_type             VARCHAR(128)
-template_id         BIGINT NULL
-power_state         ENUM('running', 'stopped', 'paused', 'unknown') NOT NULL DEFAULT 'unknown'
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-
-UNIQUE(cluster_id, proxmox_vmid)
-```
-
-### 9.5 containers
-
-Cloud-managed LXC containers.
-
-```sql
-containers
-----------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-cluster_id          BIGINT NOT NULL
-node_id             BIGINT
-proxmox_vmid        INT NOT NULL
-name                VARCHAR(255) NOT NULL
-cpu_cores           INT NOT NULL
-memory_mb           BIGINT NOT NULL
-disk_gb             BIGINT
-template_id         BIGINT NULL
-power_state         ENUM('running', 'stopped', 'unknown') NOT NULL DEFAULT 'unknown'
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-
-UNIQUE(cluster_id, proxmox_vmid)
-```
-
-### 9.6 virtual_networks
-
-Managed virtual networks.
-
-```sql
-virtual_networks
-----------------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-cluster_id          BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-network_type        ENUM('bridge', 'vlan', 'vxlan', 'sdn_zone', 'isolated', 'routed', 'nat') NOT NULL
-cidr_ipv4           VARCHAR(64)
-cidr_ipv6           VARCHAR(128)
-vlan_id             INT NULL
-vxlan_id            INT NULL
-gateway_ipv4        VARCHAR(64)
-gateway_ipv6        VARCHAR(128)
-is_internet_routable BOOLEAN NOT NULL DEFAULT FALSE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 9.7 resource_network_interfaces
-
-Maps VMs/CTs to networks.
-
-```sql
-resource_network_interfaces
----------------------------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT NOT NULL
-network_id          BIGINT NOT NULL
-mac_address         VARCHAR(32)
-ipv4_address        VARCHAR(64)
-ipv6_address        VARCHAR(128)
-interface_name      VARCHAR(64)
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 9.8 templates
-
-Tracks VM/CT templates.
-
-```sql
-templates
----------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-cluster_id          BIGINT NOT NULL
-template_type       ENUM('vm', 'ct', 'terraform', 'ansible', 'lab_blueprint') NOT NULL
-name                VARCHAR(255) NOT NULL
-version             VARCHAR(64)
-description         TEXT
-source_resource_id  BIGINT NULL
-is_public           BOOLEAN NOT NULL DEFAULT FALSE
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-## 10. Quota Tables
-
-### 10.1 quota_policies
-
-Reusable quota policies.
-
-```sql
-quota_policies
---------------
-id                  BIGINT PRIMARY KEY
-name                VARCHAR(255) NOT NULL
-description         TEXT
-max_vms             INT
-max_containers      INT
-max_vcpu            INT
-max_memory_mb       BIGINT
-max_storage_gb      BIGINT
-max_networks        INT
-max_public_ips      INT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 10.2 quota_bindings
-
-Applies quota policies to users, groups, organizations, or projects.
-
-```sql
-quota_bindings
---------------
-id                  BIGINT PRIMARY KEY
-quota_policy_id     BIGINT NOT NULL
-subject_type        ENUM('user', 'group', 'organization', 'project') NOT NULL
-subject_id          BIGINT NOT NULL
-created_at          DATETIME NOT NULL
-
-UNIQUE(subject_type, subject_id)
-```
-
-### 10.3 resource_usage_snapshots
-
-Optional table for cached usage calculations.
-
-```sql
-resource_usage_snapshots
-------------------------
-id                  BIGINT PRIMARY KEY
-subject_type        ENUM('user', 'group', 'organization', 'project') NOT NULL
-subject_id          BIGINT NOT NULL
-vm_count            INT NOT NULL DEFAULT 0
-container_count     INT NOT NULL DEFAULT 0
-vcpu_used           INT NOT NULL DEFAULT 0
-memory_mb_used      BIGINT NOT NULL DEFAULT 0
-storage_gb_used     BIGINT NOT NULL DEFAULT 0
-network_count       INT NOT NULL DEFAULT 0
-created_at          DATETIME NOT NULL
-```
-
-## 11. Automation Tables
-
-### 11.1 jobs
-
-Generic async job tracking.
-
-```sql
-jobs
-----
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-job_type            ENUM('proxmox', 'terraform', 'ansible', 'lab_deploy', 'lab_destroy', 'sync', 'cleanup') NOT NULL
-status              ENUM('queued', 'running', 'succeeded', 'failed', 'cancelled') NOT NULL
-requested_by_user_id BIGINT
-project_id          BIGINT NULL
-resource_id         BIGINT NULL
-queue_id            VARCHAR(255)
-started_at          DATETIME NULL
-finished_at         DATETIME NULL
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 11.2 job_logs
-
-Stores job output.
-
-```sql
-job_logs
---------
-id                  BIGINT PRIMARY KEY
-job_id              BIGINT NOT NULL
-stream              ENUM('stdout', 'stderr', 'system') NOT NULL
-message             TEXT NOT NULL
-created_at          DATETIME NOT NULL
-```
-
-### 11.3 terraform_workspaces
-
-Tracks Terraform/OpenTofu state.
-
-```sql
-terraform_workspaces
---------------------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-project_id          BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-working_dir         VARCHAR(1024)
-state_backend       ENUM('local', 's3', 'http', 'other') NOT NULL
-status              ENUM('new', 'planned', 'applied', 'destroyed', 'error') NOT NULL
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 11.4 terraform_runs
-
-Tracks individual plan/apply/destroy runs.
-
-```sql
-terraform_runs
---------------
-id                  BIGINT PRIMARY KEY
-workspace_id        BIGINT NOT NULL
-job_id              BIGINT NOT NULL
-action              ENUM('init', 'plan', 'apply', 'destroy') NOT NULL
-status              ENUM('queued', 'running', 'succeeded', 'failed', 'cancelled') NOT NULL
-plan_output         LONGTEXT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 11.5 ansible_inventories
-
-Stores generated or uploaded inventories.
-
-```sql
-ansible_inventories
--------------------
-id                  BIGINT PRIMARY KEY
-resource_id         BIGINT UNIQUE NOT NULL
-project_id          BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-inventory_content   LONGTEXT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 11.6 ansible_runs
-
-Tracks playbook executions.
-
-```sql
-ansible_runs
-------------
-id                  BIGINT PRIMARY KEY
-project_id          BIGINT NOT NULL
-inventory_id        BIGINT
-job_id              BIGINT NOT NULL
-playbook_name       VARCHAR(255) NOT NULL
-status              ENUM('queued', 'running', 'succeeded', 'failed', 'cancelled') NOT NULL
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-## 12. Lab Blueprint Tables
-
-### 12.1 lab_blueprints
-
-Defines reusable lab deployments.
-
-```sql
-lab_blueprints
---------------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-name                VARCHAR(255) NOT NULL
-description         TEXT
-version             VARCHAR(64)
-blueprint_format    ENUM('native', 'terraform', 'ansible', 'mixed') NOT NULL
-created_by_user_id  BIGINT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 12.2 lab_deployments
-
-Represents an instantiated lab.
-
-```sql
-lab_deployments
----------------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-blueprint_id        BIGINT NOT NULL
-project_id          BIGINT NOT NULL
-name                VARCHAR(255) NOT NULL
-status              ENUM('creating', 'ready', 'updating', 'destroying', 'destroyed', 'error') NOT NULL
-created_by_user_id  BIGINT
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-### 12.3 lab_deployment_targets
-
-Tracks who/what a lab was deployed for.
-
-```sql
-lab_deployment_targets
-----------------------
-id                  BIGINT PRIMARY KEY
-deployment_id       BIGINT NOT NULL
-target_type         ENUM('user', 'group', 'project') NOT NULL
-target_id           BIGINT NOT NULL
-created_at          DATETIME NOT NULL
-```
-
-## 13. Secrets Tables
-
-### 13.1 secrets
-
-Stores references to encrypted secrets.
-
-```sql
-secrets
--------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-name                VARCHAR(255) NOT NULL
-secret_type         ENUM('proxmox_token', 'ssh_key', 'password', 'api_token', 'terraform_var', 'ansible_var') NOT NULL
-encrypted_value     BLOB NOT NULL
-owner_type          ENUM('system', 'user', 'group', 'project') NOT NULL
-owner_id            BIGINT NULL
-created_at          DATETIME NOT NULL
-updated_at          DATETIME NOT NULL
-```
-
-## 14. Audit Tables
-
-### 14.1 audit_events
-
-Stores security and activity logs.
-
-```sql
-audit_events
-------------
-id                  BIGINT PRIMARY KEY
-uuid                CHAR(36) UNIQUE NOT NULL
-actor_user_id       BIGINT NULL
-action              VARCHAR(255) NOT NULL
-target_type         VARCHAR(128)
-target_id           BIGINT NULL
-project_id          BIGINT NULL
-source_ip           VARCHAR(128)
-user_agent          TEXT
-metadata_json       JSON
-created_at          DATETIME NOT NULL
-```
-
-Example actions:
-
-```text
-auth.login
-auth.logout
-vm.create
-vm.delete
-vm.start
-vm.stop
-vm.console.open
-network.create
-network.delete
-quota.update
-role.assign
-terraform.apply
-ansible.run
-lab.deploy
-lab.destroy
-```
-
-## 15. Recommended MVP Database Scope
-
-For the first implementation, build only these tables:
-
-```text
-users
-groups
-group_memberships
-roles
-permissions
-role_permissions
-role_bindings
-
-organizations
-projects
-project_memberships
-
-resources
-proxmox_clusters
-proxmox_nodes
-virtual_machines
-containers
-virtual_networks
-
-quota_policies
-quota_bindings
-
-jobs
-job_logs
-audit_events
-secrets
-```
-
-Add Terraform, Ansible, and lab blueprint tables after VM/CT provisioning and RBAC are stable.
-
-## 16. Recommended Permission Model
-
-Use this shape internally:
-
-```text
-subject: user or group
-action: permission string
-object: scoped resource path
-```
-
-Example objects:
-
-```text
-/global
-/org/teaching
-/org/teaching/it666-fall2026
-/project/it666-fall2026-group-03
-/resource/vm/1201
-/resource/network/it666-lab1-g03
-```
-
-Example checks:
-
-```text
-Can Evan create VMs in IT666-Fall2026?
-subject = user:evan
-action = vm.create
-object = /org/teaching/it666-fall2026
-
-Can Alice open console for VM 1201?
-subject = user:alice
-action = vm.console
-object = /resource/vm/1201
-
-Can Group 03 manage its own network?
-subject = group:it666-fall2026-group-03
-action = network.update
-object = /project/it666-fall2026-group-03
-```
-
-## 17. Recommended Resource Lifecycle
-
-### VM Creation
-
-```text
-1. User submits VM creation request
-2. API checks authentication
-3. API checks permission: vm.create
-4. API checks quota
-5. API creates resource row with status=creating
-6. API queues provisioning job
-7. Worker creates VM in Proxmox
-8. Worker tags VM in Proxmox
-9. Worker updates virtual_machines row
-10. Worker updates resource status=ready
-11. Audit event is written
-```
-
-### VM Deletion
-
-```text
-1. User requests delete
-2. API checks permission: vm.delete
-3. API marks resource status=deleting
-4. API queues deletion job
-5. Worker destroys VM in Proxmox
-6. Worker marks resource deleted
-7. Audit event is written
-```
-
-## 18. Recommended Proxmox Integration Rules
-
-The application should tag all managed Proxmox resources.
-
-Recommended tags:
-
-```text
-managed-by:lab-cloud
-project:<project-slug>
-org:<org-path-or-slug>
-owner-type:<user|group|project>
-owner:<owner-slug>
-```
-
-Example:
-
-```text
-managed-by:lab-cloud
-project:it666-fall2026-group-03
-org:teaching/it666-fall2026
-owner-type:group
-owner:it666-fall2026-group-03
-```
-
-The app should periodically sync with Proxmox to detect drift.
-
-Drift examples:
-
-```text
-VM deleted manually in Proxmox
-VM renamed manually in Proxmox
-VM moved to another node
-VM CPU/RAM changed outside the app
-VM power state changed
-```
-
-## 19. Recommended MVP Milestones
-
-### Milestone 1: Identity and RBAC
-
-* Login
-* Users
-* Groups
-* Group memberships
-* Roles
-* Permissions
-* Role bindings surfaced through scoped memberships and assignments
-
-### Milestone 2: Proxmox Inventory
-
-* Add Proxmox cluster
-* Discover nodes
-* Discover existing VMs/CTs
-* Display VM/CT state
-* Tag app-managed resources
-
-### Milestone 3: Basic VM Lifecycle
-
-* Create VM from template
-* Start/stop/reboot
-* Delete
-* View console
-* Audit events
-
-### Milestone 4: Projects and Quotas
-
-* Projects
-* Project membership
-* Quota policies
-* Quota enforcement
-* Per-project resource views
-
-### Milestone 5: Organization Tree Support
-
-* Organization and sub-organization creation
-* Instructor/teaching-assistant/student groups as normal groups
-* Bulk student import
-* Per-student VM creation
-* Per-group VM creation
-
-### Milestone 6: Networks
-
-* Create virtual networks
-* Attach VM/CT to networks
-* Per-student/per-group isolation
-
-### Milestone 7: Automation
-
-* Job queue
-* Job logs
-* Terraform/OpenTofu runner
-* Ansible runner
-
-### Milestone 8: Lab Blueprints
-
-* Define reusable labs
-* Deploy lab per student
-* Deploy lab per group
-* Destroy/archive labs
-
-## 20. Implementation Strategy
-
-Implementation should proceed in small vertical slices that can be prompted, implemented, reviewed, and tested independently. Each part should leave the app compiling, preserve the existing Go/Fiber package layout, and use `gomysql` registrations, filters, migrations, and table helpers instead of hand-written direct SQL.
-
-Each implementation prompt should usually ask for one part below, include the target files, and require at least `go test ./...` before completion. If client files change, also run the client production build from `client/`.
-
-Current repo shape:
-
-```text
-main.go                 app startup
-config/                 TOML config loading
-auth/                   LDAP authentication, JWT sessions, test user injection
-db/                     gomysql models, registration, migrations, helper queries
-app/                    Fiber routes, page handlers, API handlers
-client/views/           small Fiber templates that mount React roots
-client/src/             React/TypeScript components and shared client helpers built by Vite
-```
-
-### 20.1 Current Progress
-
-Completed or substantially implemented:
-
-* Temporary-test-database setup for Go tests.
-* Auth route tests, middleware tests, enum tests, config tests, and focused `db` helper tests.
-* Authenticated API middleware that resolves the current auth user and local database user.
-* MVP gomysql models for users, groups, memberships, organizations, projects, project memberships, roles, permissions, role permissions, role bindings, quotas, resources, asset groups, asset assignments, Proxmox inventory, jobs, audit events, and secrets.
-* Idempotent initial setup for the root lab organization, configured administrator groups, `LabAdmin`, core permissions, and admin role bindings.
-* LDAP login sync limited to bootstrap admin groups and explicitly configured LDAP-synced cloud groups. Arbitrary LDAP groups are no longer imported by default.
-* Central RBAC evaluation through roles, permissions, scoped grants, scopes, site-admin override behavior, and a Casbin-derived policy engine backed by application-owned tables.
-* User, group, role, permission, scoped membership/access, and project helper APIs.
-* Project create/list/detail/delete, project membership management, project member role editing, direct user lookup/sync, and group assignment to projects.
-* Exactly-one-root organization enforcement, organization create/move guarded by the root rule, guarded delete, and project move APIs with permission checks.
-* Organization archive/deactivate behavior for empty organizations, active-tree filtering, and archived organization project-attachment guards.
-* Custom role creation and role permission grant editing, including project/org-scoped custom roles and privilege-ceiling checks.
-* Safe custom role edit/delete APIs with system-role protection and in-use role delete guards.
-* Group update/archive APIs, active-group filtering, and archived-group RBAC deactivation.
-* Delegated group-scoped role grant management for group owners, with global grants remaining site-admin only.
-* Delegated organization and project member role assignment with privilege-ceiling checks so managers cannot assign roles above their own scoped permissions.
-* Organization/project-owned group membership management from the directory detail UI, with LDAP import/sync remaining site-admin-only.
-* Access tab and `/api/v1/system/access` backend removed after backup; reusable role-permission editing now lives in directory-scoped role panels.
-* Dashboard tabs for overview, directory, people, and identity, with account menu, toasts, URL routing, responsive navigation, and user-scoped recents.
-* Directory UI with one-root organization/project tree behavior, scoped org/project member management, local group creation, group membership management, custom role creation, and reusable role-permission editing.
-* People UI import flow for bringing in multiple FreeIPA users at once, including partial success and per-entry failure display.
-* React/TypeScript client split into reusable components, views, API helpers, hooks, tree utilities, and layered CSS partials, built with Bun, Vite, and Tailwind.
-* TanStack Query wired into the dashboard data and project membership loaders so API consumption can move away from manual fetch state.
-
-Known deliberate leftovers:
-
-* Some legacy local ACL tables and routes still exist for compatibility while the MVP cloud model takes over. Remove them only after replacement routes and tests cover the same use cases.
-* Organization management is now usable from the directory tree, but full edit screens and archive UI affordances still need polish.
-* Asset group and assignment tables/helpers exist, but full resource/asset group APIs and UI workflows are still pending.
-* Resources, quotas, Proxmox integration, and job execution are scaffolded in the schema but not yet functional product workflows.
-* Audit events exist and setup writes some audit rows, but audit logging is not yet consistently applied to all management actions.
-* Several destructive operations still hard-delete rows. MVP should prefer archive/deactivate behavior for projects, resources, and assignments where historical context matters.
-* TanStack Query is installed and used for core reads, but mutations still mostly use manual invalidation/refresh helpers.
-
-Current baseline checks:
+Every branch must:
+
+- Include the schema/helpers, API, UI, and tests needed for its vertical user story.
+- Keep Proxmox, runners, filesystem, and command execution behind interfaces with fakes.
+- Use forward-compatible migrations and leave the app deployable.
+- Pass:
 
 ```text
 go test ./...
 cd client && bun run check && bun run build
+git diff --check
 ```
 
-MVP gap summary, in recommended order:
+Real-cluster tests must be opt-in; fake-service integration tests remain part of the normal suite.
 
-* Finish identity/access durability: consistent audit events, mutation conversion to TanStack Query mutations, and explanation/deep-link views from roles/groups back to the org/project/asset where access is granted.
-* Finish tenant/project lifecycle: project archive/deactivate instead of hard delete, richer organization/project edit screens, and readable scoped membership/assignment selectors.
-* Implement quota policies and local usage calculation before touching Proxmox mutations.
-* Implement resource registry APIs and UI sections against local database rows only, with RBAC, ownership, quota checks, and audit writes.
-* Add a Proxmox service boundary with fake tests, then read-only cluster/node/VM/CT discovery and drift-safe inventory sync.
-* Add jobs, job logs, cancellation/status transitions, and an audit helper before any long-running infrastructure action.
-* Ship the smallest useful VM lifecycle: create from template, start, stop, reboot, delete/archive, and console ticket, all queued as jobs and permission/quota checked.
+## 5. Implementation Slices
 
-### 20.2 Working Rules Going Forward
+### Slice 0 — Stabilize Resources and Scheduler
 
-* Keep the access model simple: groups answer "who", roles answer "what", memberships/assignments answer "where".
-* Do not add a second permission system in project membership or group membership. Project/group-local roles may control local administration, but infrastructure permissions should come from scoped role grants represented in the application database and mirrored into the policy engine.
-* Put delegated access management where the scope lives. Project/org/group/role/asset screens should provide day-to-day scoped access tools; any future global view should summarize and deep-link for site administrators.
-* Enforce privilege ceilings in the API, not only in the UI. Delegated administrators can grant only permissions and roles they already hold at the target scope.
-* Keep LDAP import/sync controls site-admin-only, even for groups owned by a project or organization.
-* Prefer one vertical slice at a time: schema/helper, API, UI, tests, build.
-* Keep handlers thin. Put repeated gomysql lookups and mutations into `db` helpers or small app helper functions.
-* Use readable labels in APIs wherever the UI would otherwise need to render raw IDs.
-* Remove legacy tables or routes only when the replacement workflow and tests for the same user goal are in place.
+Branch: `classroom/00-foundation-hardening`
 
-### 20.3 Next Slice: Scoped Access Durability
+Purpose: turn the current uncommitted work into a safe baseline.
 
-Goal: finish the identity/access foundation before moving into resources.
+Scope:
 
-Implementation scope:
+- Finish and commit the resource, asset-group, assignment, job-model, and scheduler work already present.
+- Fix resource archive authorization: project visibility is insufficient; require project management or the correct delete permission.
+- Add negative authorization tests for create, update, archive, assignment changes, and cross-project IDs.
+- Ensure asset-group grants cover current and subsequently added resources and are safely removed on archive.
+- Add asset-group update/archive API and UI.
+- Make operational resource states server-owned; clients cannot arbitrarily set `ready`, `deleting`, or `error`.
+- Limit this registry to VM, CT, and network until other resource types have real workflows.
+- Ignore/remove runtime task databases such as `pve-acl.db.tasks` from version control.
 
-* Completed: add edit/delete endpoints for roles where safe. System roles should not be deletable from the UI.
-* Completed: add group update/archive endpoints and a cleaner group detail payload.
-* Completed: add optional delegated scoped grant management: group owners may manage grants only within their own group scope, while global grants remain site-admin only.
-* Completed: add project-scoped role creation, permission editing, assignable-role listing, and project member role assignment with privilege-ceiling checks.
-* Completed: add project group membership management UI for project-owned groups.
-* Completed: remove the global Access tab and system access endpoint after backup.
-* Completed: add organization-scoped memberships, assignable roles, owned groups, local role creation, and reusable role-permission editing from the directory UI.
-* Completed: add exactly-one-root organization enforcement in API/db/UI.
-* Completed: add initial Casbin-backed scoped RBAC evaluation while keeping application tables as source of truth.
-* Completed: add asset group and asset assignment schema/helpers as the local foundation for resource assignment workflows.
-* Convert access mutations to TanStack Query mutations with targeted invalidation.
-* Add audit events for user, group, role, permission grant, scoped membership, and asset assignment changes.
-* Add access explanation APIs that can show the "you get X through Y" path for memberships and resource assignments.
-* Completed: add tests for system role protection, group update/archive behavior, delegated scoped grant management, one-root org enforcement, project/org-scoped role privilege ceilings, Casbin-backed scope inheritance, and asset assignment foundations.
+Acceptance:
 
-Acceptance checks:
+1. A manager creates local resources, groups them, and assigns the group to students.
+2. Students see assigned resources but cannot update/archive them or change access.
+3. The no-op scheduler test creates a job, executes it, and records logs.
+4. All baseline checks pass and the work is committed coherently.
+
+### Slice 1 — Quotas, Audit, Lifecycle, and Secrets
+
+Branch: `classroom/01-quota-audit-secrets`
+
+Purpose: add guardrails before live infrastructure mutations.
+
+Scope:
+
+- Implement quota-policy CRUD/bindings and effective quota resolution for organizations, projects, groups, and optionally users.
+- Calculate intended VM, vCPU, RAM, disk, network, and public-address usage.
+- Add quota reservations so concurrent deployments cannot both pass stale checks.
+- Add a central audit helper and audit access, resource, quota, secret, job, login, and destructive changes.
+- Implement full project update/archive; never hard-delete a project with history or resources.
+- Encrypt secrets with an externally supplied master key; support create, rotate, and archive without returning decrypted values.
+- Redact secret values from API errors, job logs, audit metadata, and runner output.
+- Refuse live infrastructure operations if secret encryption is not configured correctly.
+
+Suggested addition: `quota_reservations` with scope, job/deployment, dimensions, expiry, and committed/released state.
+
+Acceptance:
+
+1. Concurrent fake deployments cannot exceed a project quota.
+2. Project archive preserves resources, assignments, jobs, and audit history.
+3. Test secrets are encrypted at rest and absent from API/log output.
+4. Audit history identifies who changed access or requested work.
+
+### Slice 2 — Proxmox Service and Read-Only Inventory
+
+Branch: `classroom/02-proxmox-inventory`
+
+Purpose: prove connectivity and actual-state modeling before mutations.
+
+Scope:
+
+- Add an application-owned `proxmox.Service` interface, typed DTOs, fake implementation, and real adapter.
+- Support health, node, storage, network/SDN, guest/template, and guest-status/config reads.
+- Add admin APIs/UI for connection health and inventory sync.
+- Reconcile inventory without automatically taking ownership of discovered objects.
+- Link managed resources only through durable Organesson tags plus cluster/VMID identity.
+- Record in-sync, missing, changed, unmanaged, ambiguous, and error drift states.
+- Never mutate or delete during discovery.
+- Document an environment-gated real-cluster smoke test.
+
+The service boundary should resemble:
+
+```go
+type Service interface {
+    Health(ctx context.Context) error
+    ListNodes(ctx context.Context) ([]Node, error)
+    ListStorages(ctx context.Context) ([]Storage, error)
+    ListNetworks(ctx context.Context) ([]Network, error)
+    ListGuests(ctx context.Context) ([]Guest, error)
+    GetGuest(ctx context.Context, node string, vmID int) (Guest, error)
+}
+```
+
+Acceptance:
+
+1. Fake-driven sync has complete tests.
+2. A test cluster displays nodes, templates, networks, and guests.
+3. Unmanaged objects remain untouched.
+4. Missing managed guests become drifted rather than erasing history.
+
+### Slice 3 — Jobs and Operations UI
+
+Branch: `classroom/03-jobs-operations`
+
+Purpose: make long-running actions observable and recoverable.
+
+Scope:
+
+- Add scoped job list/detail/log APIs and an operations UI.
+- Show status, progress, requester, target, attempts, timestamps, safe errors, and logs.
+- Add cancellation request/confirmation semantics and transient-versus-permanent retry classification.
+- Persist immutable job input, operation type, attempt count, error code, and safe summary.
+- Add heartbeat/lease and startup recovery for abandoned running jobs.
+- Add API idempotency keys and worker operation keys.
+- Add configurable global/per-node concurrency.
+- Polling for UI log/status updates is sufficient for the first classroom release.
+- Drain active tasks for a bounded time during scheduler shutdown.
+- Retain user-visible job/audit history while pruning scheduler internals by policy.
+
+Acceptance:
+
+1. A fake multi-step job exposes progress/logs and supports cancellation.
+2. Duplicate API requests do not duplicate work.
+3. Restart recovery produces a safe, documented result.
+4. Students cannot inspect other groups’ jobs or logs.
+
+### Slice 4 — VM Power and Browser Console
+
+Branch: `classroom/04-vm-console`
+
+Purpose: deliver the first student-useful live workflow.
+
+Scope:
+
+- Extend the Proxmox service with start, shutdown/stop, reboot, task polling, and console-ticket methods.
+- Queue power mutations and enforce the corresponding resource permission.
+- Revalidate managed identity, project ownership, tags, and authorization in the worker.
+- Display actual power state and its freshness.
+- Broker short-lived browser console sessions/WebSockets without exposing the durable Proxmox token.
+- Validate user session, origin, target, and expiry when the console connects.
+- Rate-limit console tickets and power actions.
+- Add pending UI states and fake tests for failure, timeout, duplication, forbidden access, lost resources, and expired tickets.
+
+Acceptance:
+
+1. Assigned students can see, start, stop, reboot, and console a test VM.
+2. Unassigned students cannot discover or operate it.
+3. Every action creates a job and audit event.
+4. No durable Proxmox credential reaches the browser.
+
+Milestone A: staff can manually create/tag lab VMs and use Organesson for assignment, console, and power.
+
+### Slice 5 — Lab Blueprints and Network Allocation
+
+Branch: `classroom/05-lab-blueprints`
+
+Purpose: represent `goal.md` as repeatable desired state.
+
+Scope:
+
+- Add blueprint, immutable blueprint-version, deployment, deployment-resource, network-pool, and allocation models.
+- Model eight VMs, templates, sizing, NICs, networks, boot ordering, and configuration roles.
+- Model WAN/LAN/DMZ, exercise VLAN/management parameters, IPv4/IPv6, DNS/domain settings, and optional inbound web access.
+- Support student groups of one to N without changing ownership.
+- Preflight total quotas and known cluster capacity.
+- Allocate VMIDs, names, VLAN/VXLAN/VNet IDs, WAN addresses, and external ports transactionally.
+- Validate templates, NICs, CIDRs, pool capacity, and cluster capabilities.
+- Add instructor blueprint/version, validation, and deployment-preview UI.
+- Provide a reference `cyber-lab-v1` blueprint matching `goal.md`.
+
+Recommended names:
 
 ```text
-go test ./...
-cd client && bun run check && bun run build
+deployment: it666-fa26-g03
+VMs:        it666-fa26-g03-fw, -sw-lan, -sw-dmz, -ad, -win11, -fedora, -web, -ubuntu
+networks:   it666-fa26-g03-wan, -lan, -dmz
+tag:        organesson.deployment=<deployment UUID>
 ```
 
-### 20.4 Next Slice: Organization Tree
+Acceptance:
 
-Goal: make the tenant hierarchy real enough to attach projects, groups, quotas, and scopes to it.
+1. Previewing three groups shows eight VMs and complete allocations for each.
+2. Allocations cannot collide; quota/pool/capacity failure occurs before queuing.
+3. Editing a used blueprint creates a new version without changing deployments.
 
-Implementation scope:
+### Slice 6 — Sandboxed Runner Foundation
 
-* Completed: replace organization hard delete with archive/deactivate behavior after API tests cover the expected constraints.
-* Completed: enforce exactly one root organization and disallow moving normal orgs back to root.
-* Completed: add organization detail panels for memberships, owned groups, and roles.
-* Add organization edit UI for name, slug, description, and parent movement rather than only drag-and-drop movement.
-* Add focused organization detail panels for child orgs, projects, quota bindings, and access explanation/deep-link views.
-* Update scoped membership/assignment selectors so org/project/resource scopes can be selected by readable name rather than raw ID.
-* Partially completed: add tests for organization archive and visible-tree filtering. Still needed: move cycle prevention coverage and readable scope label coverage.
+Branch: `classroom/06-runner-foundation`
 
-Acceptance checks:
+Purpose: safely execute Terraform/OpenTofu and Ansible through jobs.
+
+Scope:
+
+- Add separate runner interfaces for Terraform/OpenTofu and Ansible.
+- Use explicit arguments, clean environments, private bounded workdirs, timeouts, cancellation, and output limits; do not invoke a shell for derived values.
+- Keep one workdir/state lock per deployment/run and store durable state/artifacts outside the web root.
+- Persist plan summaries, state references, run records, and sanitized output.
+- Stream redacted stdout/stderr into job logs.
+- Allow only configured source roots and immutable module/playbook revisions; never arbitrary user code/paths.
+- Add runner health/version checks.
+- Run plans automatically if authorized; require explicit authorization for apply/destroy.
+- Test with fake executables for success, failure, malformed output, timeout, cancellation, process-group cleanup, path escape, and redaction.
+
+Acceptance:
+
+1. Fake Terraform plan/apply and Ansible jobs run through the scheduler and UI.
+2. Cancellation terminates the child process group.
+3. Secrets are absent from stored logs/output.
+4. Paths cannot escape configured sources/workdirs.
+
+### Slice 7 — Terraform/OpenTofu Lab Provisioning
+
+Branch: `classroom/07-lab-provisioning`
+
+Purpose: create and destroy the complete virtual topology.
+
+Scope:
+
+- Add a pinned root module for the reference lab.
+- Clone templates, connect NICs to allocated WAN/LAN/DMZ networks, and tag every object.
+- Return structured VMIDs, placement, MACs, addresses, and network IDs.
+- Validate outputs before importing local resource/VM/network rows.
+- Implement plan, apply, refresh/reconcile, and destroy jobs.
+- Make operations idempotent/resumable where possible and provide safe recovery otherwise.
+- Respect network/appliance/server/client boot dependencies.
+- Add bulk deployment with bounded concurrency and per-group status.
+- Release quota reservations on pre-creation failure; retain them for partial infrastructure until reconciled.
+- Never auto-destroy partial deployments. Expose retry, reconcile, and confirmed destroy.
+- Show desired/actual resources, outputs, drift, and jobs in deployment details.
+
+Acceptance:
+
+1. One test deployment creates eight correctly wired VMs and isolated networks.
+2. A second deployment uses distinct allocation identities and cannot cross LAN/DMZ boundaries.
+3. Reapply is stable; partial failure is visible and recoverable.
+4. Destroy removes only correctly tagged deployment objects and then releases allocations.
+
+### Slice 8 — Ansible Baseline and Exercise Preparation
+
+Branch: `classroom/08-lab-configuration`
+
+Purpose: produce a consistent starting lab without solving student exercises.
+
+Scope:
+
+- Generate per-deployment inventory from validated Terraform outputs and live facts.
+- Add connection strategies for Linux, Windows/WinRM, pfSense, and ArubaOS-CX; explicitly report unsupported automation.
+- Add first-boot readiness probes and retries.
+- Implement versioned baseline, collect-facts, exercise-reset, and connectivity-validation workflows.
+- Configure only the starting state, credentials, hostnames, and minimum management path; do not apply graded target state.
+- Store structured per-host results and show a redacted inventory preview.
+- Validate expected guests, NIC/MAC mappings, and management reachability before marking ready.
+
+The baseline must prepare pfSense WAN/LAN/DMZ, Aruba management/uplinks, AD and Windows, the pinned Fedora starting release, DMZ hosts, and IPv4/IPv6 exercise parameters.
+
+Acceptance:
+
+1. A new lab enters `ready` only after validation.
+2. Baseline reruns are idempotent.
+3. An unreachable host yields an actionable partial result.
+4. Graded target configuration is not pre-applied.
+
+Milestone B: the complete unconfigured/exercise-ready topology can be repeatedly deployed and configured.
+
+### Slice 9 — Roster, Bulk Assignment, and Student UX
+
+Branch: `classroom/09-student-experience`
+
+Purpose: make class setup and daily use practical.
+
+Scope:
+
+- Add a course setup flow: org/project, roster import, group formation, blueprint selection, quota preview, and deployment.
+- Support CSV plus existing LDAP/FreeIPA lookup with stable matching/duplicate handling.
+- Bulk-create groups and review membership before provisioning.
+- Automatically create and assign each deployment asset group after provisioning.
+- Create/select a least-privilege student role with required read, power, and console permissions.
+- Add a “My Lab” page with topology, status, console/power controls, instructor notes, and maintenance state.
+- Hide administrative infrastructure fields from students.
+- Add safe instructor bulk controls with target review, concurrency, and per-lab results.
+- Add access explanations for why a user can access a resource.
+- Validate responsive/accessibility behavior for core pages and console launch.
+
+Acceptance:
+
+1. Import a sample roster with individual and multi-student groups.
+2. Deploy/attach and assign labs in bulk.
+3. Each student sees exactly the intended lab; TAs see project labs according to role.
+4. Membership changes update access without transferring resource ownership.
+
+### Slice 10 — Grading, Reset, and Course Lifecycle
+
+Branch: `classroom/10-grading-reset`
+
+Purpose: cover the required exercises and repeated classroom operation.
+
+Scope:
+
+- Add versioned grading workflows mapped to blueprint versions.
+- Run read-mostly grading against one, selected, or all labs with bounded concurrency.
+- Store structured checks, points, feedback, version, timestamps, and evidence references.
+- Separate student feedback from instructor diagnostics.
+- Implement robust checks for:
+  - Device/interface discovery.
+  - Firewall policy and exposed services.
+  - VLANs and segmentation.
+  - Management access only from the intended Fedora VM.
+  - Windows joined to the expected AD domain.
+  - Fedora upgraded to the configured target release.
+  - DMZ web server reachable through the intended external path.
+  - Intended LAN/DMZ flows and blocked flows.
+  - DMZ IPv6 addressing, routing, and filtering.
+- Prefer behavioral checks over brittle configuration-string matching.
+- Implement reset via safe playbook, approved snapshot, or full destroy/redeploy.
+- Archive courses by disabling access before optional delayed destruction.
+- Require confirmation for bulk reset/destroy and export results as CSV/JSON.
+
+Acceptance:
+
+1. Known-good and intentionally broken labs produce expected results.
+2. Students cannot inspect instructor-only grading logic/evidence.
+3. Reset restores the documented start state.
+4. Redeploy preserves historical jobs, audits, and grade attempts.
+5. Archive removes access without immediately deleting evidence.
+
+Milestone C: all non-honors tasks in `goal.md` can be prepared, attempted, graded, and reset.
+
+### Slice 11 — Pilot Hardening
+
+Branch: `classroom/11-pilot-hardening`
+
+Purpose: make the feature-complete workflow dependable for a supervised class.
+
+Scope:
+
+- Rehearse at 1, 5, and full expected class size.
+- Measure clone/configure duration, API pressure, storage growth, job throughput, and console concurrency.
+- Tune concurrency, retries, timeouts, and start staggering.
+- Add health/status for database, scheduler, runners, Proxmox, storage, pools, and templates.
+- Add monitoring hooks for stuck jobs, low capacity, pool exhaustion, drift, and repeated failures.
+- Document and test backup/restore for databases, encryption key, runner state/artifacts, blueprint sources, and grades.
+- Test recovery from app/scheduler restarts, Proxmox timeout, partial apply, lost Ansible connectivity, and restore.
+- Add retention for console sessions, logs, artifacts, states, grade evidence, and audits.
+- Review CSRF/origin protections, rate limits, cookies, CSP, dependencies, destructive routes, and tenant boundaries.
+- Freeze blueprint, templates, providers, playbooks, and OS targets before class.
+
+Required runbooks:
+
+- Install/configure the app and encryption key.
+- Connect/validate Proxmox and register templates.
+- Configure network/address pools.
+- Create a course, import roster, and deploy labs.
+- Diagnose, retry, reset, archive, and destroy.
+- Move a student between groups.
+- Recover pool exhaustion or partial provisioning.
+- Restore backups.
+- Emergency-disable all student operations without deleting labs.
+
+Acceptance:
+
+1. Full-class rehearsal completes within the acceptable deployment window.
+2. Automated cross-lab isolation passes.
+3. Representative concurrent consoles and power operations remain bounded.
+4. Restart/recovery and clean-instance restore succeed.
+5. A scripted instructor-to-student-to-grading-to-reset walkthrough succeeds.
+6. No critical authorization, secret-exposure, isolation, or destruction defects remain.
+
+Milestone D: recommended classroom-ready cutoff.
+
+### Slice 12 — Optional Honors Attack Automation
+
+Branch: `classroom/12-honors-attacks`
+
+Purpose: support optional adversarial exercises without threatening shared infrastructure.
+
+Scope:
+
+- Use dedicated disposable attacker infrastructure.
+- Target explicit deployment UUIDs/addresses, never arbitrary CIDRs.
+- Enforce rate, duration, packet/connection, and concurrency ceilings.
+- Network-block access to management, Proxmox, Organesson, storage, LDAP, and other labs.
+- Add controlled scanning, seeded-account authentication attempts, bounded HTTP load, and safe exploit validation.
+- Do not run volumetric DDoS on shared infrastructure; simulate pressure within operator-approved limits.
+- Audit authorization, targets, limits, results, and emergency stops.
+- Add a kill switch that cancels work and disables the attacker path.
+
+Acceptance:
+
+1. Attacks reach only the selected lab and obey limits after worker restart.
+2. The kill switch stops work and blocks traffic.
+3. Other labs and management services remain unaffected.
+
+This slice is optional and must not delay the normal course.
+
+## 6. Required Data Model
+
+Retain and extend existing organizations, projects, groups, RBAC, resources, asset groups/assignments, Proxmox inventory, quotas, jobs, audit, and secrets.
+
+Add:
+
+- `QuotaReservation`.
+- `LabBlueprint` and immutable `LabBlueprintVersion`.
+- `LabDeployment` and `LabDeploymentResource`.
+- `NetworkPool` and `NetworkAllocation`.
+- `TerraformWorkspace`/`TerraformRun` or equivalent state records.
+- `AnsibleInventory` and `AnsibleRun`.
+- `GradeWorkflow`, `GradeAttempt`, and `GradeCheckResult`.
+- `ConsoleSession` with short expiry.
+
+Recommended deployment states:
 
 ```text
-go test ./...
-cd client && bun run check && bun run build
+draft -> validated -> queued -> planning -> provisioning -> configuring -> ready
+ready -> degraded | resetting | destroying | archived
+any active operation -> error
+destroying -> destroyed
 ```
 
-### 20.5 Next Slice: Project Cleanup and Quota Policies
+Validate transitions centrally and audit them. API clients must not write arbitrary lifecycle state.
 
-Goal: make projects the useful operational boundary before introducing real resources.
+## 7. Suggested API Surface
 
-Implementation scope:
-
-* Add full project update for name, slug, description, organization, and active/archive state.
-* Replace project hard delete as the default UI behavior with archive/deactivate.
-* Partially completed: add project-level scoped access shortcuts that create normal scoped grants rather than separate permission logic. Current project member role assignment writes normal project-scoped role bindings; still needed: assignment panels, explanation paths, and deep links.
-* Add quota policy CRUD and quota bindings for projects and groups.
-* Add usage-calculation helpers that can run before Proxmox integration.
-* Add tests for project archive, quota binding, and quota calculation with local resource rows.
-
-Acceptance checks:
+Names are illustrative and should follow repository conventions.
 
 ```text
-go test ./...
-cd client && bun run check && bun run build
+GET/POST/PATCH       /api/v1/quota-policies
+GET/POST/DELETE      /api/v1/projects/:id/quota-bindings
+
+GET/POST             /api/v1/system/proxmox/clusters
+POST                 /api/v1/system/proxmox/clusters/:id/sync
+GET                  /api/v1/system/proxmox/clusters/:id/inventory
+
+GET                  /api/v1/jobs
+GET                  /api/v1/jobs/:id
+GET                  /api/v1/jobs/:id/logs
+POST                 /api/v1/jobs/:id/cancel
+
+POST                 /api/v1/resources/:id/actions/start
+POST                 /api/v1/resources/:id/actions/stop
+POST                 /api/v1/resources/:id/actions/reboot
+POST                 /api/v1/resources/:id/console-sessions
+
+GET/POST             /api/v1/lab-blueprints
+GET/POST             /api/v1/lab-blueprints/:id/versions
+POST                 /api/v1/lab-blueprints/:id/validate
+
+GET/POST             /api/v1/projects/:id/lab-deployments
+GET                  /api/v1/lab-deployments/:id
+POST                 /api/v1/lab-deployments/:id/plan
+POST                 /api/v1/lab-deployments/:id/apply
+POST                 /api/v1/lab-deployments/:id/configure
+POST                 /api/v1/lab-deployments/:id/grade
+POST                 /api/v1/lab-deployments/:id/reset
+POST                 /api/v1/lab-deployments/:id/destroy
+POST                 /api/v1/lab-deployments/:id/reconcile
 ```
 
-### 20.6 Next Slice: Resource Registry Without Proxmox Mutations
+Bulk endpoints must accept explicit deployment IDs and return a parent job with child jobs. Never use a list filter as an implicit destructive target selector.
 
-Goal: create a cloud-level inventory and permission surface before issuing infrastructure changes.
+## 8. Testing and Security Gates
 
-Implementation scope:
+Automated coverage must include:
 
-* Implement resource CRUD/archive APIs for VM, CT, network, template, volume, secret, Terraform workspace, and Ansible inventory rows.
-* Attach resources to projects and owners.
-* Implement asset group CRUD and resource-to-asset-group membership APIs.
-* Implement direct resource and asset-group assignment APIs that grant scoped roles without transferring project ownership.
-* Enforce scoped role grants and quota checks before resource creation/update.
-* Add dashboard project detail sections for resources, asset groups, and assignments.
-* Add audit events for create, update, archive, asset group, and assignment changes.
-* Keep these APIs Proxmox-free so quota/RBAC/resource ownership can be tested without infrastructure access.
+- Database validation, lifecycle transitions, allocation locking, quotas, and archive behavior.
+- RBAC for students, groups, instructors, TAs, admins, and unrelated users on every endpoint.
+- Shared contracts for fake/real Proxmox adapters where practical.
+- Job/runner idempotency, cancellation, retries, restart recovery, timeouts, ordering, and redaction.
+- Browser workflows for setup, assignment, student visibility, jobs, console, grading, and destruction.
+- Terraform validation/fixture plans and Ansible syntax/fixture tests.
 
-Acceptance checks:
+Required environment-gated tests:
 
-```text
-go test ./...
-cd client && bun run check && bun run build
-```
+1. Proxmox read-only health/inventory.
+2. One small guest clone, power, console, and destroy.
+3. Full eight-VM deployment.
+4. Two-lab IPv4/IPv6 cross-isolation.
+5. Baseline configuration and idempotent rerun.
+6. Known-good/known-bad grading fixtures.
+7. Full-class capacity rehearsal.
 
-### 20.7 Next Slice: Proxmox Service Boundary
+Security tests must prove:
 
-Goal: isolate Proxmox access behind a testable service before any mutating VM action exists.
+- Assignment never transfers ownership.
+- Students cannot enumerate other labs through IDs, lists, jobs, logs, grading, or consoles.
+- Delegated admins cannot assign permissions they lack.
+- Workers reject mismatched job/project/deployment/resource identity.
+- Destroy cannot target untagged or ambiguously tagged objects.
+- Secrets never appear in JSON, logs, errors, audit metadata, or stored command lines.
+- Labs cannot reach each other’s LAN, DMZ, management interfaces, or console sessions.
 
-Implementation scope:
+## 9. Operations Recommendations
 
-* Add a Proxmox service package with an interface and fake implementation.
-* Wrap the configured Proxmox client in that service.
-* Implement cluster/node discovery and read-only VM/CT inventory sync first.
-* Keep handlers talking to the service interface, not directly to the Proxmox client.
-* Add tests with the fake service.
+- Start with one app instance and embedded scheduler; add distributed workers only when justified.
+- Run jobs as a dedicated OS user with access only to needed binaries/artifacts.
+- Keep Terraform state/artifacts on backed-up storage, not ephemeral workdirs.
+- Use a dedicated least-privilege Proxmox token plus application ownership guards.
+- Separate application/Proxmox management, lab WAN, lab internals, and attacker infrastructure at the network layer.
+- Maintain a non-production Proxmox target for release validation.
+- Pre-warm templates and deploy before class instead of cloning everything at student login.
+- Maintain spare network allocations and storage headroom.
+- Archive first and destroy after a reviewed retention window.
 
-Acceptance checks:
+## 10. Decisions Required Before Slice 5
 
-```text
-go test ./...
-```
+Slices 0–4 can proceed now. Blueprint/provisioning work requires recorded answers for:
 
-### 20.8 Next Slice: Jobs and Audit Trail
+- Cluster, nodes, storage, SDN/bridge model, and VLAN/VXLAN capabilities.
+- Reused-isolated versus unique LAN/DMZ private prefixes.
+- WAN IPv4/IPv6 pools, routing, DNS, NAT, and inbound web exposure.
+- Template IDs, versions, licensing, initialization, and resource sizing.
+- ArubaOS-CX and pfSense automation methods.
+- AD domain, Windows licensing/activation, and reset method.
+- Frozen Fedora starting/target versions. Do not resolve “latest” dynamically.
+- Expected class/group sizes, capacity, and acceptable deployment time.
+- Grading points, feedback/evidence retention, and rerun policy.
+- Snapshot versus redeploy reset policy.
 
-Goal: prepare for long-running VM, network, Terraform/OpenTofu, and Ansible workflows.
+Record answers in versioned operator and blueprint configuration, not source constants.
 
-Implementation scope:
+## 11. Definition of Done
 
-* Implement job creation, status transitions, logs, cancellation semantics, and in-process development workers.
-* Write audit events through a helper so handlers and workers do not duplicate audit formatting.
-* Add job detail APIs and UI surfaces for queued/running/completed work.
-* Backfill management handlers to use the audit helper before adding Proxmox mutations.
-* Add tests for job state transitions, job logs, cancellation, and audit writes.
+The goal is decently classroom ready when:
 
-Acceptance checks:
+- A course roster becomes one deployment per group without manual database changes.
+- Each deployment creates the expected eight VMs and WAN/LAN/DMZ wiring.
+- Two simultaneous labs pass automated IPv4/IPv6 cross-isolation tests.
+- Students can see, power, and console only assigned resources.
+- Staff can configure, grade, reset, redeploy, archive, and explicitly destroy through queued audited jobs.
+- Every required `goal.md` task has known-good and known-bad grading fixtures.
+- Quota, allocation, template, capacity, and cluster failures surface before destructive work.
+- Partial failures/restarts do not create untracked duplicate infrastructure or unsafe destruction.
+- Secrets are protected and no critical authorization/isolation defect is open.
+- Full-class rehearsal, backup/restore, and operator runbooks are complete.
 
-```text
-go test ./...
-cd client && bun run check && bun run build
-```
-
-### 20.9 Next Slice: VM/CT Lifecycle
-
-Goal: ship the first useful end-to-end Proxmox-backed workflow.
-
-Implementation scope:
-
-* Implement VM create-from-template, start, stop, reboot, delete/archive, and console-ticket workflows first.
-* Repeat the same shape for containers after VM behavior is stable.
-* Queue mutating operations as jobs and update resource status as jobs progress.
-* Enforce scoped role grants and quotas before job creation.
-* Use a non-production Proxmox cluster or fake service until the workflow is proven.
-
-Acceptance checks:
-
-```text
-go test ./...
-cd client && bun run check && bun run build
-```
-
-### 20.10 Later Slices: Automation and Lab Blueprints
-
-Goal: add Terraform/OpenTofu, Ansible, and lab blueprints only after inventory, RBAC, quotas, jobs, and VM/CT lifecycle are stable.
-
-Implementation scope:
-
-* Add Terraform/OpenTofu workspace and run tables.
-* Add Ansible inventory and run tables.
-* Add lab blueprint and deployment tables.
-* Implement each runner through the job queue with logs, approval gates where needed, and project-scoped permissions.
-* Use temporary working directories and fake commands in tests before enabling real infrastructure execution.
-
-Acceptance checks:
-
-```text
-go test ./...
-```
-
-### 20.11 Likely Go Packages to Add
-
-* Queuing: `github.com/hibiken/asynq`, `github.com/redis/go-redis/v9`
-* Proxmox API: `github.com/luthermonson/go-proxmox`
-* ACL policy engine, only if the custom gomysql RBAC path becomes too costly: `github.com/casbin/casbin/v2`
-* Terraform/OpenTofu: `github.com/hashicorp/hcl/v2`, `github.com/hashicorp/terraform-exec/tfexec`
-* Typing help for Terraform/OpenTofu values: `github.com/zclconf/go-cty/cty`
-
-## 21. Long-Term Features
-
-Potential future features:
-
-* Approval workflows
-* Budget-like quota dashboards
-* Scheduled lab teardown
-* VM expiration dates
-* Snapshot policies
-* Backup policies
-* Per-org/project templates
-* Cloud-init customization
-* DNS integration
-* IPAM integration
-* NetBox integration
-* FreeIPA group sync
-* OIDC login
-* Grafana dashboards
-* Per-project audit exports
-* Student-facing lab instructions
+Perfection is not required. Appliance-specific documented recovery, polling-based job updates, supervised operations, and a single app instance are acceptable for the first course run.

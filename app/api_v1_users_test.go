@@ -44,7 +44,7 @@ func TestGetCurrentUser(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/users/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -111,7 +111,7 @@ func TestGetCurrentUserAccessIncludesGroupsAndRoles(t *testing.T) {
 	req = httptest.NewRequest("GET", "/api/v1/users/me/access", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {

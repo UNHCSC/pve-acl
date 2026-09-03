@@ -14,58 +14,58 @@ type (
 	AssetPermission      uint8
 
 	LocalUser struct {
-		Username  string    `gomysql:"username,primary,unique" json:"username"`
-		Name      string    `gomysql:"name" json:"name"`
-		Email     string    `gomysql:"email" json:"email"`
-		Notes     string    `gomysql:"notes" json:"notes"`
-		FirstSeen time.Time `gomysql:"first_seen" json:"first_seen"`
-		LastSeen  time.Time `gomysql:"last_seen" json:"last_seen"`
+		Username  string    `gosqlite:"username,primary,unique" json:"username"`
+		Name      string    `gosqlite:"name" json:"name"`
+		Email     string    `gosqlite:"email" json:"email"`
+		Notes     string    `gosqlite:"notes" json:"notes"`
+		FirstSeen time.Time `gosqlite:"first_seen" json:"first_seen"`
+		LastSeen  time.Time `gosqlite:"last_seen" json:"last_seen"`
 	}
 
 	LocalGroup struct {
-		Groupname   string `gomysql:"groupname,primary,unique" json:"groupname"`
-		DisplayName string `gomysql:"display_name" json:"display_name"`
-		Notes       string `gomysql:"notes" json:"notes"`
+		Groupname   string `gosqlite:"groupname,primary,unique" json:"groupname"`
+		DisplayName string `gosqlite:"display_name" json:"display_name"`
+		Notes       string `gosqlite:"notes" json:"notes"`
 	}
 
 	ProxmoxAsset struct {
-		ID   string           `gomysql:"id,primary,unique" json:"id"`
-		Name string           `gomysql:"name" json:"name"`
-		Type ProxmoxAssetType `gomysql:"type" json:"type"`
+		ID   string           `gosqlite:"id,primary,unique" json:"id"`
+		Name string           `gosqlite:"name" json:"name"`
+		Type ProxmoxAssetType `gosqlite:"type" json:"type"`
 	}
 
 	LocalGroupMembership struct {
-		ID        int    `gomysql:"membership_id,primary,increment" json:"membership_id"`
-		Username  string `gomysql:"username,fkey:LocalUser.username" json:"username"`
-		Groupname string `gomysql:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
+		ID        int    `gosqlite:"membership_id,primary,increment" json:"membership_id"`
+		Username  string `gosqlite:"username,fkey:LocalUser.username" json:"username"`
+		Groupname string `gosqlite:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
 	}
 
 	ProxmoxAssetAssignmentByUser struct {
-		ID          int             `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
-		AssetID     string          `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
-		Username    string          `gomysql:"username,fkey:LocalUser.username" json:"username"`
-		Permissions AssetPermission `gomysql:"permissions" json:"permissions"`
+		ID          int             `gosqlite:"ownership_id,primary,increment" json:"ownership_id"`
+		AssetID     string          `gosqlite:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
+		Username    string          `gosqlite:"username,fkey:LocalUser.username" json:"username"`
+		Permissions AssetPermission `gosqlite:"permissions" json:"permissions"`
 	}
 
 	ProxmoxAssetAssignmentByGroup struct {
-		ID          int             `gomysql:"ownership_id,primary,increment" json:"ownership_id"`
-		AssetID     string          `gomysql:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
-		Groupname   string          `gomysql:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
-		Permissions AssetPermission `gomysql:"permissions" json:"permissions"`
+		ID          int             `gosqlite:"ownership_id,primary,increment" json:"ownership_id"`
+		AssetID     string          `gosqlite:"asset_id,fkey:ProxmoxAsset.id" json:"asset_id"`
+		Groupname   string          `gosqlite:"groupname,fkey:LocalGroup.groupname" json:"groupname"`
+		Permissions AssetPermission `gosqlite:"permissions" json:"permissions"`
 	}
 
 	LocalGroupManagementByUser struct {
-		ID          int                  `gomysql:"membership_id,primary,increment" json:"membership_id"`
-		Member      string               `gomysql:"member,fkey:LocalUser.username" json:"member"`
-		MemberOf    string               `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
-		Permissions ManagementPermission `gomysql:"permissions" json:"permissions"`
+		ID          int                  `gosqlite:"membership_id,primary,increment" json:"membership_id"`
+		Member      string               `gosqlite:"member,fkey:LocalUser.username" json:"member"`
+		MemberOf    string               `gosqlite:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
+		Permissions ManagementPermission `gosqlite:"permissions" json:"permissions"`
 	}
 
 	LocalGroupManagementByGroup struct {
-		ID          int                  `gomysql:"membership_id,primary,increment" json:"membership_id"`
-		Member      string               `gomysql:"member,fkey:LocalGroup.groupname" json:"member"`
-		MemberOf    string               `gomysql:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
-		Permissions ManagementPermission `gomysql:"permissions" json:"permissions"`
+		ID          int                  `gosqlite:"membership_id,primary,increment" json:"membership_id"`
+		Member      string               `gosqlite:"member,fkey:LocalGroup.groupname" json:"member"`
+		MemberOf    string               `gosqlite:"member_of,fkey:LocalGroup.groupname" json:"member_of"`
+		Permissions ManagementPermission `gosqlite:"permissions" json:"permissions"`
 	}
 )
 

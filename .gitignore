@@ -3,6 +3,7 @@
 *.db
 *.log
 .organesson-session-key
+*.db.tasks
 log/
 
 # Go ignores

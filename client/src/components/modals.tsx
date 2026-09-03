@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "../api";
 import { Field, ModalFrame, RowActionMenu, Select, SimpleFormModal, Textarea } from "./common";
-import type { GroupMembership, Organization, Project, UserImportResponse } from "../types";
+import type { AssetGroup, GroupMembership, Organization, Project, ProjectResource, Role, UserImportResponse } from "../types";
 import { classNames, displayUser } from "../ui-helpers";
 
 export function OrgModal({
@@ -254,6 +254,297 @@ export function ProjectMemberModal({
                 </Select>
             )}
         </SimpleFormModal>
+    );
+}
+
+export function ResourceModal({
+    project,
+    onSubmit,
+    onClose
+}: {
+    project: Project;
+    onSubmit: (values: { name: string; slug: string; resourceType: string; status: string }) => Promise<void>;
+    onClose: () => void;
+}) {
+    return (
+        <SimpleFormModal
+            title={`New resource for ${project.name}`}
+            label="Inventory"
+            onClose={onClose}
+            onSubmit={(data) =>
+                onSubmit({
+                    name: String(data.get("name") || ""),
+                    slug: String(data.get("slug") || ""),
+                    resourceType: String(data.get("resourceType") || "vm"),
+                    status: String(data.get("status") || "ready")
+                })
+            }
+        >
+            <Field name="name" label="Name" required />
+            <Field name="slug" label="Slug" />
+            <Select name="resourceType" label="Type" defaultValue="vm" required>
+                <option value="vm">Virtual machine</option>
+                <option value="container">Container</option>
+                <option value="network">Network</option>
+            </Select>
+            <Select name="status" label="Status" defaultValue="ready" required>
+                <option value="ready">Ready</option>
+                <option value="unknown">Unknown</option>
+                <option value="error">Error</option>
+            </Select>
+        </SimpleFormModal>
+    );
+}
+
+export function AssetGroupModal({
+    project,
+    onSubmit,
+    onClose
+}: {
+    project: Project;
+    onSubmit: (values: { name: string; slug: string; description: string }) => Promise<void>;
+    onClose: () => void;
+}) {
+    return (
+        <SimpleFormModal
+            title={`New asset group for ${project.name}`}
+            label="Inventory"
+            onClose={onClose}
+            onSubmit={(data) =>
+                onSubmit({
+                    name: String(data.get("name") || ""),
+                    slug: String(data.get("slug") || ""),
+                    description: String(data.get("description") || "")
+                })
+            }
+        >
+            <Field name="name" label="Name" required />
+            <Field name="slug" label="Slug" />
+            <Textarea name="description" label="Description" />
+        </SimpleFormModal>
+    );
+}
+
+export function AssetGroupResourcesModal({
+    group,
+    resources,
+    onAdd,
+    onRemove,
+    onClose
+}: {
+    group: AssetGroup;
+    resources: ProjectResource[];
+    onAdd: (resourceID: number) => Promise<void>;
+    onRemove: (resourceID: number) => Promise<void>;
+    onClose: () => void;
+}) {
+    const attachedIDs = new Set((group.resources || []).map((resource) => resource.id));
+    const available = resources.filter((resource) => !attachedIDs.has(resource.id));
+    const [selectedResourceID, setSelectedResourceID] = useState<number | "">(available[0]?.id || "");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        setSelectedResourceID((current) => {
+            if (current && available.some((resource) => resource.id === current)) {
+                return current;
+            }
+            return available[0]?.id || "";
+        });
+    }, [group.id, resources.length, group.resources?.length]);
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!selectedResourceID) {
+            return;
+        }
+        setSaving(true);
+        setError("");
+        try {
+            await onAdd(Number(selectedResourceID));
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "Failed to add resource");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const remove = async (resourceID: number) => {
+        setSaving(true);
+        setError("");
+        try {
+            await onRemove(resourceID);
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "Failed to remove resource");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <ModalFrame title={`${group.name} resources`} label="Asset group" onClose={onClose}>
+            <div className="group-members-modal asset-group-resources-modal">
+                <form className="modal-form group-member-form" onSubmit={submit}>
+                    <div className="modal-section-heading">
+                        <span className="panel-label">Attach resource</span>
+                        <strong>{available.length}</strong>
+                    </div>
+                    <label className="field-group">
+                        <span className="field-label">Resource</span>
+                        <select
+                            className="field-input"
+                            name="resourceID"
+                            value={selectedResourceID}
+                            disabled={saving || available.length === 0}
+                            onChange={(event) => setSelectedResourceID(event.currentTarget.value ? Number(event.currentTarget.value) : "")}
+                        >
+                            {available.length === 0 && <option value="">No available resources</option>}
+                            {available.map((resource) => (
+                                <option key={resource.id} value={resource.id}>
+                                    {resource.name} ({resource.resource_type_label || "resource"})
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    {error && <p className="form-message is-warning">{error}</p>}
+                    <div className="modal-actions">
+                        <button type="submit" className="button-primary" disabled={saving || available.length === 0}>
+                            Add resource
+                        </button>
+                    </div>
+                </form>
+                <section className="group-member-list-panel">
+                    <div className="modal-section-heading">
+                        <span className="panel-label">Attached</span>
+                        <strong>{group.resources?.length || 0}</strong>
+                    </div>
+                    {(!group.resources || group.resources.length === 0) && <p className="form-message">No resources attached.</p>}
+                    {group.resources && group.resources.length > 0 && (
+                        <div className="compact-list">
+                            {group.resources.map((resource) => (
+                                <div className="compact-list-row action-list-row group-member-row" key={resource.id}>
+                                    <div className="access-row-subject">
+                                        <div>
+                                            <strong>{resource.name}</strong>
+                                            <span>{resource.slug} / {resource.resource_type_label || "resource"}</span>
+                                        </div>
+                                    </div>
+                                    <div className="project-access-actions">
+                                        <span className="access-pill">{resource.status_label || "ready"}</span>
+                                        <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
+                                            <button type="button" role="menuitem" className="danger-action" disabled={saving} onClick={() => remove(resource.id)}>
+                                                Remove resource
+                                            </button>
+                                        </RowActionMenu>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </div>
+        </ModalFrame>
+    );
+}
+
+export function AssetAssignmentModal({
+    project,
+    resources,
+    assetGroups,
+    roles,
+    onSubmit,
+    onClose
+}: {
+    project: Project;
+    resources: ProjectResource[];
+    assetGroups: AssetGroup[];
+    roles: Role[];
+    onSubmit: (values: { targetType: string; resourceID?: number; assetGroupID?: number; subjectType: string; subjectRef: string; roleID: number }) => Promise<void>;
+    onClose: () => void;
+}) {
+    const [targetType, setTargetType] = useState<"resource" | "assetGroup">("resource");
+    const [subjectType, setSubjectType] = useState<"user" | "group">("user");
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const targetsAvailable = targetType === "resource" ? resources.length > 0 : assetGroups.length > 0;
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        setSubmitting(true);
+        setError("");
+        try {
+            await onSubmit({
+                targetType,
+                resourceID: targetType === "resource" ? Number(data.get("resourceID")) : undefined,
+                assetGroupID: targetType === "assetGroup" ? Number(data.get("assetGroupID")) : undefined,
+                subjectType,
+                subjectRef: String(data.get("subjectRef") || ""),
+                roleID: Number(data.get("roleID"))
+            });
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "Failed to create assignment");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <ModalFrame title={`Assign assets in ${project.name}`} label="Inventory" onClose={onClose}>
+            <form className="modal-form" onSubmit={submit}>
+                <label className="field-group">
+                    <span className="field-label">Target type</span>
+                    <select className="field-input" value={targetType} onChange={(event) => setTargetType(event.currentTarget.value as "resource" | "assetGroup")}>
+                        <option value="resource">Resource</option>
+                        <option value="assetGroup">Asset group</option>
+                    </select>
+                </label>
+                {targetType === "resource" ? (
+                    <Select name="resourceID" label="Resource" required defaultValue={resources[0]?.id || ""}>
+                        {resources.length === 0 && <option value="">No resources</option>}
+                        {resources.map((resource) => (
+                            <option key={resource.id} value={resource.id}>
+                                {resource.name} ({resource.resource_type_label || "resource"})
+                            </option>
+                        ))}
+                    </Select>
+                ) : (
+                    <Select name="assetGroupID" label="Asset group" required defaultValue={assetGroups[0]?.id || ""}>
+                        {assetGroups.length === 0 && <option value="">No asset groups</option>}
+                        {assetGroups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                                {group.name} ({group.resource_count || 0} resources)
+                            </option>
+                        ))}
+                    </Select>
+                )}
+                <label className="field-group">
+                    <span className="field-label">Subject type</span>
+                    <select className="field-input" value={subjectType} onChange={(event) => setSubjectType(event.currentTarget.value as "user" | "group")}>
+                        <option value="user">User</option>
+                        <option value="group">Group</option>
+                    </select>
+                </label>
+                <Field name="subjectRef" label={subjectType === "group" ? "Group slug" : "Username or email"} required />
+                <Select name="roleID" label="Role" required defaultValue={roles[0]?.id || ""}>
+                    {roles.length === 0 && <option value="">No assignable roles</option>}
+                    {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                            {role.name}
+                        </option>
+                    ))}
+                </Select>
+                {error && <p className="form-message is-warning">{error}</p>}
+                <div className="modal-actions">
+                    <button type="button" className="button-secondary" onClick={onClose} disabled={submitting}>
+                        Cancel
+                    </button>
+                    <button type="submit" className="button-primary" disabled={submitting || !targetsAvailable || roles.length === 0}>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </ModalFrame>
     );
 }
 

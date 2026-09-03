@@ -2,14 +2,16 @@ package app
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
 	"path/filepath"
 	"time"
 
 	"github.com/UNHCSC/organesson/auth"
 	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/internal/safefile"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -39,9 +41,15 @@ func initPersistentJWTSigningKey() (err error) {
 	var keyPath string = filepath.Join(keyDir, ".organesson-session-key")
 
 	var key []byte
-	if key, err = os.ReadFile(keyPath); err == nil && len(key) >= 32 {
+	if key, err = safefile.Read(keyPath); err == nil {
+		if len(key) < 32 {
+			return fmt.Errorf("session key must contain at least 32 bytes")
+		}
+
 		jwtSigningKey = key
 		return
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("load session key: %w", err)
 	}
 
 	key = make([]byte, 64)
@@ -49,7 +57,7 @@ func initPersistentJWTSigningKey() (err error) {
 		return fmt.Errorf("generate session key: %w", err)
 	}
 
-	if err = os.WriteFile(keyPath, key, 0600); err != nil {
+	if err = safefile.WritePrivate(keyPath, key); err != nil {
 		return fmt.Errorf("write session key: %w", err)
 	}
 

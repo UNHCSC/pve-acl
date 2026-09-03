@@ -10,6 +10,7 @@ type Configuration struct {
 
 	LDAP struct {
 		Address     string   `toml:"address" default:"" validate:"required"`                   // LDAP server address (e.g. "ldaps://domain.cyber.lab:636")
+		CAFile      string   `toml:"ca_file" default:""`                                       // Optional PEM CA bundle used to verify the LDAP server certificate.
 		DomainSLD   string   `toml:"domain_sld" default:"" validate:"required"`                // LDAP domain second-level domain (e.g. "cyber" for "domain.cyber.lab")
 		DomainTLD   string   `toml:"domain_tld" default:"" validate:"required"`                // LDAP domain top-level domain (e.g. "lab" for "domain.cyber.lab")
 		AccountsCN  string   `toml:"accounts_cn" default:"accounts" validate:"required"`       // LDAP container name for accounts (usually "accounts")
@@ -22,6 +23,10 @@ type Configuration struct {
 	Database struct {
 		File string `toml:"file" default:"organesson.db" validate:"required"` // Path to the MySQL database file
 	} `toml:"database"` // Database configuration
+
+	Scheduler struct {
+		DatabaseFile string `toml:"database_file" default:""` // Path to the gasket task database. Empty uses the application database path with ".tasks" appended.
+	} `toml:"scheduler"` // Embedded task scheduler configuration
 
 	Proxmox struct {
 		Enabled  bool   `toml:"enabled" default:"false"`           // Enable Proxmox VE integration

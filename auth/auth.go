@@ -358,7 +358,7 @@ func Authenticate(username, password string) (authUserResult *AuthUser, errResul
 	}
 
 	if !ldapConn.IsAuthenticated {
-		ldapConn.Close()
+		_ = ldapConn.Close()
 		return nil, ErrUnauthorized
 	}
 	var expiry time.Time
@@ -374,7 +374,7 @@ func Authenticate(username, password string) (authUserResult *AuthUser, errResul
 	}
 
 	if user.Permissions() == AuthPermsNone {
-		ldapConn.Close()
+		_ = ldapConn.Close()
 		return nil, fmt.Errorf("user is unauthorized to use this application")
 	}
 	user.Token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -405,7 +405,7 @@ func Logout(username string) {
 
 		if user, ok = activeUsers[username]; ok {
 			if user.LDAPConn != nil {
-				user.LDAPConn.Close()
+				_ = user.LDAPConn.Close()
 			}
 
 			authLog.Infof("User '%s' logged out.\n", username)

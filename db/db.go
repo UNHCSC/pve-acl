@@ -7,59 +7,59 @@ import (
 
 	"github.com/UNHCSC/organesson/config"
 	"github.com/z46-dev/golog"
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 var (
 	dbLog                          *golog.Logger
-	Driver                         *gomysql.Driver
-	LocalUsers                     *gomysql.RegisteredStruct[LocalUser]
-	LocalGroups                    *gomysql.RegisteredStruct[LocalGroup]
-	ProxmoxAssets                  *gomysql.RegisteredStruct[ProxmoxAsset]
-	LocalGroupMembershipsByUser    *gomysql.RegisteredStruct[LocalGroupMembership]
-	ProxmoxAssetAssignmentsByUser  *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByUser]
-	ProxmoxAssetAssignmentsByGroup *gomysql.RegisteredStruct[ProxmoxAssetAssignmentByGroup]
-	LocalGroupManagementsByUser    *gomysql.RegisteredStruct[LocalGroupManagementByUser]
-	LocalGroupManagementsByGroup   *gomysql.RegisteredStruct[LocalGroupManagementByGroup]
-	Users                          *gomysql.RegisteredStruct[User]
-	CloudGroups                    *gomysql.RegisteredStruct[CloudGroup]
-	CloudGroupMemberships          *gomysql.RegisteredStruct[CloudGroupMembership]
-	Organizations                  *gomysql.RegisteredStruct[Organization]
-	OrganizationMemberships        *gomysql.RegisteredStruct[OrganizationMembership]
-	Projects                       *gomysql.RegisteredStruct[Project]
-	ProjectMemberships             *gomysql.RegisteredStruct[ProjectMembership]
-	Roles                          *gomysql.RegisteredStruct[Role]
-	Permissions                    *gomysql.RegisteredStruct[Permission]
-	RolePermissions                *gomysql.RegisteredStruct[RolePermission]
-	RoleBindings                   *gomysql.RegisteredStruct[RoleBinding]
-	QuotaPolicies                  *gomysql.RegisteredStruct[QuotaPolicy]
-	QuotaBindings                  *gomysql.RegisteredStruct[QuotaBinding]
-	Resources                      *gomysql.RegisteredStruct[Resource]
-	ResourceOwners                 *gomysql.RegisteredStruct[ResourceOwner]
-	AssetGroups                    *gomysql.RegisteredStruct[AssetGroup]
-	AssetGroupResources            *gomysql.RegisteredStruct[AssetGroupResource]
-	AssetAssignments               *gomysql.RegisteredStruct[AssetAssignment]
-	ProxmoxClusters                *gomysql.RegisteredStruct[ProxmoxCluster]
-	ProxmoxNodes                   *gomysql.RegisteredStruct[ProxmoxNode]
-	VirtualMachines                *gomysql.RegisteredStruct[VirtualMachine]
-	Containers                     *gomysql.RegisteredStruct[Container]
-	VirtualNetworks                *gomysql.RegisteredStruct[VirtualNetwork]
-	Jobs                           *gomysql.RegisteredStruct[Job]
-	JobLogs                        *gomysql.RegisteredStruct[JobLog]
-	AuditEvents                    *gomysql.RegisteredStruct[AuditEvent]
-	Secrets                        *gomysql.RegisteredStruct[Secret]
+	Driver                         *gosqlite.Driver
+	LocalUsers                     *gosqlite.RegisteredStruct[LocalUser]
+	LocalGroups                    *gosqlite.RegisteredStruct[LocalGroup]
+	ProxmoxAssets                  *gosqlite.RegisteredStruct[ProxmoxAsset]
+	LocalGroupMembershipsByUser    *gosqlite.RegisteredStruct[LocalGroupMembership]
+	ProxmoxAssetAssignmentsByUser  *gosqlite.RegisteredStruct[ProxmoxAssetAssignmentByUser]
+	ProxmoxAssetAssignmentsByGroup *gosqlite.RegisteredStruct[ProxmoxAssetAssignmentByGroup]
+	LocalGroupManagementsByUser    *gosqlite.RegisteredStruct[LocalGroupManagementByUser]
+	LocalGroupManagementsByGroup   *gosqlite.RegisteredStruct[LocalGroupManagementByGroup]
+	Users                          *gosqlite.RegisteredStruct[User]
+	CloudGroups                    *gosqlite.RegisteredStruct[CloudGroup]
+	CloudGroupMemberships          *gosqlite.RegisteredStruct[CloudGroupMembership]
+	Organizations                  *gosqlite.RegisteredStruct[Organization]
+	OrganizationMemberships        *gosqlite.RegisteredStruct[OrganizationMembership]
+	Projects                       *gosqlite.RegisteredStruct[Project]
+	ProjectMemberships             *gosqlite.RegisteredStruct[ProjectMembership]
+	Roles                          *gosqlite.RegisteredStruct[Role]
+	Permissions                    *gosqlite.RegisteredStruct[Permission]
+	RolePermissions                *gosqlite.RegisteredStruct[RolePermission]
+	RoleBindings                   *gosqlite.RegisteredStruct[RoleBinding]
+	QuotaPolicies                  *gosqlite.RegisteredStruct[QuotaPolicy]
+	QuotaBindings                  *gosqlite.RegisteredStruct[QuotaBinding]
+	Resources                      *gosqlite.RegisteredStruct[Resource]
+	ResourceOwners                 *gosqlite.RegisteredStruct[ResourceOwner]
+	AssetGroups                    *gosqlite.RegisteredStruct[AssetGroup]
+	AssetGroupResources            *gosqlite.RegisteredStruct[AssetGroupResource]
+	AssetAssignments               *gosqlite.RegisteredStruct[AssetAssignment]
+	ProxmoxClusters                *gosqlite.RegisteredStruct[ProxmoxCluster]
+	ProxmoxNodes                   *gosqlite.RegisteredStruct[ProxmoxNode]
+	VirtualMachines                *gosqlite.RegisteredStruct[VirtualMachine]
+	Containers                     *gosqlite.RegisteredStruct[Container]
+	VirtualNetworks                *gosqlite.RegisteredStruct[VirtualNetwork]
+	Jobs                           *gosqlite.RegisteredStruct[Job]
+	JobLogs                        *gosqlite.RegisteredStruct[JobLog]
+	AuditEvents                    *gosqlite.RegisteredStruct[AuditEvent]
+	Secrets                        *gosqlite.RegisteredStruct[Secret]
 )
 
 // Init initializes this package.
 func Init(parentLog *golog.Logger) (err error) {
 	dbLog = parentLog.SpawnChild().Prefix("[DB]", golog.BoldGreen)
 
-	if Driver, err = gomysql.Begin(config.Config.Database.File); err != nil {
+	if Driver, err = gosqlite.Begin(config.Config.Database.File); err != nil {
 		dbLog.Errorf("Failed to initialize database: %v\n", err)
 		return
 	}
 
-	var migrationOpts gomysql.MigrationOptions
+	var migrationOpts gosqlite.MigrationOptions
 
 	if len(os.Args) > 1 && slices.Contains(os.Args, "--allow-destructive-migrations") {
 		migrationOpts.AllowDestructive = true
@@ -211,8 +211,8 @@ func Init(parentLog *golog.Logger) (err error) {
 	return
 }
 
-func registerAndMigrate[T any](name string, target **gomysql.RegisteredStruct[T], model T, opts gomysql.MigrationOptions) (err error) {
-	if *target, err = gomysql.Register(Driver, model); err != nil {
+func registerAndMigrate[T any](name string, target **gosqlite.RegisteredStruct[T], model T, opts gosqlite.MigrationOptions) (err error) {
+	if *target, err = gosqlite.Register(Driver, model); err != nil {
 		dbLog.Errorf("Failed to register %s struct: %v\n", name, err)
 		return
 	}
@@ -225,8 +225,8 @@ func registerAndMigrate[T any](name string, target **gomysql.RegisteredStruct[T]
 	return
 }
 
-func migrate[T any](table *gomysql.RegisteredStruct[T], opts gomysql.MigrationOptions) (err error) {
-	var report *gomysql.MigrationReport
+func migrate[T any](table *gosqlite.RegisteredStruct[T], opts gosqlite.MigrationOptions) (err error) {
+	var report *gosqlite.MigrationReport
 
 	if report, err = table.Migrate(opts); err != nil {
 		return

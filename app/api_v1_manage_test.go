@@ -38,7 +38,7 @@ func TestAdminCanCreateAndListCloudGroups(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create group route returned error: %v", err)
 	}
 
@@ -49,7 +49,7 @@ func TestAdminCanCreateAndListCloudGroups(t *testing.T) {
 	listReq = httptest.NewRequest("GET", "/api/v1/groups", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 
-	if listResp, err = fiberApp.Test(listReq); err != nil {
+	if listResp, err = testFiberRequest(fiberApp, listReq); err != nil {
 		t.Fatalf("list group route returned error: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func TestRoleBoundAdminCanCreateCloudGroups(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create group route returned error: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestGroupManagerCanManageMembershipRoles(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("membership route returned error: %v", err)
 	}
 
@@ -249,7 +249,7 @@ func TestGroupManagerCanPatchMembershipRole(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("patch membership route returned error: %v", err)
 	}
 
@@ -304,7 +304,7 @@ func TestAdminCanUpdateAndArchiveCloudGroup(t *testing.T) {
 	}`))
 	patchReq.Header.Set("Authorization", "Bearer "+token)
 	patchReq.Header.Set("Content-Type", "application/json")
-	if patchResp, err = fiberApp.Test(patchReq); err != nil {
+	if patchResp, err = testFiberRequest(fiberApp, patchReq); err != nil {
 		t.Fatalf("patch group route returned error: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestAdminCanUpdateAndArchiveCloudGroup(t *testing.T) {
 
 	deleteReq = httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(group.ID), nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
-	if deleteResp, err = fiberApp.Test(deleteReq); err != nil {
+	if deleteResp, err = testFiberRequest(fiberApp, deleteReq); err != nil {
 		t.Fatalf("delete group route returned error: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestAdminCanUpdateAndArchiveCloudGroup(t *testing.T) {
 
 	listReq = httptest.NewRequest("GET", "/api/v1/groups", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
-	if listResp, err = fiberApp.Test(listReq); err != nil {
+	if listResp, err = testFiberRequest(fiberApp, listReq); err != nil {
 		t.Fatalf("list groups route returned error: %v", err)
 	}
 
@@ -391,7 +391,7 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Content-Type", "application/json")
 
-	if createResp, err = fiberApp.Test(createReq); err != nil {
+	if createResp, err = testFiberRequest(fiberApp, createReq); err != nil {
 		t.Fatalf("create role route returned error: %v", err)
 	}
 
@@ -411,7 +411,7 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 	grantReq.Header.Set("Authorization", "Bearer "+token)
 	grantReq.Header.Set("Content-Type", "application/json")
 
-	if grantResp, err = fiberApp.Test(grantReq); err != nil {
+	if grantResp, err = testFiberRequest(fiberApp, grantReq); err != nil {
 		t.Fatalf("grant permission route returned error: %v", err)
 	}
 
@@ -429,7 +429,7 @@ func TestAdminCanCreateCustomRoleAndGrantPermission(t *testing.T) {
 
 	listReq = httptest.NewRequest("GET", "/api/v1/roles/"+strconv.Itoa(roleID)+"/permissions", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
-	if listResp, err = fiberApp.Test(listReq); err != nil {
+	if listResp, err = testFiberRequest(fiberApp, listReq); err != nil {
 		t.Fatalf("list permissions route returned error: %v", err)
 	}
 
@@ -486,7 +486,7 @@ func TestAdminCanUpdateAndDeleteUnboundCustomRole(t *testing.T) {
 	patchReq.Header.Set("Authorization", "Bearer "+token)
 	patchReq.Header.Set("Content-Type", "application/json")
 
-	if patchResp, err = fiberApp.Test(patchReq); err != nil {
+	if patchResp, err = testFiberRequest(fiberApp, patchReq); err != nil {
 		t.Fatalf("patch role route returned error: %v", err)
 	}
 
@@ -504,7 +504,7 @@ func TestAdminCanUpdateAndDeleteUnboundCustomRole(t *testing.T) {
 
 	deleteReq = httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(updated.ID), nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
-	if deleteResp, err = fiberApp.Test(deleteReq); err != nil {
+	if deleteResp, err = testFiberRequest(fiberApp, deleteReq); err != nil {
 		t.Fatalf("delete role route returned error: %v", err)
 	}
 
@@ -541,7 +541,7 @@ func TestSystemRoleEditAndDeleteAreProtected(t *testing.T) {
 	patchReq.Header.Set("Authorization", "Bearer "+token)
 	patchReq.Header.Set("Content-Type", "application/json")
 
-	if patchResp, err = fiberApp.Test(patchReq); err != nil {
+	if patchResp, err = testFiberRequest(fiberApp, patchReq); err != nil {
 		t.Fatalf("patch system role route returned error: %v", err)
 	}
 
@@ -552,7 +552,7 @@ func TestSystemRoleEditAndDeleteAreProtected(t *testing.T) {
 	deleteReq = httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(role.ID), nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
 
-	if deleteResp, err = fiberApp.Test(deleteReq); err != nil {
+	if deleteResp, err = testFiberRequest(fiberApp, deleteReq); err != nil {
 		t.Fatalf("delete system role route returned error: %v", err)
 	}
 
@@ -593,7 +593,7 @@ func TestBoundCustomRoleCannotBeDeleted(t *testing.T) {
 
 	req = httptest.NewRequest("DELETE", "/api/v1/roles/"+strconv.Itoa(role.ID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	if resp, err = fiberApp.Test(req); err != nil {
+	if resp, err = testFiberRequest(fiberApp, req); err != nil {
 		t.Fatalf("delete bound role route returned error: %v", err)
 	}
 
@@ -643,7 +643,7 @@ func TestGroupRoleBindingRequiresScopedRoleManage(t *testing.T) {
 	}`))
 	globalReq.Header.Set("Authorization", "Bearer "+token)
 	globalReq.Header.Set("Content-Type", "application/json")
-	if globalResp, err = fiberApp.Test(globalReq); err != nil {
+	if globalResp, err = testFiberRequest(fiberApp, globalReq); err != nil {
 		t.Fatalf("global role binding route returned error: %v", err)
 	}
 
@@ -655,7 +655,7 @@ func TestGroupRoleBindingRequiresScopedRoleManage(t *testing.T) {
 	scopedReq = httptest.NewRequest("POST", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings", bytes.NewBufferString(scopedBody))
 	scopedReq.Header.Set("Authorization", "Bearer "+token)
 	scopedReq.Header.Set("Content-Type", "application/json")
-	if scopedResp, err = fiberApp.Test(scopedReq); err != nil {
+	if scopedResp, err = testFiberRequest(fiberApp, scopedReq); err != nil {
 		t.Fatalf("scoped role binding route returned error: %v", err)
 	}
 
@@ -711,7 +711,7 @@ func TestGroupOwnerCanManageOnlyOwnScopedRoleBindings(t *testing.T) {
 	}`))
 	globalReq.Header.Set("Authorization", "Bearer "+token)
 	globalReq.Header.Set("Content-Type", "application/json")
-	if globalResp, err = fiberApp.Test(globalReq); err != nil {
+	if globalResp, err = testFiberRequest(fiberApp, globalReq); err != nil {
 		t.Fatalf("global owner grant route returned error: %v", err)
 	}
 	if globalResp.StatusCode != fiber.StatusForbidden {
@@ -722,7 +722,7 @@ func TestGroupOwnerCanManageOnlyOwnScopedRoleBindings(t *testing.T) {
 	scopedReq = httptest.NewRequest("POST", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings", bytes.NewBufferString(scopedBody))
 	scopedReq.Header.Set("Authorization", "Bearer "+token)
 	scopedReq.Header.Set("Content-Type", "application/json")
-	if scopedResp, err = fiberApp.Test(scopedReq); err != nil {
+	if scopedResp, err = testFiberRequest(fiberApp, scopedReq); err != nil {
 		t.Fatalf("scoped owner grant route returned error: %v", err)
 	}
 	if scopedResp.StatusCode != fiber.StatusCreated {
@@ -737,7 +737,7 @@ func TestGroupOwnerCanManageOnlyOwnScopedRoleBindings(t *testing.T) {
 	}
 	wrongGroupReq = httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(otherGroup.ID)+"/role-bindings/"+strconv.Itoa(bindings[0].ID), nil)
 	wrongGroupReq.Header.Set("Authorization", "Bearer "+token)
-	if wrongGroupResp, err = fiberApp.Test(wrongGroupReq); err != nil {
+	if wrongGroupResp, err = testFiberRequest(fiberApp, wrongGroupReq); err != nil {
 		t.Fatalf("wrong group delete route returned error: %v", err)
 	}
 	if wrongGroupResp.StatusCode != fiber.StatusNotFound {
@@ -746,7 +746,7 @@ func TestGroupOwnerCanManageOnlyOwnScopedRoleBindings(t *testing.T) {
 
 	deleteReq = httptest.NewRequest("DELETE", "/api/v1/groups/"+strconv.Itoa(group.ID)+"/role-bindings/"+strconv.Itoa(bindings[0].ID), nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
-	if deleteResp, err = fiberApp.Test(deleteReq); err != nil {
+	if deleteResp, err = testFiberRequest(fiberApp, deleteReq); err != nil {
 		t.Fatalf("delete owner grant route returned error: %v", err)
 	}
 	if deleteResp.StatusCode != fiber.StatusNoContent {

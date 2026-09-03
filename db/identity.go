@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/z46-dev/gomysql"
+	"github.com/z46-dev/gosqlite"
 )
 
 // EnsureUser ensures user exists.
@@ -80,25 +80,25 @@ func GetUserByID(id int) (userResult *User, okResult bool, errResult error) {
 
 // ListCloudGroups lists cloud groups.
 func ListCloudGroups() (itemsResult []*CloudGroup, errResult error) {
-	return CloudGroups.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+	return CloudGroups.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
 // CloudGroupsForOwner returns active cloud groups owned by a scope.
 func CloudGroupsForOwner(scopeType RoleBindingScope, scopeID *int) (itemsResult []*CloudGroup, errResult error) {
-	var filter *gomysql.Filter
+	var filter *gosqlite.Filter
 
-	filter = gomysql.NewFilter().
-		KeyCmp(CloudGroups.FieldBySQLName("owner_scope_type"), gomysql.OpEqual, scopeType).
+	filter = gosqlite.NewFilter().
+		KeyCmp(CloudGroups.FieldBySQLName("owner_scope_type"), gosqlite.OpEqual, scopeType).
 		And()
 	if scopeID == nil {
-		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gomysql.OpIsNull, nil)
+		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gosqlite.OpIsNull, nil)
 	} else {
-		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gomysql.OpEqual, *scopeID)
+		filter = filter.KeyCmp(CloudGroups.FieldBySQLName("owner_scope_id"), gosqlite.OpEqual, *scopeID)
 	}
 	return CloudGroups.SelectAllWithFilter(filter.
 		And().
-		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gomysql.OpIsNull, nil))
+		KeyCmp(CloudGroups.FieldBySQLName("archived_at"), gosqlite.OpIsNull, nil))
 }
 
 // UpdateCloudGroup updates cloud group.
@@ -146,14 +146,14 @@ func GetCloudGroupBySlug(slug string) (cloudGroupResult *CloudGroup, okResult bo
 
 // CloudGroupMembershipsForGroup returns memberships for a cloud group.
 func CloudGroupMembershipsForGroup(groupID int) (itemsResult []*CloudGroupMembership, errResult error) {
-	return CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID))
+	return CloudGroupMemberships.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gosqlite.OpEqual, groupID))
 }
 
 // CloudGroupMembershipsForUser returns cloud group memberships for a user.
 func CloudGroupMembershipsForUser(userID int) (itemsResult []*CloudGroupMembership, errResult error) {
-	return CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID))
+	return CloudGroupMemberships.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gosqlite.OpEqual, userID))
 }
 
 // CloudGroupIDsForUser returns cloud group ids for a user.
@@ -259,10 +259,10 @@ func CloudGroupMembershipForUserAndGroup(userID, groupID int) (cloudGroupMembers
 		err         error
 	)
 
-	memberships, err = CloudGroupMemberships.SelectAllWithFilter(gomysql.NewFilter().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gomysql.OpEqual, userID).
+	memberships, err = CloudGroupMemberships.SelectAllWithFilter(gosqlite.NewFilter().
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("user_id"), gosqlite.OpEqual, userID).
 		And().
-		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gomysql.OpEqual, groupID).
+		KeyCmp(CloudGroupMemberships.FieldBySQLName("group_id"), gosqlite.OpEqual, groupID).
 		Limit(1))
 	if err != nil {
 		return nil, false, err
