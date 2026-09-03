@@ -344,6 +344,20 @@ type (
 		ProjectID         *int       `gosqlite:"project_id,fkey:Project.id" json:"project_id,omitempty"`
 		ResourceID        *int       `gosqlite:"resource_id,fkey:Resource.id" json:"resource_id,omitempty"`
 		QueueID           string     `gosqlite:"queue_id" json:"queue_id"`
+		Operation         string     `gosqlite:"operation" json:"operation"`
+		InputJSON         string     `gosqlite:"input_json" json:"-"`
+		IdempotencyKey    string     `gosqlite:"idempotency_key" json:"-"`
+		OperationKey      string     `gosqlite:"operation_key" json:"operation_key"`
+		Node              string     `gosqlite:"node" json:"node,omitempty"`
+		Progress          int        `gosqlite:"progress" json:"progress"`
+		AttemptCount      int        `gosqlite:"attempt_count" json:"attempt_count"`
+		MaxAttempts       int        `gosqlite:"max_attempts" json:"max_attempts"`
+		ErrorCode         string     `gosqlite:"error_code" json:"error_code,omitempty"`
+		ErrorSummary      string     `gosqlite:"error_summary" json:"error_summary,omitempty"`
+		RetryClass        string     `gosqlite:"retry_class" json:"retry_class,omitempty"`
+		CancelRequestedAt *time.Time `gosqlite:"cancel_requested_at" json:"cancel_requested_at,omitempty"`
+		HeartbeatAt       *time.Time `gosqlite:"heartbeat_at" json:"heartbeat_at,omitempty"`
+		LeaseExpiresAt    *time.Time `gosqlite:"lease_expires_at" json:"lease_expires_at,omitempty"`
 		StartedAt         *time.Time `gosqlite:"started_at" json:"started_at,omitempty"`
 		FinishedAt        *time.Time `gosqlite:"finished_at" json:"finished_at,omitempty"`
 		CreatedAt         time.Time  `gosqlite:"created_at,notnull" json:"created_at"`

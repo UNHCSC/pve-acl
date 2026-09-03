@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/UNHCSC/organesson/app"
 	"github.com/UNHCSC/organesson/auth"
@@ -28,6 +29,9 @@ func main() {
 
 	if err = db.EnsureInitialSetup(); err != nil {
 		log.Panicf("Failed to complete initial setup: %v\n", err)
+	}
+	if _, err = db.RecoverAbandonedJobs(time.Now().UTC()); err != nil {
+		log.Panicf("Failed to recover abandoned jobs: %v\n", err)
 	}
 
 	if err = auth.Init(log); err != nil {

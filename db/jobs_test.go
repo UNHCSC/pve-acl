@@ -89,3 +89,33 @@ func TestJobStatusAndLogs(t *testing.T) {
 		t.Fatalf("expected one job log, got %#v", logs)
 	}
 }
+
+func TestRecoverAbandonedJobsRetainsSafeHistory(t *testing.T) {
+	initTestDB(t)
+	var job *Job
+	var err error
+	if job, err = CreateJob(JobCreateInput{JobType: JobTypeCleanup, Operation: "test.recovery"}); err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	if err = MarkJobRunning(job.ID); err != nil {
+		t.Fatalf("MarkJobRunning returned error: %v", err)
+	}
+	var past time.Time = time.Now().UTC().Add(-time.Minute)
+	job, _, err = GetJobByID(job.ID)
+	job.LeaseExpiresAt = &past
+	if err = Jobs.Update(job); err != nil {
+		t.Fatalf("expire lease: %v", err)
+	}
+	var count int
+	if count, err = RecoverAbandonedJobs(time.Now().UTC()); err != nil || count != 1 {
+		t.Fatalf("RecoverAbandonedJobs count=%d err=%v", count, err)
+	}
+	job, _, err = GetJobByID(job.ID)
+	if job.Status != JobStatusFailed || job.ErrorCode != "worker_abandoned" || job.FinishedAt == nil {
+		t.Fatalf("unexpected recovered job: %#v", job)
+	}
+	var logs []*JobLog
+	if logs, err = JobLogsForJob(job.ID); err != nil || len(logs) != 1 {
+		t.Fatalf("expected recovery log, logs=%#v err=%v", logs, err)
+	}
+}

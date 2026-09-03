@@ -25,7 +25,10 @@ type Configuration struct {
 	} `toml:"database"` // Database configuration
 
 	Scheduler struct {
-		DatabaseFile string `toml:"database_file" default:""` // Path to the gasket task database. Empty uses the application database path with ".tasks" appended.
+		DatabaseFile         string `toml:"database_file" default:""` // Path to the gasket task database. Empty uses the application database path with ".tasks" appended.
+		GlobalConcurrency    int    `toml:"global_concurrency" default:"4"`
+		PerNodeConcurrency   int    `toml:"per_node_concurrency" default:"2"`
+		ShutdownDrainSeconds int    `toml:"shutdown_drain_seconds" default:"20"`
 	} `toml:"scheduler"` // Embedded task scheduler configuration
 
 	Secrets struct {

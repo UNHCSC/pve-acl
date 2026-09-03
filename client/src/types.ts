@@ -1,5 +1,5 @@
 export type ToastKind = "info" | "success" | "warning";
-export type ViewKey = "overview" | "directory" | "infrastructure" | "people" | "identity";
+export type ViewKey = "overview" | "directory" | "operations" | "infrastructure" | "people" | "identity";
 export type ThemeKey = "light" | "dark" | "proxmox-light" | "proxmox-dark";
 export type ModalKey = "org" | "project" | "import-users" | "group" | "role" | "project-member" | "group-members" | "resource" | "asset-group" | "asset-group-resources" | "asset-assignment" | null;
 export type Selection =
@@ -320,11 +320,22 @@ export type ProxmoxInventory = {
     synced_at?: string;
 };
 
+export type Job = {
+    id: number; uuid: string; status: number; operation: string; operation_key: string;
+    project_id?: number; resource_id?: number; requested_by_user_id?: number; node?: string;
+    progress: number; attempt_count: number; max_attempts: number; error_code?: string;
+    error_summary?: string; retry_class?: string; cancel_requested_at?: string;
+    started_at?: string; finished_at?: string; created_at: string; updated_at: string;
+};
+
+export type JobLog = { id: number; job_id: number; stream: number; message: string; created_at: string };
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {
     overview: "Overview",
     directory: "Directory",
+    operations: "Operations",
     infrastructure: "Infrastructure",
     people: "People",
     identity: "Identity",
