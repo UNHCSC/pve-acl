@@ -331,7 +331,7 @@ function DashboardApp() {
         showToast("Project member added", "success");
     };
 
-    const createResource = async (values: { name: string; slug: string; resourceType: string }) => {
+    const createResource = async (values: { name: string; slug: string; resourceType: string; proxmoxInventoryGuestID?: number }) => {
         if (!activeProject) {
             return;
         }

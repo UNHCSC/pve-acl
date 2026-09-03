@@ -189,6 +189,8 @@ export type ProjectResource = {
     status_label?: "ready" | "unknown" | "error" | "deleted" | string;
     asset_group_count?: number;
     assignment_count?: number;
+    power_state?: number;
+    power_updated_at?: string;
     created_at?: string;
     updated_at?: string;
 };

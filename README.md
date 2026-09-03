@@ -31,10 +31,22 @@ The real-cluster smoke test is disabled by default and performs GET requests onl
 ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterReadOnlyInventory -v
 ```
 
-Power lifecycle testing is separately gated because it mutates a real guest. It refuses to run unless the explicitly selected VM starts stopped and carries the exact managed tag:
+Power and console lifecycle testing is separately gated because it mutates a real guest. It refuses to operate on an existing VM unless it starts stopped and carries the exact managed tag:
 
 ```sh
 ORGANESSON_PROXMOX_LIFECYCLE=1 ORGANESSON_PROXMOX_TEST_NODE=pve-a ORGANESSON_PROXMOX_TEST_VMID=1234 go test ./proxmox -run TestRealClusterTaggedGuestPowerLifecycle -v
+```
+
+The test can instead create a diskless 256 MiB fixture carrying both `organesson-managed` and `organesson-test`, exercise start and the console WebSocket, then stop and delete it. This requires `VM.Allocate`, `VM.Audit`, `VM.PowerMgmt`, and `VM.Console` on the selected test scope. The extra test tag and stopped-state check are mandatory deletion guards.
+
+```sh
+ORGANESSON_PROXMOX_LIFECYCLE=1 ORGANESSON_PROXMOX_CREATE_TEST_GUEST=1 ORGANESSON_PROXMOX_TEST_NODE=pve-a go test ./proxmox -run TestRealClusterTaggedGuestPowerLifecycle -v
+```
+
+The effective token capabilities can be checked without mutation:
+
+```sh
+ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterTokenCapabilities -v
 ```
 
 ## Operation recovery

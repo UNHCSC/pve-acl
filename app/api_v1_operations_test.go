@@ -104,6 +104,45 @@ func TestAssignedPowerAndConsoleStayTagAndPermissionScoped(t *testing.T) {
 	if _, err = managedMachineGuest(context.Background(), &db.VirtualMachine{ClusterID: cluster.ID, NodeID: &node.ID, ProxmoxVMID: 101}); err == nil {
 		t.Fatal("expected lost managed tag to block operation")
 	}
+	fake.Guests[0].Tags = []string{proxmox.DefaultManagedTag}
+	fake.Tasks["UPID:test"] = proxmox.Task{ID: "UPID:test", Status: "running"}
+	var timeoutJob *db.Job
+	var found bool
+	if timeoutJob, err = db.CreateJob(db.JobCreateInput{JobType: db.JobTypeProxmox, RequestedByUserID: &assigned.ID, ProjectID: &project.ID, ResourceID: &resource.ID, Operation: "vm.start", OperationKey: "timeout-test"}); err != nil {
+		t.Fatal(err)
+	}
+	var payload []byte
+	if payload, err = json.Marshal(jobscheduler.JobPayload{JobID: timeoutJob.ID, Operation: "start"}); err != nil {
+		t.Fatal(err)
+	}
+	var oldPollLimit int = proxmoxTaskPollLimit
+	var oldPollInterval time.Duration = proxmoxTaskPollInterval
+	proxmoxTaskPollLimit = 1
+	proxmoxTaskPollInterval = 0
+	consumeProxmoxAction(0, payload)
+	proxmoxTaskPollLimit = oldPollLimit
+	proxmoxTaskPollInterval = oldPollInterval
+	if timeoutJob, found, err = db.GetJobByID(timeoutJob.ID); err != nil || !found || timeoutJob.Status != db.JobStatusFailed || timeoutJob.ErrorCode != "provider_timeout" {
+		t.Fatalf("timeout job=%#v found=%t err=%v", timeoutJob, found, err)
+	}
+	var lostJob *db.Job
+	if lostJob, err = db.CreateJob(db.JobCreateInput{JobType: db.JobTypeProxmox, RequestedByUserID: &assigned.ID, ProjectID: &project.ID, ResourceID: &resource.ID, Operation: "vm.start", OperationKey: "lost-test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.ArchiveResource(resource); err != nil {
+		t.Fatal(err)
+	}
+	if payload, err = json.Marshal(jobscheduler.JobPayload{JobID: lostJob.ID, Operation: "start"}); err != nil {
+		t.Fatal(err)
+	}
+	consumeProxmoxAction(0, payload)
+	if lostJob, found, err = db.GetJobByID(lostJob.ID); err != nil || !found || lostJob.Status != db.JobStatusFailed || lostJob.ErrorCode != "resource_missing" {
+		t.Fatalf("lost-resource job=%#v found=%t err=%v", lostJob, found, err)
+	}
+	var audits []*db.AuditEvent
+	if audits, err = db.AuditEventsForProject(&project.ID); err != nil || len(audits) < 3 {
+		t.Fatalf("expected action job audits, count=%d err=%v", len(audits), err)
+	}
 }
 
 func TestConsoleSessionRejectsWrongUserAndExpiry(t *testing.T) {

@@ -74,6 +74,41 @@ type apiNetwork struct {
 	Active  int    `json:"active"`
 }
 
+// Permissions returns the effective API-token privileges by Proxmox object path.
+func (client *Client) Permissions(ctx context.Context) (permissionsResult map[string]map[string]int, errResult error) {
+	errResult = client.get(ctx, "/access/permissions", nil, &permissionsResult)
+	return
+}
+
+// NextVMID asks Proxmox for the next unused VM identifier.
+func (client *Client) NextVMID(ctx context.Context) (vmIDResult int, errResult error) {
+	var value json.Number
+	if errResult = client.get(ctx, "/cluster/nextid", nil, &value); errResult == nil {
+		vmIDResult, errResult = strconv.Atoi(value.String())
+	}
+	return
+}
+
+// CreateTestGuest allocates a diskless QEMU guest for an explicitly gated lifecycle test.
+func (client *Client) CreateTestGuest(ctx context.Context, node string, vmID int, name, managedTag string) (taskResult string, errResult error) {
+	var values url.Values = url.Values{"vmid": []string{strconv.Itoa(vmID)}, "name": []string{name}, "tags": []string{managedTag + ";organesson-test"}, "cores": []string{"1"}, "memory": []string{"256"}, "ostype": []string{"l26"}, "scsihw": []string{"virtio-scsi-single"}}
+	errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu", values, &taskResult)
+	return
+}
+
+// DeleteTestGuest deletes only a stopped guest that still carries the exact managed and test tags.
+func (client *Client) DeleteTestGuest(ctx context.Context, node string, vmID int, managedTag string) (taskResult string, errResult error) {
+	var guest Guest
+	if guest, errResult = client.GetGuest(ctx, node, vmID); errResult != nil {
+		return
+	}
+	if guest.Status != "stopped" || !HasTag(guest, managedTag) || !HasTag(guest, "organesson-test") {
+		return "", fmt.Errorf("refusing deletion: guest is not a stopped Organesson test guest")
+	}
+	errResult = client.request(ctx, http.MethodDelete, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID), nil, &taskResult)
+	return
+}
+
 // NewClient creates a read-only Proxmox API adapter.
 func NewClient(clientConfig ClientConfig) (clientResult *Client, errResult error) {
 	var parsedURL *url.URL

@@ -589,14 +589,19 @@ function ProjectResourcesPanel(props: {
 }) {
 	const [pending, setPending] = useState<string | null>(null);
 	const [consolePath, setConsolePath] = useState<string | null>(null);
+	const [operationError, setOperationError] = useState("");
 	const power = async (resource: ProjectResource, action: string) => {
 		setPending(`${resource.id}:${action}`);
+		setOperationError("");
 		try { await apiFetch(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }); }
+		catch (error) { setOperationError(error instanceof Error ? error.message : "Power action failed"); }
 		finally { setPending(null); }
 	};
 	const openConsole = async (resource: ProjectResource) => {
 		setPending(`${resource.id}:console`);
+		setOperationError("");
 		try { const session = await apiFetch<{ websocket_path: string }>(`/api/v1/resources/${resource.id}/console-sessions`, { method: "POST" }); setConsolePath(session.websocket_path); }
+		catch (error) { setOperationError(error instanceof Error ? error.message : "Console request failed"); }
 		finally { setPending(null); }
 	};
     return (
@@ -606,6 +611,7 @@ function ProjectResourcesPanel(props: {
                 title="Resources"
                 action={<button className="button-secondary compact-button" type="button" onClick={props.createResource}>New resource</button>}
             />
+			{operationError && <p className="form-message is-warning">{operationError}</p>}
             {props.loading && <EmptyState>Loading resources...</EmptyState>}
             {!props.loading && props.resources.length === 0 && <EmptyState>No local resources have been created.</EmptyState>}
             {!props.loading && props.resources.length > 0 && (
@@ -621,7 +627,7 @@ function ProjectResourcesPanel(props: {
                                 {resource.power_state !== undefined && <span className="access-pill">{["running", "stopped", "paused", "unknown"][resource.power_state] || "unknown"}</span>}
                                 <span className="access-pill">{resource.assignment_count || 0} grants</span>
                                 <span className="access-pill">{resource.asset_group_count || 0} groups</span>
-                                {resource.resource_type_label === "vm" && <>
+                                {resource.resource_type_label === "vm" && resource.power_state !== undefined && <>
                                     <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "start")}>Start</button>
                                     <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "stop")}>Stop</button>
                                     <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "reboot")}>Reboot</button>

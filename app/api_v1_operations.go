@@ -367,7 +367,7 @@ func consumeProxmoxAction(_ int, payload []byte) (result gasket.TaskConsumerResu
 	case "start":
 		taskID, err = proxmoxIntegration.service.StartGuest(context.Background(), guest.Node, guest.VMID)
 	case "stop":
-		taskID, err = proxmoxIntegration.service.ShutdownGuest(context.Background(), guest.Node, guest.VMID)
+		taskID, err = proxmoxIntegration.service.StopGuest(context.Background(), guest.Node, guest.VMID)
 	case "shutdown":
 		taskID, err = proxmoxIntegration.service.ShutdownGuest(context.Background(), guest.Node, guest.VMID)
 	case "reboot":

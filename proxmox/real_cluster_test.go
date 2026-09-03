@@ -70,6 +70,45 @@ func TestRealClusterReadOnlyInventory(t *testing.T) {
 	t.Logf("read-only inventory succeeded: %d nodes, %d storage records, %d networks, %d tagged guests", len(nodes), len(storages), len(networks), managedCount)
 }
 
+func TestRealClusterTokenCapabilities(t *testing.T) {
+	if os.Getenv("ORGANESSON_PROXMOX_SMOKE") != "1" {
+		t.Skip("set ORGANESSON_PROXMOX_SMOKE=1 to inspect token capabilities")
+	}
+	var err error
+	if err = config.Init("../config.toml"); err != nil {
+		t.Fatalf("load configuration: %v", err)
+	}
+	var baseURL string
+	if baseURL, err = smokeBaseURL(config.Config.Proxmox.Hostname, config.Config.Proxmox.Port); err != nil {
+		t.Fatal(err)
+	}
+	var client *proxmox.Client
+	if client, err = proxmox.NewClient(proxmox.ClientConfig{BaseURL: baseURL, TokenID: config.Config.Proxmox.TokenID, Secret: config.Config.Proxmox.Secret, VerifyTLS: config.Config.Proxmox.VerifyTLS, TLSFingerprintSHA256: config.Config.Proxmox.TLSFingerprintSHA256}); err != nil {
+		t.Fatal(err)
+	}
+	var permissions map[string]map[string]int
+	if permissions, err = client.Permissions(context.Background()); err != nil {
+		t.Fatalf("permissions: %v", err)
+	}
+	var required []string = []string{"VM.Allocate", "VM.Audit", "VM.PowerMgmt", "VM.Console"}
+	var effective map[string]bool = make(map[string]bool)
+	var privilegeNames map[string]bool = make(map[string]bool)
+	for _, privileges := range permissions {
+		for privilege := range privileges {
+			privilegeNames[privilege] = true
+		}
+		for _, privilege := range required {
+			if privileges[privilege] == 1 {
+				effective[privilege] = true
+			}
+		}
+	}
+	for _, privilege := range required {
+		t.Logf("%s=%t", privilege, effective[privilege])
+	}
+	t.Logf("permission paths=%d privilege names=%v", len(permissions), privilegeNames)
+}
+
 func smokeBaseURL(hostname, port string) (valueResult string, errResult error) {
 	if strings.Contains(hostname, "://") {
 		var parsed *url.URL

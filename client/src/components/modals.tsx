@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { Field, ModalFrame, RowActionMenu, Select, SimpleFormModal, Textarea } from "./common";
-import type { AssetGroup, GroupMembership, Organization, Project, ProjectResource, Role, UserImportResponse } from "../types";
+import type { AssetGroup, GroupMembership, Organization, Project, ProjectResource, ProxmoxInventory, Role, UserImportResponse } from "../types";
 import { classNames, displayUser } from "../ui-helpers";
 
 export function OrgModal({
@@ -263,9 +264,11 @@ export function ResourceModal({
     onClose
 }: {
     project: Project;
-    onSubmit: (values: { name: string; slug: string; resourceType: string }) => Promise<void>;
+    onSubmit: (values: { name: string; slug: string; resourceType: string; proxmoxInventoryGuestID?: number }) => Promise<void>;
     onClose: () => void;
 }) {
+    const inventoryQuery = useQuery({ queryKey: ["proxmox", "inventory"], queryFn: () => apiFetch<ProxmoxInventory>("/api/v1/proxmox/inventory"), retry: false });
+    const availableGuests = (inventoryQuery.data?.guests || []).filter((guest) => !guest.resource_id && !guest.is_template && guest.kind === "qemu" && !guest.missing_since && !["ambiguous", "error"].includes(guest.drift_state));
     return (
         <SimpleFormModal
             title={`New resource for ${project.name}`}
@@ -275,7 +278,8 @@ export function ResourceModal({
                 onSubmit({
                     name: String(data.get("name") || ""),
                     slug: String(data.get("slug") || ""),
-                    resourceType: String(data.get("resourceType") || "vm")
+                    resourceType: String(data.get("resourceType") || "vm"),
+                    proxmoxInventoryGuestID: data.get("proxmoxInventoryGuestID") ? Number(data.get("proxmoxInventoryGuestID")) : undefined
                 })
             }
         >
@@ -286,6 +290,11 @@ export function ResourceModal({
                 <option value="container">Container</option>
                 <option value="network">Network</option>
             </Select>
+            <Select name="proxmoxInventoryGuestID" label="Managed Proxmox guest" defaultValue="" required>
+                <option value="" disabled>{inventoryQuery.isLoading ? "Loading managed guests…" : "Select a tagged guest"}</option>
+                {availableGuests.map((guest) => <option key={guest.id} value={guest.id}>{guest.name || `VM ${guest.vmid}`} · {guest.node} · VMID {guest.vmid}</option>)}
+            </Select>
+            {!inventoryQuery.isLoading && availableGuests.length === 0 && <p className="form-message is-warning">No unlinked, non-template QEMU guest with the required managed tag is available. Synchronize Proxmox inventory first.</p>}
         </SimpleFormModal>
     );
 }

@@ -1,19 +1,24 @@
 package app
 
 import (
+	"context"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/UNHCSC/organesson/config"
 	"github.com/UNHCSC/organesson/db"
+	"github.com/UNHCSC/organesson/proxmox"
 	"github.com/gofiber/fiber/v2"
 )
 
 type (
 	projectResourceRequest struct {
-		Name         string `json:"name"`
-		Slug         string `json:"slug"`
-		ResourceType string `json:"resourceType"`
-		Status       string `json:"status"`
+		Name                    string `json:"name"`
+		Slug                    string `json:"slug"`
+		ResourceType            string `json:"resourceType"`
+		Status                  string `json:"status"`
+		ProxmoxInventoryGuestID *int   `json:"proxmoxInventoryGuestID"`
 	}
 
 	assetGroupRequest struct {
@@ -137,16 +142,22 @@ func postCreateProjectResource(c *fiber.Ctx) (errResult error) {
 		createdByUserID = &current.ID
 	}
 	var resource *db.Resource
-
-	resource, err = db.CreateResource(db.ResourceCreateInput{
-		ProjectID:       project.ID,
-		Name:            req.Name,
-		Slug:            req.Slug,
-		ResourceType:    resourceType,
-		Status:          db.ResourceStatusReady,
-		CreatedByUserID: createdByUserID,
-	})
+	if req.ProxmoxInventoryGuestID != nil {
+		resource, err = importProxmoxProjectResource(c, project, req, createdByUserID)
+	} else {
+		resource, err = db.CreateResource(db.ResourceCreateInput{
+			ProjectID:       project.ID,
+			Name:            req.Name,
+			Slug:            req.Slug,
+			ResourceType:    resourceType,
+			Status:          db.ResourceStatusReady,
+			CreatedByUserID: createdByUserID,
+		})
+	}
 	if err != nil {
+		if fiberError, ok := err.(*fiber.Error); ok {
+			return c.Status(fiberError.Code).JSON(fiber.Map{"error": fiberError.Message})
+		}
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	var items []fiber.Map
@@ -159,6 +170,38 @@ func postCreateProjectResource(c *fiber.Ctx) (errResult error) {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record audit event"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(items[0])
+}
+
+func importProxmoxProjectResource(c *fiber.Ctx, project *db.Project, req projectResourceRequest, createdByUserID *int) (resourceResult *db.Resource, errResult error) {
+	if !proxmoxIntegration.enabled || proxmoxIntegration.service == nil {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "Proxmox integration is disabled")
+	}
+	if req.ResourceType != "vm" {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "a Proxmox guest must be imported as a virtual machine")
+	}
+	var inventory *db.ProxmoxInventoryGuest
+	if inventory, errResult = db.ProxmoxInventoryGuests.Select(*req.ProxmoxInventoryGuestID); errResult != nil || inventory == nil {
+		return nil, fiber.NewError(fiber.StatusNotFound, "managed Proxmox guest was not found")
+	}
+	if inventory.ClusterIdentity != proxmoxIntegration.clusterIdentity || inventory.ResourceID != nil || inventory.MissingSince != nil || inventory.DriftState == db.ProxmoxDriftAmbiguous || inventory.DriftState == db.ProxmoxDriftError {
+		return nil, fiber.NewError(fiber.StatusConflict, "managed Proxmox guest is not available for import")
+	}
+	var ctx context.Context
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(c.UserContext(), 20*time.Second)
+	defer cancel()
+	var guest proxmox.Guest
+	if guest, errResult = proxmoxIntegration.service.GetGuest(ctx, inventory.Node, inventory.ProxmoxVMID); errResult != nil {
+		return nil, fiber.NewError(fiber.StatusBadGateway, "failed to verify managed Proxmox guest")
+	}
+	if !proxmox.HasTag(guest, proxmoxIntegration.managedTag) {
+		return nil, fiber.NewError(fiber.StatusConflict, "guest no longer has the required managed tag")
+	}
+	var baseURL string
+	if baseURL, errResult = proxmoxBaseURL(config.Config.Proxmox.Hostname, config.Config.Proxmox.Port); errResult != nil {
+		return
+	}
+	return db.ImportProxmoxGuest(db.ProxmoxGuestImportInput{ProjectID: project.ID, Name: req.Name, Slug: req.Slug, ClusterIdentity: proxmoxIntegration.clusterIdentity, APIURL: baseURL, VerifyTLS: config.Config.Proxmox.VerifyTLS, Guest: guest, CreatedByUserID: createdByUserID})
 }
 
 // patchProjectResource updates a local inventory resource.
