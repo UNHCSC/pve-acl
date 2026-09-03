@@ -3,6 +3,7 @@
 *.db
 *.log
 .organesson-session-key
+.local-tls/
 *.db.tasks
 log/
 
@@ -23,6 +24,7 @@ obj/
 node_modules/
 build/
 package-lock.json
+playwright/test-results/
 
 # IDE/editor specific ignores
 .codex

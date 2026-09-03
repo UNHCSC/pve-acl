@@ -52,6 +52,11 @@ func TestProjectManagerCanManageResourceWorkflow(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("expected one resource, got %#v", resources)
 	}
+	for _, capability := range []string{"can_start", "can_stop", "can_reboot", "can_console"} {
+		if resources[0][capability] != true {
+			t.Fatalf("expected manager capability %s, got %#v", capability, resources[0])
+		}
+	}
 	resp = resourceAPIRequest(t, fiberApp, token, "PATCH", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources/"+strconv.Itoa(resourceID), `{"name":"Student VM Updated","slug":"student-vm-updated"}`)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected update 200, got %d", resp.StatusCode)
@@ -71,7 +76,10 @@ func TestProjectManagerCanManageResourceWorkflow(t *testing.T) {
 func TestProjectViewerCannotMutateResourceWorkflow(t *testing.T) {
 	initACLTestDB(t)
 	ensureInitialSetupForTest(t)
-	var project *db.Project
+	var (
+		project *db.Project
+		err     error
+	)
 
 	project = createResourceAPIProject(t, "Viewer Resources")
 	var viewer *db.User
@@ -98,6 +106,14 @@ func TestProjectViewerCannotMutateResourceWorkflow(t *testing.T) {
 
 	resourceID = int(resource["id"].(float64))
 	var resp *http.Response
+	resp = resourceAPIRequest(t, fiberApp, token, "GET", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", "")
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected viewer list 200, got %d", resp.StatusCode)
+	}
+	var viewerResources []map[string]any
+	if err = json.NewDecoder(resp.Body).Decode(&viewerResources); err != nil || len(viewerResources) != 1 || viewerResources[0]["can_start"] != false || viewerResources[0]["can_console"] != false {
+		t.Fatalf("viewer capabilities were not restricted: %#v err=%v", viewerResources, err)
+	}
 
 	resp = resourceAPIRequest(t, fiberApp, token, "POST", "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", `{"name":"Denied VM","resourceType":"vm"}`)
 	if resp.StatusCode != fiber.StatusForbidden {

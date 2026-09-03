@@ -27,6 +27,8 @@ func TestClientUsesTokenAndMapsGuestInventory(t *testing.T) {
 			_ = json.NewEncoder(response).Encode(map[string]any{"data": []map[string]any{{"vmid": 101, "node": "pve-a", "name": "lab-ad", "type": "qemu", "tags": "organesson-managed;class-a", "status": "running", "maxcpu": 4, "maxmem": 8589934592}}})
 		case "/api2/json/nodes/pve-a/qemu/101/config":
 			_ = json.NewEncoder(response).Encode(map[string]any{"data": map[string]any{"ostype": "win11", "tags": "class-a;organesson-managed"}})
+		case "/api2/json/nodes/pve-a/qemu/101/status/current":
+			_ = json.NewEncoder(response).Encode(map[string]any{"data": map[string]any{"status": "running", "qmpstatus": "running"}})
 		default:
 			http.NotFound(response, request)
 		}

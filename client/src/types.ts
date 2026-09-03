@@ -187,6 +187,18 @@ export type ProjectResource = {
     status_label?: "ready" | "unknown" | "error" | "deleted" | string;
     asset_group_count?: number;
     assignment_count?: number;
+    power_state?: number;
+    power_updated_at?: string;
+    proxmox_vmid?: number;
+    proxmox_node?: string;
+    cpu_cores?: number;
+    memory_mb?: number;
+    disk_gb?: number;
+    os_type?: string;
+    can_start?: boolean;
+    can_stop?: boolean;
+    can_reboot?: boolean;
+    can_console?: boolean;
     created_at?: string;
     updated_at?: string;
 };

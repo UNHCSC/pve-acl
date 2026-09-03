@@ -362,6 +362,20 @@
         justify-content: flex-start;
     }
 
+    .resource-card-main {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .resource-card-controls {
+        flex-wrap: wrap;
+        padding-left: 50px;
+    }
+
+    .resource-details {
+        grid-template-columns: 1fr;
+    }
+
     .segmented-control.project-member-tabs {
         overflow-x: auto;
         width: 100%;

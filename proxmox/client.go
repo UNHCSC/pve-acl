@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/fasthttp/websocket"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -36,29 +38,30 @@ type apiResponse[T any] struct {
 }
 
 type apiResource struct {
-	ID       string  `json:"id"`
-	Node     string  `json:"node"`
-	Name     string  `json:"name"`
-	Status   string  `json:"status"`
-	Type     string  `json:"type"`
-	Tags     string  `json:"tags"`
-	Content  string  `json:"content"`
-	Storage  string  `json:"storage"`
-	OSType   string  `json:"ostype"`
-	Template int     `json:"template"`
-	Active   int     `json:"active"`
-	Shared   int     `json:"shared"`
-	CPU      float64 `json:"cpu"`
-	MaxCPU   int     `json:"maxcpu"`
-	Mem      int64   `json:"mem"`
-	MaxMem   int64   `json:"maxmem"`
-	Disk     int64   `json:"disk"`
-	MaxDisk  int64   `json:"maxdisk"`
-	Uptime   int64   `json:"uptime"`
-	VMID     int     `json:"vmid"`
-	Total    int64   `json:"total"`
-	Used     int64   `json:"used"`
-	Avail    int64   `json:"avail"`
+	ID        string  `json:"id"`
+	Node      string  `json:"node"`
+	Name      string  `json:"name"`
+	Status    string  `json:"status"`
+	QMPStatus string  `json:"qmpstatus"`
+	Type      string  `json:"type"`
+	Tags      string  `json:"tags"`
+	Content   string  `json:"content"`
+	Storage   string  `json:"storage"`
+	OSType    string  `json:"ostype"`
+	Template  int     `json:"template"`
+	Active    int     `json:"active"`
+	Shared    int     `json:"shared"`
+	CPU       float64 `json:"cpu"`
+	MaxCPU    int     `json:"maxcpu"`
+	Mem       int64   `json:"mem"`
+	MaxMem    int64   `json:"maxmem"`
+	Disk      int64   `json:"disk"`
+	MaxDisk   int64   `json:"maxdisk"`
+	Uptime    int64   `json:"uptime"`
+	VMID      int     `json:"vmid"`
+	Total     int64   `json:"total"`
+	Used      int64   `json:"used"`
+	Avail     int64   `json:"avail"`
 }
 
 type apiNetwork struct {
@@ -70,6 +73,41 @@ type apiNetwork struct {
 	Netmask string `json:"netmask"`
 	Gateway string `json:"gateway"`
 	Active  int    `json:"active"`
+}
+
+// Permissions returns the effective API-token privileges by Proxmox object path.
+func (client *Client) Permissions(ctx context.Context) (permissionsResult map[string]map[string]int, errResult error) {
+	errResult = client.get(ctx, "/access/permissions", nil, &permissionsResult)
+	return
+}
+
+// NextVMID asks Proxmox for the next unused VM identifier.
+func (client *Client) NextVMID(ctx context.Context) (vmIDResult int, errResult error) {
+	var value json.Number
+	if errResult = client.get(ctx, "/cluster/nextid", nil, &value); errResult == nil {
+		vmIDResult, errResult = strconv.Atoi(value.String())
+	}
+	return
+}
+
+// CreateTestGuest allocates a diskless QEMU guest for an explicitly gated lifecycle test.
+func (client *Client) CreateTestGuest(ctx context.Context, node string, vmID int, name, managedTag string) (taskResult string, errResult error) {
+	var values url.Values = url.Values{"vmid": []string{strconv.Itoa(vmID)}, "name": []string{name}, "tags": []string{managedTag + ";organesson-test"}, "cores": []string{"1"}, "memory": []string{"256"}, "ostype": []string{"l26"}, "scsihw": []string{"virtio-scsi-single"}}
+	errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu", values, &taskResult)
+	return
+}
+
+// DeleteTestGuest deletes only a stopped guest that still carries the exact managed and test tags.
+func (client *Client) DeleteTestGuest(ctx context.Context, node string, vmID int, managedTag string) (taskResult string, errResult error) {
+	var guest Guest
+	if guest, errResult = client.GetGuest(ctx, node, vmID); errResult != nil {
+		return
+	}
+	if guest.Status != "stopped" || !HasTag(guest, managedTag) || !HasTag(guest, "organesson-test") {
+		return "", fmt.Errorf("refusing deletion: guest is not a stopped Organesson test guest")
+	}
+	errResult = client.request(ctx, http.MethodDelete, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID), nil, &taskResult)
+	return
 }
 
 // NewClient creates a read-only Proxmox API adapter.
@@ -224,9 +262,84 @@ func (client *Client) GetGuest(ctx context.Context, node string, vmID int) (gues
 		if value, ok := config["tags"].(string); ok {
 			guest.Tags = ParseTags(value)
 		}
+		var current apiResource
+		if errResult = client.get(ctx, "/nodes/"+url.PathEscape(node)+"/"+guest.Kind+"/"+strconv.Itoa(vmID)+"/status/current", nil, &current); errResult != nil {
+			return Guest{}, errResult
+		}
+		guest.Status = current.Status
+		if current.QMPStatus == "paused" {
+			guest.Status = "paused"
+		}
 		return guest, nil
 	}
 	errResult = fmt.Errorf("guest %s/%d was not found", node, vmID)
+	return
+}
+
+func (client *Client) guestAction(ctx context.Context, node string, vmID int, operation string) (taskResult string, errResult error) {
+	var data string
+	errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID)+"/status/"+operation, nil, &data)
+	return data, errResult
+}
+
+func (client *Client) StartGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "start")
+}
+func (client *Client) ShutdownGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "shutdown")
+}
+func (client *Client) StopGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "stop")
+}
+func (client *Client) RebootGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "reboot")
+}
+func (client *Client) PauseGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "suspend")
+}
+func (client *Client) ResumeGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "resume")
+}
+
+func (client *Client) GetTask(ctx context.Context, node, taskID string) (taskResult Task, errResult error) {
+	var data struct {
+		Status     string `json:"status"`
+		ExitStatus string `json:"exitstatus"`
+	}
+	if errResult = client.get(ctx, "/nodes/"+url.PathEscape(node)+"/tasks/"+url.PathEscape(taskID)+"/status", nil, &data); errResult == nil {
+		taskResult = Task{ID: taskID, Status: data.Status, ExitStatus: data.ExitStatus}
+	}
+	return
+}
+
+func (client *Client) CreateConsoleTicket(ctx context.Context, node string, vmID int) (ticketResult ConsoleTicket, errResult error) {
+	var data struct {
+		Ticket string      `json:"ticket"`
+		Port   json.Number `json:"port"`
+		User   string      `json:"user"`
+	}
+	if errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID)+"/vncproxy", url.Values{"websocket": []string{"1"}}, &data); errResult != nil {
+		return
+	}
+	ticketResult.Ticket, ticketResult.User, ticketResult.ExpiresAt = data.Ticket, data.User, time.Now().UTC().Add(2*time.Minute)
+	ticketResult.Port, _ = strconv.Atoi(data.Port.String())
+	return
+}
+
+func (client *Client) DialConsole(ctx context.Context, node string, vmID, port int, ticket string) (connectionResult *websocket.Conn, errResult error) {
+	var endpoint *url.URL = client.baseURL.JoinPath("api2", "json", "nodes", node, "qemu", strconv.Itoa(vmID), "vncwebsocket")
+	endpoint.Scheme = "wss"
+	endpoint.RawQuery = url.Values{"port": []string{strconv.Itoa(port)}, "vncticket": []string{ticket}}.Encode()
+	var transport *http.Transport = client.httpClient.Transport.(*http.Transport)
+	var dialer websocket.Dialer = websocket.Dialer{TLSClientConfig: transport.TLSClientConfig.Clone(), HandshakeTimeout: 15 * time.Second}
+	var response *http.Response
+	connectionResult, response, errResult = dialer.DialContext(ctx, endpoint.String(), http.Header{"Authorization": []string{"PVEAPIToken=" + client.tokenID + "=" + client.secret}})
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if errResult != nil {
+		errResult = fmt.Errorf("connect Proxmox console: %w", errResult)
+	}
 	return
 }
 
@@ -235,14 +348,26 @@ func guestFromResource(item apiResource) (guestResult Guest) {
 }
 
 func (client *Client) get(ctx context.Context, apiPath string, query url.Values, output any) (errResult error) {
+	return client.request(ctx, http.MethodGet, apiPath, query, output)
+}
+
+func (client *Client) request(ctx context.Context, method, apiPath string, values url.Values, output any) (errResult error) {
 	var endpoint *url.URL = client.baseURL.JoinPath("api2", "json", strings.TrimPrefix(apiPath, "/"))
-	endpoint.RawQuery = query.Encode()
+	var body io.Reader
+	if method == http.MethodGet {
+		endpoint.RawQuery = values.Encode()
+	} else if values != nil {
+		body = strings.NewReader(values.Encode())
+	}
 	var request *http.Request
-	if request, errResult = http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil); errResult != nil {
+	if request, errResult = http.NewRequestWithContext(ctx, method, endpoint.String(), body); errResult != nil {
 		return
 	}
 	request.Header.Set("Authorization", "PVEAPIToken="+client.tokenID+"="+client.secret)
 	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	var response *http.Response
 	if response, errResult = client.httpClient.Do(request); errResult != nil {
 		errResult = fmt.Errorf("Proxmox request failed: %w", errResult)

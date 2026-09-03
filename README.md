@@ -31,6 +31,24 @@ The real-cluster smoke test is disabled by default and performs GET requests onl
 ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterReadOnlyInventory -v
 ```
 
+Power and console lifecycle testing is separately gated because it mutates a real guest. It refuses to operate on an existing VM unless it starts stopped and carries the exact managed tag:
+
+```sh
+ORGANESSON_PROXMOX_LIFECYCLE=1 ORGANESSON_PROXMOX_TEST_NODE=pve-a ORGANESSON_PROXMOX_TEST_VMID=1234 go test ./proxmox -run TestRealClusterTaggedGuestPowerLifecycle -v
+```
+
+The test can instead create a diskless 256 MiB fixture carrying both `organesson-managed` and `organesson-test`, exercise start and the console WebSocket, then stop and delete it. This requires `VM.Allocate`, `VM.Audit`, `VM.PowerMgmt`, and `VM.Console` on the selected test scope. The extra test tag and stopped-state check are mandatory deletion guards.
+
+```sh
+ORGANESSON_PROXMOX_LIFECYCLE=1 ORGANESSON_PROXMOX_CREATE_TEST_GUEST=1 ORGANESSON_PROXMOX_TEST_NODE=pve-a go test ./proxmox -run TestRealClusterTaggedGuestPowerLifecycle -v
+```
+
+The effective token capabilities can be checked without mutation:
+
+```sh
+ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterTokenCapabilities -v
+```
+
 ## Operation recovery
 
 Long-running work has a durable user-visible job separate from the scheduler's internal task record. API idempotency keys prevent repeated requests from creating duplicate jobs. Workers update progress, attempts, heartbeat, and a renewable lease; on startup an expired running lease is marked failed with `worker_abandoned` instead of being assumed successful or automatically repeated. Retrying a mutating operation therefore requires checking provider state first. Cancellation is cooperative and is confirmed only at a safe checkpoint. Logs and error summaries are redacted, and access follows requester or scoped `audit.read` permissions.

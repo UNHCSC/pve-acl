@@ -1,11 +1,15 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
+	"github.com/UNHCSC/organesson/config"
+	"github.com/UNHCSC/organesson/db"
 	"github.com/UNHCSC/organesson/proxmox"
 	"github.com/gofiber/fiber/v2"
 )
@@ -57,5 +61,72 @@ func TestProxmoxInventoryAPIRequiresAdminAndFiltersUntaggedGuests(t *testing.T) 
 	}
 	if len(body.Guests) != 1 || body.Guests[0].VMID != 101 {
 		t.Fatalf("expected only tagged guest, got %#v", body.Guests)
+	}
+}
+
+func TestCreateResourceImportsOnlyFreshTaggedGuest(t *testing.T) {
+	initACLTestDB(t)
+	ensureInitialSetupForTest(t)
+	var project *db.Project = createResourceAPIProject(t, "Imported VMs")
+	var fake *proxmox.FakeService = &proxmox.FakeService{Guests: []proxmox.Guest{{VMID: 501, Node: "pve-a", Name: "managed-vm", Kind: "qemu", Status: "stopped", Tags: []string{proxmox.DefaultManagedTag}, CPUCores: 2, MemoryTotal: 512 * 1024 * 1024}}}
+	var original proxmoxIntegrationState = proxmoxIntegration
+	var originalConfig config.Configuration = config.Config
+	proxmoxIntegration = proxmoxIntegrationState{enabled: true, clusterIdentity: "test-cluster", managedTag: proxmox.DefaultManagedTag, service: fake}
+	config.Config.Proxmox.Hostname = "pve.test"
+	config.Config.Proxmox.Port = "8006"
+	config.Config.Proxmox.VerifyTLS = true
+	t.Cleanup(func() { proxmoxIntegration = original; config.Config = originalConfig })
+	var syncResult *db.ProxmoxInventorySyncResult
+	var err error
+	if syncResult, err = db.SyncProxmoxInventory(t.Context(), fake, "test-cluster", proxmox.DefaultManagedTag); err != nil {
+		t.Fatalf("sync inventory: %v", err)
+	}
+	var app *fiber.App = newAuthenticatedFiberApp()
+	app.Post("/api/v1/projects/:id/resources", postCreateProjectResource)
+	app.Get("/api/v1/projects/:id/resources", getProjectResources)
+	var token string = authenticateTestUser(t, "import-admin", true)
+	var payload []byte
+	if payload, err = json.Marshal(map[string]any{"name": "Course VM", "resourceType": "vm", "proxmoxInventoryGuestID": syncResult.Guests[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	var request *http.Request = httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	var response *http.Response
+	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode != fiber.StatusCreated {
+		t.Fatalf("import status=%d err=%v", response.StatusCode, err)
+	}
+	var resource db.Resource
+	if err = json.NewDecoder(response.Body).Decode(&resource); err != nil {
+		t.Fatal(err)
+	}
+	var machine *db.VirtualMachine
+	var found bool
+	if machine, found, err = db.VirtualMachineForResource(resource.ID); err != nil || !found || machine.ProxmoxVMID != 501 {
+		t.Fatalf("linked machine=%#v found=%t err=%v", machine, found, err)
+	}
+	fake.Guests[0].Status = "running"
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode != fiber.StatusOK {
+		t.Fatalf("refresh resources status=%d err=%v", response.StatusCode, err)
+	}
+	var resources []map[string]any
+	if err = json.NewDecoder(response.Body).Decode(&resources); err != nil || len(resources) != 1 || resources[0]["power_state"] != float64(db.PowerStateRunning) {
+		t.Fatalf("expected live running state, resources=%#v err=%v", resources, err)
+	}
+	fake.Guests = []proxmox.Guest{{VMID: 502, Node: "pve-a", Name: "lost-tag", Kind: "qemu", Tags: []string{proxmox.DefaultManagedTag}}}
+	if syncResult, err = db.SyncProxmoxInventory(t.Context(), fake, "test-cluster", proxmox.DefaultManagedTag); err != nil {
+		t.Fatal(err)
+	}
+	fake.Guests[0].Tags = nil
+	if payload, err = json.Marshal(map[string]any{"name": "Unsafe VM", "resourceType": "vm", "proxmoxInventoryGuestID": syncResult.Guests[1].ID}); err != nil {
+		t.Fatal(err)
+	}
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/resources", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	if response, err = testFiberRequest(app, request); err != nil || response.StatusCode == fiber.StatusCreated {
+		t.Fatalf("lost-tag import status=%d err=%v", response.StatusCode, err)
 	}
 }

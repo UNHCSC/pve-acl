@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "screenshots": "playwright install chromium && node role-ui-screenshots.mjs"
+        "screenshots": "playwright install chromium && node role-ui-screenshots.mjs",
+        "test": "playwright test"
     },
     "devDependencies": {
         "@playwright/test": "^1.57.0"

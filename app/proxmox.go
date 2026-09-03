@@ -8,6 +8,7 @@ import (
 
 	"github.com/UNHCSC/organesson/config"
 	"github.com/UNHCSC/organesson/proxmox"
+	jobscheduler "github.com/UNHCSC/organesson/scheduler"
 )
 
 type proxmoxIntegrationState struct {
@@ -38,6 +39,11 @@ func configureProxmoxIntegration() (errResult error) {
 		clusterIdentity = strings.TrimSpace(config.Config.Proxmox.Hostname)
 	}
 	proxmoxIntegration = proxmoxIntegrationState{service: service, clusterIdentity: clusterIdentity, managedTag: strings.TrimSpace(config.Config.Proxmox.ManagedTag), enabled: true}
+	if jobscheduler.Default() != nil {
+		if errResult = jobscheduler.Default().RegisterConsumer(jobscheduler.TaskTypeProxmoxAction, consumeProxmoxAction); errResult != nil {
+			return
+		}
+	}
 	return
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/UNHCSC/organesson/config"
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/z46-dev/golog"
@@ -87,6 +88,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Jobs.Get("/:id", getJob)
 	apiV1Jobs.Get("/:id/logs", getJobLogs)
 	apiV1Jobs.Post("/:id/cancel", postCancelJob)
+	apiV1.Post("/resources/:id/actions/:action", postResourcePowerAction)
+	apiV1.Post("/resources/:id/console-sessions", postResourceConsoleSession)
+	apiV1.Get("/console-sessions/:id/websocket", validateConsoleUpgrade, websocket.New(proxyConsoleSession))
 	apiV1.Get("/permissions", getPermissions)
 
 	// API v1 users

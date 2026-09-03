@@ -64,6 +64,7 @@ export function CompactList<T extends { id: number }>({ items, render }: { items
 export function RowActionMenu({
     ariaLabel = "More actions",
     buttonClassName,
+    buttonContent,
     children,
     className,
     closeOnSelect = true,
@@ -74,6 +75,7 @@ export function RowActionMenu({
 }: {
     ariaLabel?: string;
     buttonClassName?: string;
+    buttonContent?: ReactNode;
     children: ReactNode;
     className?: string;
     closeOnSelect?: boolean;
@@ -127,7 +129,7 @@ export function RowActionMenu({
                     updateOpen(!actualOpen);
                 }}
             >
-                <span className="row-menu-icon" aria-hidden="true" />
+                {buttonContent ?? <span className="row-menu-icon" aria-hidden="true" />}
             </button>
             {actualOpen && createPortal(
                 <div
