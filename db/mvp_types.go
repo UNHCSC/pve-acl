@@ -22,6 +22,7 @@ type (
 	SecretOwnerType       uint8
 	QuotaReservationState uint8
 	MembershipRole        uint8
+	ProxmoxDriftState     string
 
 	User struct {
 		ID            int       `gosqlite:"id,primary,increment" json:"id"`
@@ -261,6 +262,27 @@ type (
 		MemoryTotalMB int       `gosqlite:"memory_total_mb" json:"memory_total_mb"`
 		CreatedAt     time.Time `gosqlite:"created_at,notnull" json:"created_at"`
 		UpdatedAt     time.Time `gosqlite:"updated_at,notnull" json:"updated_at"`
+	}
+
+	ProxmoxInventoryGuest struct {
+		ID              int               `gosqlite:"id,primary,increment" json:"id"`
+		Identity        string            `gosqlite:"identity,unique,notnull" json:"identity"`
+		ClusterIdentity string            `gosqlite:"cluster_identity,notnull" json:"cluster_identity"`
+		ProxmoxVMID     int               `gosqlite:"proxmox_vmid,notnull" json:"vmid"`
+		ResourceID      *int              `gosqlite:"resource_id,fkey:Resource.id" json:"resource_id,omitempty"`
+		Node            string            `gosqlite:"node,notnull" json:"node"`
+		Name            string            `gosqlite:"name,notnull" json:"name"`
+		Kind            string            `gosqlite:"kind,notnull" json:"kind"`
+		IsTemplate      bool              `gosqlite:"is_template,notnull" json:"is_template"`
+		Status          string            `gosqlite:"status" json:"status"`
+		Tags            string            `gosqlite:"tags" json:"tags"`
+		Fingerprint     string            `gosqlite:"fingerprint,notnull" json:"-"`
+		DriftState      ProxmoxDriftState `gosqlite:"drift_state,notnull" json:"drift_state"`
+		LastError       string            `gosqlite:"last_error" json:"last_error,omitempty"`
+		FirstSeenAt     time.Time         `gosqlite:"first_seen_at,notnull" json:"first_seen_at"`
+		LastSeenAt      time.Time         `gosqlite:"last_seen_at,notnull" json:"last_seen_at"`
+		MissingSince    *time.Time        `gosqlite:"missing_since" json:"missing_since,omitempty"`
+		UpdatedAt       time.Time         `gosqlite:"updated_at,notnull" json:"updated_at"`
 	}
 
 	VirtualMachine struct {

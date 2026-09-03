@@ -92,6 +92,7 @@ func getSystemSummary(c *fiber.Ctx) (err error) {
 			"canManageRoles":    canManageRoles,
 			"canManageOrgs":     canManageOrgs,
 			"canViewUsers":      canManageUsers,
+			"canManageProxmox":  currentUserIsSiteAdmin(c),
 		},
 	})
 	return

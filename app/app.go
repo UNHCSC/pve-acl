@@ -22,6 +22,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	if err = initPersistentJWTSigningKey(); err != nil {
 		return
 	}
+	if err = configureProxmoxIntegration(); err != nil {
+		return
+	}
 
 	app = fiber.New(fiber.Config{
 		Views:   templateEngine,
@@ -55,6 +58,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 		apiV1Projects fiber.Router = apiV1.Group("/projects")
 		apiV1Assets   fiber.Router = apiV1.Group("/assets")
 		apiV1ACL      fiber.Router = apiV1.Group("/acl")
+		apiV1Proxmox  fiber.Router = apiV1.Group("/proxmox")
 	)
 
 	// API v1 auth
@@ -74,6 +78,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 
 	// API v1 system
 	apiV1System.Get("/summary", getSystemSummary)
+	apiV1Proxmox.Get("/health", getProxmoxHealth)
+	apiV1Proxmox.Get("/inventory", getProxmoxInventory)
+	apiV1Proxmox.Post("/inventory/sync", postProxmoxInventorySync)
 	apiV1.Get("/permissions", getPermissions)
 
 	// API v1 users

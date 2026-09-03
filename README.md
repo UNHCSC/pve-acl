@@ -20,3 +20,13 @@ I also want non-students (e.g. other TAs, professors) to be able to manage creat
 2. Assets (Proxmox Networks, VMs, Containers, etc.) are assigned to users and or groups, and users can only see and manage assets that are assigned to them.
 3. Users can only perform actions on assets that they have permissions for, and these permissions are defined in a local database that is separate from Proxmox's ACL system. Note that there should be a native console/vnc viewer that users can use to access their VMs without needing to log into Proxmox itself.
 4. The system should be easy to manage and scale, and should not require a lot of manual configuration in Proxmox itself. (Only an API user/token will be necessary)
+
+## Proxmox inventory safety
+
+Organesson's discovery is read-only and retains only guests carrying the exact configured `managed_tag`, which defaults to `organesson-managed`. Untagged guests are never adopted, persisted as new inventory, or operated on. Nodes, storage, and networks are displayed only as cluster context.
+
+The real-cluster smoke test is disabled by default and performs GET requests only. Configure the `[proxmox]` section in the ignored local `config.toml`, then run. Keep `verify_tls = true` for a publicly or locally trusted certificate. For a private Proxmox CA, set `tls_fingerprint_sha256` to the expected leaf-certificate fingerprint; hostname validation remains enforced with the pin.
+
+```sh
+ORGANESSON_PROXMOX_SMOKE=1 go test ./proxmox -run TestRealClusterReadOnlyInventory -v
+```

@@ -23,6 +23,7 @@ import { classNames, displayUser, initialView, initials } from "./ui-helpers";
 import { DirectoryView } from "./views/DirectoryView";
 import { HomePage } from "./views/HomePage";
 import { IdentityView } from "./views/IdentityView";
+import { InfrastructureView } from "./views/InfrastructureView";
 import { LoginPage } from "./views/LoginPage";
 import { OverviewView } from "./views/OverviewView";
 import { PeopleView } from "./views/PeopleView";
@@ -38,14 +39,17 @@ const queryClient = new QueryClient({
     }
 });
 
-function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean } } | null) {
+function viewIsAllowed(view: ViewKey, summary: { capabilities: { canViewUsers?: boolean; canManageProxmox?: boolean } } | null) {
     if (view === "people") {
         return Boolean(summary?.capabilities.canViewUsers);
+    }
+    if (view === "infrastructure") {
+        return Boolean(summary?.capabilities.canManageProxmox);
     }
     return true;
 }
 
-function allowedViews(summary: { capabilities: { canViewUsers?: boolean } } | null): ViewKey[] {
+function allowedViews(summary: { capabilities: { canViewUsers?: boolean; canManageProxmox?: boolean } } | null): ViewKey[] {
     return (Object.keys(viewTitles) as ViewKey[]).filter((key) => viewIsAllowed(key, summary));
 }
 
@@ -714,6 +718,7 @@ function DashboardApp() {
                             }
                         />
                     )}
+                    {view === "infrastructure" && summary?.capabilities.canManageProxmox && <InfrastructureView showToast={showToast} />}
                     {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canImport={Boolean(summary.capabilities.canManageUsers)} openImport={() => openContextModal("import-users")} />}
                     {view === "identity" && <IdentityView summary={summary} myAccess={myAccess} />}
                 </main>

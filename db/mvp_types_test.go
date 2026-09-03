@@ -30,6 +30,7 @@ func TestMVPTableRegistration(t *testing.T) {
 		"AssetAssignments":        AssetAssignments,
 		"ProxmoxClusters":         ProxmoxClusters,
 		"ProxmoxNodes":            ProxmoxNodes,
+		"ProxmoxInventoryGuests":  ProxmoxInventoryGuests,
 		"VirtualMachines":         VirtualMachines,
 		"Containers":              Containers,
 		"VirtualNetworks":         VirtualNetworks,

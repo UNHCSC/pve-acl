@@ -42,6 +42,7 @@ var (
 	AssetAssignments               *gosqlite.RegisteredStruct[AssetAssignment]
 	ProxmoxClusters                *gosqlite.RegisteredStruct[ProxmoxCluster]
 	ProxmoxNodes                   *gosqlite.RegisteredStruct[ProxmoxNode]
+	ProxmoxInventoryGuests         *gosqlite.RegisteredStruct[ProxmoxInventoryGuest]
 	VirtualMachines                *gosqlite.RegisteredStruct[VirtualMachine]
 	Containers                     *gosqlite.RegisteredStruct[Container]
 	VirtualNetworks                *gosqlite.RegisteredStruct[VirtualNetwork]
@@ -183,6 +184,10 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("ProxmoxNodes", &ProxmoxNodes, ProxmoxNode{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("ProxmoxInventoryGuests", &ProxmoxInventoryGuests, ProxmoxInventoryGuest{}, migrationOpts); err != nil {
 		return
 	}
 
