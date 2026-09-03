@@ -715,6 +715,17 @@ func projectResourceResponse(resources []*db.Resource) (itemsResult []fiber.Map,
 			"updated_at":          resource.UpdatedAt,
 			"deleted_at":          resource.DeletedAt,
 		})
+		if resource.ResourceType == db.ResourceTypeVM {
+			var machine *db.VirtualMachine
+			var found bool
+			if machine, found, err = db.VirtualMachineForResource(resource.ID); err != nil {
+				return nil, err
+			}
+			if found {
+				items[len(items)-1]["power_state"] = machine.PowerState
+				items[len(items)-1]["power_updated_at"] = machine.UpdatedAt
+			}
+		}
 	}
 	return items, nil
 }

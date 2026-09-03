@@ -3,8 +3,10 @@ package proxmox
 
 import (
 	"context"
+	"github.com/fasthttp/websocket"
 	"slices"
 	"strings"
+	"time"
 )
 
 const DefaultManagedTag = "organesson-managed"
@@ -17,6 +19,12 @@ type (
 		ListNetworks(ctx context.Context) ([]Network, error)
 		ListGuests(ctx context.Context) ([]Guest, error)
 		GetGuest(ctx context.Context, node string, vmID int) (Guest, error)
+		StartGuest(ctx context.Context, node string, vmID int) (string, error)
+		ShutdownGuest(ctx context.Context, node string, vmID int) (string, error)
+		StopGuest(ctx context.Context, node string, vmID int) (string, error)
+		RebootGuest(ctx context.Context, node string, vmID int) (string, error)
+		GetTask(ctx context.Context, node, taskID string) (Task, error)
+		CreateConsoleTicket(ctx context.Context, node string, vmID int) (ConsoleTicket, error)
 	}
 
 	Node struct {
@@ -67,6 +75,23 @@ type (
 		DiskTotal     int64    `json:"disk_total"`
 		UptimeSeconds int64    `json:"uptime_seconds"`
 		OSType        string   `json:"os_type,omitempty"`
+	}
+
+	Task struct {
+		ID         string `json:"id"`
+		Status     string `json:"status"`
+		ExitStatus string `json:"exit_status,omitempty"`
+	}
+
+	ConsoleTicket struct {
+		Ticket    string    `json:"-"`
+		Port      int       `json:"port"`
+		User      string    `json:"user"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+
+	ConsoleDialer interface {
+		DialConsole(ctx context.Context, node string, vmID, port int, ticket string) (*websocket.Conn, error)
 	}
 )
 

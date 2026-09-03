@@ -3,6 +3,8 @@ import { Detail, EmptyDetail, EmptyState, PanelHeading, RowActionMenu } from "..
 import type { AssetAssignment, AssetGroup, AuditEvent, Group, ModalKey, OrgNode, Organization, OrganizationMembership, Project, ProjectMembership, ProjectQuota, ProjectResource, Role, SecretMetadata, Selection } from "../types";
 import { findOrg, orgContains } from "../tree";
 import { classNames, subjectTypeLabel } from "../ui-helpers";
+import { apiFetch } from "../api";
+import { ConsoleViewer } from "../components/ConsoleViewer";
 
 const MIN_SIDEBAR_WIDTH = 232;
 const MAX_SIDEBAR_WIDTH = 520;
@@ -585,6 +587,18 @@ function ProjectResourcesPanel(props: {
     createAssetAssignment: () => void;
     deleteResource: (resource: ProjectResource) => void;
 }) {
+	const [pending, setPending] = useState<string | null>(null);
+	const [consolePath, setConsolePath] = useState<string | null>(null);
+	const power = async (resource: ProjectResource, action: string) => {
+		setPending(`${resource.id}:${action}`);
+		try { await apiFetch(`/api/v1/resources/${resource.id}/actions/${action}`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }); }
+		finally { setPending(null); }
+	};
+	const openConsole = async (resource: ProjectResource) => {
+		setPending(`${resource.id}:console`);
+		try { const session = await apiFetch<{ websocket_path: string }>(`/api/v1/resources/${resource.id}/console-sessions`, { method: "POST" }); setConsolePath(session.websocket_path); }
+		finally { setPending(null); }
+	};
     return (
         <section className="dashboard-panel project-members-panel">
             <PanelHeading
@@ -604,8 +618,15 @@ function ProjectResourcesPanel(props: {
                             />
                             <div className="project-access-actions">
                                 <span className="access-pill">{resource.status_label || "ready"}</span>
+                                {resource.power_state !== undefined && <span className="access-pill">{["running", "stopped", "paused", "unknown"][resource.power_state] || "unknown"}</span>}
                                 <span className="access-pill">{resource.assignment_count || 0} grants</span>
                                 <span className="access-pill">{resource.asset_group_count || 0} groups</span>
+                                {resource.resource_type_label === "vm" && <>
+                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "start")}>Start</button>
+                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "stop")}>Stop</button>
+                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => power(resource, "reboot")}>Reboot</button>
+                                    <button className="button-secondary compact-button" disabled={pending !== null} type="button" onClick={() => openConsole(resource)}>Console</button>
+                                </>}
                                 <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
                                     <button type="button" role="menuitem" onClick={props.createAssetAssignment}>
                                         Assign
@@ -619,6 +640,7 @@ function ProjectResourcesPanel(props: {
                     ))}
                 </div>
             )}
+            {consolePath && <ConsoleViewer path={consolePath} onClose={() => setConsolePath(null)} />}
         </section>
     );
 }

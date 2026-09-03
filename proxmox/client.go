@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/fasthttp/websocket"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -230,19 +232,92 @@ func (client *Client) GetGuest(ctx context.Context, node string, vmID int) (gues
 	return
 }
 
+func (client *Client) guestAction(ctx context.Context, node string, vmID int, operation string) (taskResult string, errResult error) {
+	var data string
+	errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID)+"/status/"+operation, nil, &data)
+	return data, errResult
+}
+
+func (client *Client) StartGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "start")
+}
+func (client *Client) ShutdownGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "shutdown")
+}
+func (client *Client) StopGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "stop")
+}
+func (client *Client) RebootGuest(ctx context.Context, node string, vmID int) (string, error) {
+	return client.guestAction(ctx, node, vmID, "reboot")
+}
+
+func (client *Client) GetTask(ctx context.Context, node, taskID string) (taskResult Task, errResult error) {
+	var data struct {
+		Status     string `json:"status"`
+		ExitStatus string `json:"exitstatus"`
+	}
+	if errResult = client.get(ctx, "/nodes/"+url.PathEscape(node)+"/tasks/"+url.PathEscape(taskID)+"/status", nil, &data); errResult == nil {
+		taskResult = Task{ID: taskID, Status: data.Status, ExitStatus: data.ExitStatus}
+	}
+	return
+}
+
+func (client *Client) CreateConsoleTicket(ctx context.Context, node string, vmID int) (ticketResult ConsoleTicket, errResult error) {
+	var data struct {
+		Ticket string      `json:"ticket"`
+		Port   json.Number `json:"port"`
+		User   string      `json:"user"`
+	}
+	if errResult = client.request(ctx, http.MethodPost, "/nodes/"+url.PathEscape(node)+"/qemu/"+strconv.Itoa(vmID)+"/vncproxy", url.Values{"websocket": []string{"1"}}, &data); errResult != nil {
+		return
+	}
+	ticketResult.Ticket, ticketResult.User, ticketResult.ExpiresAt = data.Ticket, data.User, time.Now().UTC().Add(2*time.Minute)
+	ticketResult.Port, _ = strconv.Atoi(data.Port.String())
+	return
+}
+
+func (client *Client) DialConsole(ctx context.Context, node string, vmID, port int, ticket string) (connectionResult *websocket.Conn, errResult error) {
+	var endpoint *url.URL = client.baseURL.JoinPath("api2", "json", "nodes", node, "qemu", strconv.Itoa(vmID), "vncwebsocket")
+	endpoint.Scheme = "wss"
+	endpoint.RawQuery = url.Values{"port": []string{strconv.Itoa(port)}, "vncticket": []string{ticket}}.Encode()
+	var transport *http.Transport = client.httpClient.Transport.(*http.Transport)
+	var dialer websocket.Dialer = websocket.Dialer{TLSClientConfig: transport.TLSClientConfig.Clone(), HandshakeTimeout: 15 * time.Second}
+	var response *http.Response
+	connectionResult, response, errResult = dialer.DialContext(ctx, endpoint.String(), http.Header{"Authorization": []string{"PVEAPIToken=" + client.tokenID + "=" + client.secret}})
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if errResult != nil {
+		errResult = fmt.Errorf("connect Proxmox console: %w", errResult)
+	}
+	return
+}
+
 func guestFromResource(item apiResource) (guestResult Guest) {
 	return Guest{VMID: item.VMID, Node: item.Node, Name: item.Name, Kind: item.Type, Status: item.Status, Tags: ParseTags(item.Tags), Template: item.Template == 1, CPUUsage: item.CPU, CPUCores: item.MaxCPU, MemoryUsed: item.Mem, MemoryTotal: item.MaxMem, DiskUsed: item.Disk, DiskTotal: item.MaxDisk, UptimeSeconds: item.Uptime, OSType: item.OSType}
 }
 
 func (client *Client) get(ctx context.Context, apiPath string, query url.Values, output any) (errResult error) {
+	return client.request(ctx, http.MethodGet, apiPath, query, output)
+}
+
+func (client *Client) request(ctx context.Context, method, apiPath string, values url.Values, output any) (errResult error) {
 	var endpoint *url.URL = client.baseURL.JoinPath("api2", "json", strings.TrimPrefix(apiPath, "/"))
-	endpoint.RawQuery = query.Encode()
+	var body io.Reader
+	if method == http.MethodGet {
+		endpoint.RawQuery = values.Encode()
+	} else if values != nil {
+		body = strings.NewReader(values.Encode())
+	}
 	var request *http.Request
-	if request, errResult = http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil); errResult != nil {
+	if request, errResult = http.NewRequestWithContext(ctx, method, endpoint.String(), body); errResult != nil {
 		return
 	}
 	request.Header.Set("Authorization", "PVEAPIToken="+client.tokenID+"="+client.secret)
 	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	var response *http.Response
 	if response, errResult = client.httpClient.Do(request); errResult != nil {
 		errResult = fmt.Errorf("Proxmox request failed: %w", errResult)
