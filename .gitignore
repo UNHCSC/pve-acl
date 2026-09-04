@@ -6,6 +6,7 @@
 .local-tls/
 *.db.tasks
 log/
+runner-data/
 
 # Go ignores
 vendor/

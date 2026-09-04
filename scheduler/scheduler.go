@@ -18,6 +18,7 @@ const (
 	TaskTypeSystemNoop    = "system.noop"
 	TaskTypeSystemDemo    = "system.demo"
 	TaskTypeProxmoxAction = "proxmox.action"
+	TaskTypeRunnerAction  = "runner.action"
 )
 
 type (

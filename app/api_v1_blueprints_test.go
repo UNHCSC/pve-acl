@@ -49,7 +49,7 @@ func TestBlueprintVersionsAreImmutableAndPreviewExpandsGroups(t *testing.T) {
 	for index := 1; index <= 8; index++ {
 		resources = append(resources, fmt.Sprintf(`{"key":"vm-%d","kind":"vm","template":"template-v1","vcpu":1,"memory_mb":1024,"disk_gb":10,"networks":["lan"]}`, index))
 	}
-	var document string = fmt.Sprintf(`{"document":{"format_version":1,"opentofu_module":"git::ssh://example/module?ref=v1","ansible_project":"git::ssh://example/ansible?ref=v1","name_pattern":"{{deployment}}-{{resource}}","resources":[%s],"networks":[{"key":"lan","kind":"isolated","ipv4_cidr":"192.168.1.0/24"}]}}`, strings.Join(resources, ","))
+	var document string = fmt.Sprintf(`{"document":{"format_version":1,"opentofu_module":"ssh://example/module?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ansible_project":"ssh://example/ansible?ref=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","name_pattern":"{{deployment}}-{{resource}}","resources":[%s],"networks":[{"key":"lan","kind":"isolated","ipv4_cidr":"192.168.1.0/24"}]}}`, strings.Join(resources, ","))
 	response = resourceAPIRequest(t, fiberApp, token, http.MethodPost, "/api/v1/blueprints/"+strconv.Itoa(blueprint.ID)+"/versions", document)
 	if response.StatusCode != fiber.StatusCreated {
 		t.Fatalf("publish status=%d", response.StatusCode)

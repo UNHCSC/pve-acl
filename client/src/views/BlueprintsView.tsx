@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { apiFetch } from "../api";
+import { apiFetch, requestKey } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
 import type { AllocationPool, Blueprint, BlueprintDocument, Deployment, Project } from "../types";
 
 const starterDocument: BlueprintDocument = {
     format_version: 1,
-    opentofu_module: "git::https://example.invalid/infrastructure.git//modules/lab?ref=v1.0.0",
-    ansible_project: "git::https://example.invalid/configuration.git?ref=v1.0.0",
+    opentofu_module: "https://example.invalid/infrastructure.git?ref=0000000000000000000000000000000000000000",
+    ansible_project: "https://example.invalid/configuration.git?ref=0000000000000000000000000000000000000000",
     name_pattern: "{{deployment}}-{{resource}}",
     resources: [{ key: "server", kind: "vm", template: "ubuntu-lts-v1", vcpu: 2, memory_mb: 2048, disk_gb: 20, networks: ["lan"], configuration_role: "server" }],
     networks: [{ key: "lan", kind: "isolated", ipv4_cidr: "192.168.1.0/24" }]
@@ -88,6 +88,18 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         } catch (error) { showToast(error instanceof Error ? error.message : "Deployment reservation failed", "warning"); }
     };
 
+    const runDeployment = async (deployment: Deployment, action: "tofu.plan" | "tofu.apply" | "ansible.check") => {
+        let planRunID = 0;
+        if (action === "tofu.apply") {
+            planRunID = Number(window.prompt("Successful OpenTofu plan run ID to apply:"));
+            if (!planRunID || !window.confirm(`Apply plan run ${planRunID} to ${deployment.name}?`)) return;
+        }
+        try {
+            await apiFetch(`/api/v1/deployments/${deployment.id}/runs`, { method: "POST", headers: { "Idempotency-Key": requestKey() }, body: JSON.stringify({ action, confirm: action === "tofu.apply", planRunID }) });
+            showToast(`${action} queued for ${deployment.name}`, "success");
+        } catch (error) { showToast(error instanceof Error ? error.message : "Runner action failed", "warning"); }
+    };
+
     return <section className="dashboard-view is-active">
         <article className="dashboard-panel">
             <PanelHeading label="Desired state" title="Versioned lab blueprints" />
@@ -119,7 +131,7 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         </article>)}
         <article className="dashboard-panel">
             <PanelHeading label="Reserved desired state" title={`Deployment plans (${deployments.length})`} />
-            {deployments.length === 0 ? <EmptyState>No deployment plans have been reserved.</EmptyState> : <div className="compact-list">{deployments.map((deployment) => <div className="compact-list-row" key={deployment.id}><strong>{deployment.name}</strong><span>{deployment.status} · group {deployment.group_id} · blueprint version {deployment.blueprint_version_id}</span></div>)}</div>}
+            {deployments.length === 0 ? <EmptyState>No deployment plans have been reserved.</EmptyState> : <div className="compact-list">{deployments.map((deployment) => <div className="compact-list-row" key={deployment.id}><span><strong>{deployment.name}</strong><span>{deployment.status} · group {deployment.group_id} · blueprint version {deployment.blueprint_version_id}</span></span><span className="inline-actions"><TextButton onClick={() => runDeployment(deployment, "tofu.plan")}>Plan</TextButton><TextButton onClick={() => runDeployment(deployment, "tofu.apply")}>Apply…</TextButton><TextButton onClick={() => runDeployment(deployment, "ansible.check")}>Ansible check</TextButton></span></div>)}</div>}
         </article>
         {preview && <article className="dashboard-panel"><PanelHeading label="No infrastructure changes" title="Deployment preview" action={<TextButton onClick={reservePlan}>Reserve deployment plan</TextButton>} /><pre className="blueprint-preview">{JSON.stringify(preview, null, 2)}</pre></article>}
     </section>;

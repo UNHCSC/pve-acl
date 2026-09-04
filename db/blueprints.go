@@ -313,5 +313,17 @@ func validAllocationKind(kind string) bool {
 }
 
 func immutableRunnerReference(value string) bool {
-	return strings.Contains(value, "ref=") || strings.Contains(value, "sha256:")
+	if strings.Contains(value, "://") || strings.HasPrefix(value, "git@") {
+		var parts []string = strings.SplitN(value, "?ref=", 2)
+		if len(parts) != 2 || (len(parts[1]) != 40 && len(parts[1]) != 64) {
+			return false
+		}
+		for _, character := range parts[1] {
+			if !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') || (character >= 'A' && character <= 'F')) {
+				return false
+			}
+		}
+		return true
+	}
+	return strings.Contains(value, "?ref=sha256:")
 }

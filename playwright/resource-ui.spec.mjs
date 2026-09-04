@@ -128,6 +128,8 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     await expect(page.getByText(/class-lab-g01-server/)).toBeVisible();
     await page.getByRole("button", { name: "Reserve deployment plan" }).click();
     await expect(page.getByText("class-lab-g01", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Plan", exact: true }).click();
+    await expect(page.getByText("tofu.plan queued for class-lab-g01")).toBeVisible();
 });
 
 async function mockDashboard(page, resources) {

@@ -26,6 +26,9 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	if err = configureProxmoxIntegration(); err != nil {
 		return
 	}
+	if err = configureRunnerIntegration(); err != nil {
+		return
+	}
 
 	app = fiber.New(fiber.Config{
 		Views:   templateEngine,
@@ -90,8 +93,11 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Jobs.Post("/:id/cancel", postCancelJob)
 	apiV1.Post("/resources/:id/actions/:action", postResourcePowerAction)
 	apiV1.Post("/resources/:id/console-sessions", postResourceConsoleSession)
+	apiV1.Post("/deployments/:id/runs", postDeploymentRun)
+	apiV1.Get("/deployments/:id/runs", getDeploymentRuns)
 	apiV1.Get("/console-sessions/:id/websocket", validateConsoleUpgrade, websocket.New(proxyConsoleSession))
 	apiV1.Get("/permissions", getPermissions)
+	apiV1.Get("/runner/health", getRunnerHealth)
 
 	// API v1 users
 	apiV1.Get("/users", getUsers)

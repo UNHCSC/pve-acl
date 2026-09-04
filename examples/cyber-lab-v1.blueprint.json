@@ -1,7 +1,7 @@
 {
   "format_version": 1,
-  "opentofu_module": "git::ssh://git.example.edu/labs.git//modules/proxmox-lab?ref=v1.0.0",
-  "ansible_project": "git::ssh://git.example.edu/labs.git//ansible/cyber-lab?ref=v1.0.0",
+  "opentofu_module": "ssh://git.example.edu/labs-opentofu.git?ref=0000000000000000000000000000000000000000",
+  "ansible_project": "ssh://git.example.edu/labs-ansible.git?ref=0000000000000000000000000000000000000000",
   "name_pattern": "{{deployment}}-{{resource}}",
   "resources": [
     { "key": "fw", "kind": "vm", "template": "pfsense-v1", "vcpu": 2, "memory_mb": 4096, "disk_gb": 32, "networks": ["wan", "lan", "dmz"], "configuration_role": "firewall" },
