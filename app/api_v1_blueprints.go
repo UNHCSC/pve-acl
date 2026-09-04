@@ -45,6 +45,9 @@ func getProjectDeployments(c *fiber.Ctx) (errResult error) {
 	if deployments, errResult = db.DeploymentsForProject(project.ID); errResult != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load deployments"})
 	}
+	if deployments == nil {
+		deployments = make([]*db.Deployment, 0)
+	}
 	return c.JSON(deployments)
 }
 

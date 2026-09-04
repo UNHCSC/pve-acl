@@ -90,8 +90,8 @@ test("capability-limited and unassigned users cannot discover unavailable action
 });
 
 test("instructor publishes a runner-backed blueprint and previews group deployments", async ({ page }) => {
-    let blueprints = [];
-    let deployments = [];
+    let blueprints = null;
+    let deployments = null;
     await page.route("**/api/v1/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
         if (path === "/api/v1/system/summary") return fulfill(route, { counts: {}, currentUser: { id: 1, username: "instructor", isSiteAdmin: true }, capabilities: { canManageProxmox: true } });
@@ -116,6 +116,8 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     });
 
     await page.goto(`${baseURL}/dashboard?view=blueprints`);
+    await expect(page.getByText("No blueprints exist for this project.")).toBeVisible();
+    await expect(page.getByText("No deployment plans have been reserved.")).toBeVisible();
     await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
     await page.getByRole("banner").getByRole("radio", { name: "2 spaces" }).click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem("organesson-editor-indent"))).toBe("2");

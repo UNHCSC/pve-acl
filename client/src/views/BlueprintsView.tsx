@@ -43,9 +43,9 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
                 apiFetch<AllocationPool[]>(`/api/v1/projects/${projectID}/allocation-pools`),
                 apiFetch<Deployment[]>(`/api/v1/projects/${projectID}/deployments`)
             ]);
-            setBlueprints(nextBlueprints);
-            setPools(nextPools);
-            setDeployments(nextDeployments);
+            setBlueprints(nextBlueprints ?? []);
+            setPools(nextPools ?? []);
+            setDeployments(nextDeployments ?? []);
         } catch (error) {
             showToast(error instanceof Error ? error.message : "Failed to load blueprints", "warning");
         }
