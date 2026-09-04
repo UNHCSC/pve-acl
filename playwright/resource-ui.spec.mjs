@@ -112,6 +112,7 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
             return fulfill(route, blueprints[0].versions[0], 201);
         }
         if (path === "/api/v1/projects/1/deployment-previews") return fulfill(route, { blueprint: { name: "Generic Lab", version: 1 }, runner: { opentofu_module: "module", ansible_project: "playbooks" }, deployments: [{ name: "class-lab-g01", resources: [{ name: "class-lab-g01-server" }] }], mutates: false });
+        if (path === "/api/v1/deployments/10/runs" && route.request().method() === "GET") return fulfill(route, [{ id: 21, job_id: 31, deployment_id: 10, tool: "tofu", action: "tofu.plan", workspace: "deployment-10/run-31", summary_json: '{"plan":{"add":8,"change":0,"destroy":0}}', job_status: 2, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), created_at: new Date().toISOString() }]);
         return fulfill(route, []);
     });
 
@@ -134,8 +135,16 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     await expect(page.getByText(/class-lab-g01-server/)).toBeVisible();
     await page.getByRole("button", { name: "Reserve deployment plan" }).click();
     await expect(page.getByText("class-lab-g01", { exact: true })).toBeVisible();
+    await expect(page.getByText(/tofu\.plan · succeeded · \+8 ~0 −0 · run #21/)).toBeVisible();
     await page.getByRole("button", { name: "Plan", exact: true }).click();
     await expect(page.getByText("tofu.plan queued for class-lab-g01")).toBeVisible();
+    page.on("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Apply…" }).click();
+    await expect(page.getByText("tofu.apply queued for class-lab-g01")).toBeVisible();
+    await page.getByRole("button", { name: "Ansible check" }).click();
+    await expect(page.getByText("ansible.check queued for class-lab-g01")).toBeVisible();
+    await page.getByRole("button", { name: "Destroy…" }).click();
+    await expect(page.getByText("tofu.destroy queued for class-lab-g01")).toBeVisible();
 });
 
 async function mockDashboard(page, resources) {

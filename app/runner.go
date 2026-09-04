@@ -25,7 +25,15 @@ type runnerIntegrationState struct {
 	tools    *runner.ToolRunner
 }
 
+type runnerRunResponse struct {
+	*db.RunnerRun
+	JobStatus    db.JobStatus `json:"job_status"`
+	ErrorCode    string       `json:"error_code,omitempty"`
+	ErrorSummary string       `json:"error_summary,omitempty"`
+}
+
 var runnerIntegration runnerIntegrationState
+var runnerDeploymentLocks deploymentRunLocks
 
 // getRunnerHealth reports actual executable availability to administrators.
 func getRunnerHealth(c *fiber.Ctx) (errResult error) {
@@ -34,9 +42,13 @@ func getRunnerHealth(c *fiber.Ctx) (errResult error) {
 	}
 	var tofuErr error
 	var ansibleErr error
+	var versions runner.Versions
 	tofuErr = runnerIntegration.tools.OpenTofuHealth(context.Background(), nil)
 	ansibleErr = runnerIntegration.tools.AnsibleHealth(context.Background(), nil)
-	return c.JSON(fiber.Map{"opentofu": fiber.Map{"healthy": tofuErr == nil, "error": safeRunnerHealthError(tofuErr)}, "ansible": fiber.Map{"healthy": ansibleErr == nil, "error": safeRunnerHealthError(ansibleErr)}})
+	if tofuErr == nil && ansibleErr == nil {
+		versions, _ = runnerIntegration.tools.ToolVersions(context.Background())
+	}
+	return c.JSON(fiber.Map{"opentofu": fiber.Map{"healthy": tofuErr == nil, "version": versions.OpenTofu, "error": safeRunnerHealthError(tofuErr)}, "ansible": fiber.Map{"healthy": ansibleErr == nil, "version": versions.Ansible, "error": safeRunnerHealthError(ansibleErr)}})
 }
 
 func safeRunnerHealthError(err error) string {
@@ -118,8 +130,13 @@ func postDeploymentRun(c *fiber.Ctx) (errResult error) {
 	case "tofu.plan":
 		permission, jobType = db.PermissionTerraformPlan, db.JobTypeTerraform
 	case "tofu.apply":
-		if !request.Confirm || request.PlanRunID <= 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "apply requires confirmation and a planRunID"})
+		if !request.Confirm {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "apply requires confirmation"})
+		}
+		permission, jobType = db.PermissionTerraformApply, db.JobTypeTerraform
+	case "tofu.destroy":
+		if !request.Confirm {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "destroy requires confirmation"})
 		}
 		permission, jobType = db.PermissionTerraformApply, db.JobTypeTerraform
 	case "ansible.run", "ansible.check":
@@ -133,6 +150,13 @@ func postDeploymentRun(c *fiber.Ctx) (errResult error) {
 	}
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
+	}
+	if (request.Action == "tofu.apply" || request.Action == "tofu.destroy") && request.PlanRunID == 0 {
+		var planRun *db.RunnerRun
+		if planRun, errResult = latestSuccessfulPlanRun(deployment.ID); errResult != nil {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": errResult.Error()})
+		}
+		request.PlanRunID = planRun.ID
 	}
 	var key string = strings.TrimSpace(c.Get("Idempotency-Key"))
 	if key == "" {
@@ -154,8 +178,10 @@ func postDeploymentRun(c *fiber.Ctx) (errResult error) {
 	}
 	if _, errResult = jobscheduler.EnqueueJobTask(job, jobscheduler.TaskTypeRunnerAction, jobscheduler.JobPayload{Operation: request.Action, Metadata: map[string]string{"deploymentID": strconv.Itoa(deployment.ID), "planRunID": strconv.Itoa(request.PlanRunID)}}); errResult != nil {
 		_ = db.FailJob(job.ID, "enqueue_failed", "The runner action could not be queued.", "transient")
+		appLog.Errorf("Failed to enqueue runner job %d: %v", job.ID, errResult)
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "failed to enqueue runner job"})
 	}
+	_ = auditRequest(c, "runner."+request.Action, "deployment", &deployment.ID, &deployment.ProjectID, map[string]any{"job_id": job.ID, "plan_run_id": request.PlanRunID})
 	return c.Status(fiber.StatusAccepted).JSON(job)
 }
 
@@ -177,7 +203,22 @@ func getDeploymentRuns(c *fiber.Ctx) (errResult error) {
 	if runs, errResult = db.RunnerRunsForDeployment(deployment.ID); errResult != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load runs"})
 	}
-	return c.JSON(runs)
+	var response []runnerRunResponse = make([]runnerRunResponse, 0, len(runs))
+	for _, run := range runs {
+		var job *db.Job
+		var found bool
+		if job, found, errResult = db.GetJobByID(run.JobID); errResult != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load run status"})
+		}
+		var item runnerRunResponse = runnerRunResponse{RunnerRun: run}
+		if found {
+			item.JobStatus = job.Status
+			item.ErrorCode = job.ErrorCode
+			item.ErrorSummary = job.ErrorSummary
+		}
+		response = append(response, item)
+	}
+	return c.JSON(response)
 }
 
 func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResult) {
@@ -215,7 +256,7 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 	}
 	var run *db.RunnerRun
 	var workspace string = fmt.Sprintf("deployment-%d/run-%d", deployment.ID, job.ID)
-	if jobPayload.Operation == "tofu.apply" {
+	if jobPayload.Operation == "tofu.apply" || jobPayload.Operation == "tofu.destroy" {
 		var planRunID int
 		if planRunID, err = strconv.Atoi(jobPayload.Metadata["planRunID"]); err != nil {
 			_ = db.FailJob(job.ID, "plan_missing", "The selected plan is invalid.", "permanent")
@@ -236,6 +277,19 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 		}
 		workspace = planRun.Workspace
 	}
+	var runContext context.Context
+	var cancel context.CancelFunc
+	var stopCancellationWatch chan struct{}
+	runContext, cancel, stopCancellationWatch = runnerJobContext(job.ID)
+	defer close(stopCancellationWatch)
+	defer cancel()
+	var release func()
+	if release, err = runnerDeploymentLocks.acquire(runContext, deployment.ID); err != nil {
+		_ = db.MarkJobFinished(job.ID, db.JobStatusCancelled)
+		result.Success = true
+		return
+	}
+	defer release()
 	var tool string = strings.SplitN(jobPayload.Operation, ".", 2)[0]
 	if run, err = db.CreateRunnerRun(job.ID, deployment.ID, tool, jobPayload.Operation, workspace); err != nil {
 		result.Error = err
@@ -246,24 +300,13 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 	_ = db.RunnerRuns.Update(run)
 	var commandResult runner.Result
 	var log runner.LogFunc = func(stream db.JobLogStream, line string) error { return db.AppendJobLog(job.ID, stream, line) }
-	var runContext context.Context
-	var cancel context.CancelFunc
-	var stopCancellationWatch chan struct{}
-	runContext, cancel, stopCancellationWatch = runnerJobContext(job.ID)
+	var cancelled bool
 	if err = executeRunnerAction(runContext, deployment, run, jobPayload.Operation, &commandResult, log); err != nil {
-		var cancelled bool
 		cancelled, _ = db.JobCancellationRequested(job.ID)
 		if cancelled {
 			_ = db.AppendJobLog(job.ID, db.JobLogStreamSystem, "runner process group terminated after cancellation")
-			_ = db.MarkJobFinished(job.ID, db.JobStatusCancelled)
-		} else {
-			_ = db.FailJob(job.ID, "runner_failed", db.RedactSensitiveText(err.Error()), "permanent")
 		}
-	} else {
-		_ = db.MarkJobFinished(job.ID, db.JobStatusSucceeded)
 	}
-	close(stopCancellationWatch)
-	cancel()
 	var finished time.Time = time.Now().UTC()
 	run.FinishedAt = &finished
 	var summary []byte
@@ -277,6 +320,13 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 	summary, _ = json.Marshal(persistedSummary)
 	run.SummaryJSON = string(summary)
 	_ = db.RunnerRuns.Update(run)
+	if err == nil {
+		_ = db.MarkJobFinished(job.ID, db.JobStatusSucceeded)
+	} else if cancelled {
+		_ = db.MarkJobFinished(job.ID, db.JobStatusCancelled)
+	} else {
+		_ = db.FailJob(job.ID, "runner_failed", db.RedactSensitiveText(err.Error()), "permanent")
+	}
 	result.Success = true
 	return
 }
@@ -315,6 +365,10 @@ func executeRunnerAction(ctx context.Context, deployment *db.Deployment, run *db
 		}
 	case "tofu.apply":
 		*commandResult, errResult = runnerIntegration.tools.Apply(ctx, run.Workspace, "planned.tfplan", log)
+		run.StateRef = filepath.Join(run.Workspace, "terraform.tfstate")
+	case "tofu.destroy":
+		*commandResult, errResult = runnerIntegration.tools.Destroy(ctx, run.Workspace, "organesson.auto.tfvars.json", log)
+		run.StateRef = filepath.Join(run.Workspace, "terraform.tfstate")
 	case "ansible.run", "ansible.check":
 		if run.SourceDigest, errResult = runnerIntegration.executor.MaterializeSource(ctx, document.AnsibleProject, run.Workspace, log); errResult != nil {
 			return
@@ -379,7 +433,7 @@ func revalidateRunnerPermission(job *db.Job, deployment *db.Deployment, action s
 		return nil
 	}
 	var permission db.PermissionKey = db.PermissionTerraformPlan
-	if action == "tofu.apply" {
+	if action == "tofu.apply" || action == "tofu.destroy" {
 		permission = db.PermissionTerraformApply
 	} else if strings.HasPrefix(action, "ansible.") {
 		permission = db.PermissionAnsibleRun
@@ -391,6 +445,32 @@ func revalidateRunnerPermission(job *db.Job, deployment *db.Deployment, action s
 	}
 	if allowed, errResult = db.HasPermission(db.PermissionCheck{UserID: user.ID, GroupIDs: groups, Permission: permission, ScopeType: db.RoleBindingScopeProject, ScopeID: &deployment.ProjectID}); errResult != nil || !allowed {
 		return fmt.Errorf("permission denied")
+	}
+	return
+}
+
+func latestSuccessfulPlanRun(deploymentID int) (runResult *db.RunnerRun, errResult error) {
+	var runs []*db.RunnerRun
+	var currentID int
+	if runs, errResult = db.RunnerRunsForDeployment(deploymentID); errResult != nil {
+		return
+	}
+	for _, run := range runs {
+		if run.Action != "tofu.plan" || run.FinishedAt == nil || run.ID <= currentID {
+			continue
+		}
+		var job *db.Job
+		var found bool
+		if job, found, errResult = db.GetJobByID(run.JobID); errResult != nil {
+			return
+		}
+		if found && job.Status == db.JobStatusSucceeded {
+			runResult = run
+			currentID = run.ID
+		}
+	}
+	if runResult == nil {
+		errResult = fmt.Errorf("a successful OpenTofu plan is required")
 	}
 	return
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { ProxmoxHealth, ProxmoxInventory } from "../types";
+import type { ProxmoxHealth, ProxmoxInventory, RunnerHealth } from "../types";
 
 const byteCount = (value = 0) => {
     if (!value) {
@@ -23,6 +23,7 @@ export function InfrastructureView({ showToast }: { showToast: (message: string,
     const queryClient = useQueryClient();
     const healthQuery = useQuery({ queryKey: ["proxmox", "health"], queryFn: () => apiFetch<ProxmoxHealth>("/api/v1/proxmox/health") });
     const inventoryQuery = useQuery({ queryKey: ["proxmox", "inventory"], queryFn: () => apiFetch<ProxmoxInventory>("/api/v1/proxmox/inventory") });
+    const runnerQuery = useQuery({ queryKey: ["runner", "health"], queryFn: () => apiFetch<RunnerHealth>("/api/v1/runner/health") });
     const syncMutation = useMutation({
         mutationFn: () => apiFetch<ProxmoxInventory>("/api/v1/proxmox/inventory/sync", { method: "POST" }),
         onSuccess: (inventory) => {
@@ -83,6 +84,14 @@ export function InfrastructureView({ showToast }: { showToast: (message: string,
                         ))}
                     </div>
                 )}
+            </article>
+
+            <article className="dashboard-panel">
+                <PanelHeading label="Automation" title="Infrastructure runners" />
+                <div className="compact-list">
+                    <div className="compact-list-row"><strong>OpenTofu</strong><span>{runnerQuery.data?.opentofu.healthy ? runnerQuery.data.opentofu.version || "Available" : runnerQuery.data?.opentofu.error || "Unavailable"}</span></div>
+                    <div className="compact-list-row"><strong>Ansible</strong><span>{runnerQuery.data?.ansible.healthy ? runnerQuery.data.ansible.version || "Available" : runnerQuery.data?.ansible.error || "Unavailable"}</span></div>
+                </div>
             </article>
 
             <div className="infrastructure-grid">

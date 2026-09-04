@@ -28,6 +28,10 @@ func TestRealInstalledToolsRunHarmlessExample(t *testing.T) {
 	if tools, err = NewToolRunner(executor); err != nil {
 		t.Fatal(err)
 	}
+	var versions Versions
+	if versions, err = tools.ToolVersions(context.Background()); err != nil || versions.OpenTofu == "" || versions.Ansible == "" {
+		t.Fatalf("tool versions: %#v err=%v", versions, err)
+	}
 	var (
 		tofuSource string = filepath.Join(exampleRoot, "opentofu")
 		tofuDigest string
@@ -50,6 +54,9 @@ func TestRealInstalledToolsRunHarmlessExample(t *testing.T) {
 	}
 	if _, err = tools.Apply(context.Background(), "smoke/tofu", "planned.tfplan", nil); err != nil {
 		t.Fatalf("OpenTofu apply: %v", err)
+	}
+	if _, err = tools.Destroy(context.Background(), "smoke/tofu", "variables.tfvars.json", nil); err != nil {
+		t.Fatalf("OpenTofu destroy: %v", err)
 	}
 	var (
 		ansibleSource string = filepath.Join(exampleRoot, "ansible")

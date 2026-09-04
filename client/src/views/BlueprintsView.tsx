@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { apiFetch, requestKey } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { AllocationPool, Blueprint, BlueprintDocument, Deployment, Project } from "../types";
+import type { AllocationPool, Blueprint, BlueprintDocument, Deployment, Project, RunnerRun } from "../types";
 
 const CodeEditor = lazy(async () => ({ default: (await import("../components/CodeEditor")).CodeEditor }));
+const runnerStatusNames = ["queued", "running", "succeeded", "failed", "cancelled"];
 
 const starterDocument: BlueprintDocument = {
     format_version: 1,
@@ -19,6 +20,7 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
     const [pools, setPools] = useState<AllocationPool[]>([]);
     const [deployments, setDeployments] = useState<Deployment[]>([]);
+    const [runs, setRuns] = useState<Record<number, RunnerRun[]>>({});
     const [name, setName] = useState("");
     const [slug, setSlug] = useState("");
     const [document, setDocument] = useState(JSON.stringify(starterDocument, null, 2));
@@ -35,6 +37,11 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         if (!projectID && projects.length > 0) setProjectID(projects[0].id);
     }, [projectID, projects]);
 
+    const loadRuns = async (items: Deployment[]) => {
+        const deploymentRuns = await Promise.all(items.map(async (deployment) => [deployment.id, (await apiFetch<RunnerRun[]>(`/api/v1/deployments/${deployment.id}/runs`)) ?? []] as const));
+        setRuns(Object.fromEntries(deploymentRuns));
+    };
+
     const load = async () => {
         if (!projectID) return;
         try {
@@ -46,12 +53,19 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
             setBlueprints(nextBlueprints ?? []);
             setPools(nextPools ?? []);
             setDeployments(nextDeployments ?? []);
+            await loadRuns(nextDeployments ?? []);
         } catch (error) {
             showToast(error instanceof Error ? error.message : "Failed to load blueprints", "warning");
         }
     };
 
     useEffect(() => { void load(); }, [projectID]);
+
+    useEffect(() => {
+        if (deployments.length === 0) return;
+        const interval = window.setInterval(() => { void loadRuns(deployments).catch(() => undefined); }, 2000);
+        return () => window.clearInterval(interval);
+    }, [deployments]);
 
     const createBlueprint = async () => {
         try {
@@ -90,16 +104,32 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         } catch (error) { showToast(error instanceof Error ? error.message : "Deployment reservation failed", "warning"); }
     };
 
-    const runDeployment = async (deployment: Deployment, action: "tofu.plan" | "tofu.apply" | "ansible.check") => {
-        let planRunID = 0;
-        if (action === "tofu.apply") {
-            planRunID = Number(window.prompt("Successful OpenTofu plan run ID to apply:"));
-            if (!planRunID || !window.confirm(`Apply plan run ${planRunID} to ${deployment.name}?`)) return;
-        }
+    const runDeployment = async (deployment: Deployment, action: "tofu.plan" | "tofu.apply" | "tofu.destroy" | "ansible.check") => {
+        if (action === "tofu.apply" && !window.confirm(`Apply the latest successful plan to ${deployment.name}?`)) return;
+        if (action === "tofu.destroy" && !window.confirm(`Destroy infrastructure for ${deployment.name}? This requires a separately confirmed operation.`)) return;
+        const confirm = action === "tofu.apply" || action === "tofu.destroy";
         try {
-            await apiFetch(`/api/v1/deployments/${deployment.id}/runs`, { method: "POST", headers: { "Idempotency-Key": requestKey() }, body: JSON.stringify({ action, confirm: action === "tofu.apply", planRunID }) });
+            await apiFetch(`/api/v1/deployments/${deployment.id}/runs`, { method: "POST", headers: { "Idempotency-Key": requestKey() }, body: JSON.stringify({ action, confirm }) });
             showToast(`${action} queued for ${deployment.name}`, "success");
+            window.setTimeout(() => { void load(); }, 500);
         } catch (error) { showToast(error instanceof Error ? error.message : "Runner action failed", "warning"); }
+    };
+
+    const latestRunLabel = (deploymentID: number) => {
+        const deploymentRuns = runs[deploymentID] || [];
+        const latest = deploymentRuns.reduce<RunnerRun | null>((result, run) => !result || run.id > result.id ? run : result, null);
+        if (!latest) return "No runner activity";
+        let summary = "";
+        if (latest.summary_json) {
+            try {
+                const parsed = JSON.parse(latest.summary_json) as { plan?: { add?: number; change?: number; destroy?: number } };
+                if (parsed.plan) summary = ` · +${parsed.plan.add || 0} ~${parsed.plan.change || 0} −${parsed.plan.destroy || 0}`;
+            } catch {
+                summary = "";
+            }
+        }
+        const status = runnerStatusNames[latest.job_status] || (latest.finished_at ? "finished" : "running");
+        return `${latest.action} · ${status}${summary} · run #${latest.id}${latest.error_summary ? ` · ${latest.error_summary}` : ""}`;
     };
 
     return <section className="dashboard-view is-active">
@@ -142,7 +172,7 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         </article>)}
         <article className="dashboard-panel">
             <PanelHeading label="Reserved desired state" title={`Deployment plans (${deployments.length})`} />
-            {deployments.length === 0 ? <EmptyState>No deployment plans have been reserved.</EmptyState> : <div className="compact-list">{deployments.map((deployment) => <div className="compact-list-row" key={deployment.id}><span><strong>{deployment.name}</strong><span>{deployment.status} · group {deployment.group_id} · blueprint version {deployment.blueprint_version_id}</span></span><span className="inline-actions"><TextButton onClick={() => runDeployment(deployment, "tofu.plan")}>Plan</TextButton><TextButton onClick={() => runDeployment(deployment, "tofu.apply")}>Apply…</TextButton><TextButton onClick={() => runDeployment(deployment, "ansible.check")}>Ansible check</TextButton></span></div>)}</div>}
+            {deployments.length === 0 ? <EmptyState>No deployment plans have been reserved.</EmptyState> : <div className="compact-list">{deployments.map((deployment) => <div className="compact-list-row runner-deployment-row" key={deployment.id}><span><strong>{deployment.name}</strong><span>{deployment.status} · group {deployment.group_id} · blueprint version {deployment.blueprint_version_id}</span><span>{latestRunLabel(deployment.id)}</span></span><span className="inline-actions"><TextButton onClick={() => runDeployment(deployment, "tofu.plan")}>Plan</TextButton><TextButton onClick={() => runDeployment(deployment, "tofu.apply")}>Apply…</TextButton><TextButton onClick={() => runDeployment(deployment, "ansible.check")}>Ansible check</TextButton><button type="button" className="button-secondary compact-button danger-button" onClick={() => runDeployment(deployment, "tofu.destroy")}>Destroy…</button></span></div>)}</div>}
         </article>
         {preview && <article className="dashboard-panel"><PanelHeading label="No infrastructure changes" title="Deployment preview" action={<TextButton onClick={reservePlan}>Reserve deployment plan</TextButton>} /><div className="blueprint-preview"><Suspense fallback={<div className="code-editor-loading">Loading preview…</div>}><CodeEditor ariaLabel="Deployment preview JSON" language="json" value={JSON.stringify(preview, null, 2)} readOnly /></Suspense></div></article>}
     </section>;

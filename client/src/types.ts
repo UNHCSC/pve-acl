@@ -366,6 +366,18 @@ export type Deployment = {
     quota_reservation_id?: number; name: string; status: string; created_at: string; updated_at: string;
 };
 
+export type RunnerRun = {
+    id: number; job_id: number; deployment_id: number; tool: string; action: string;
+    workspace: string; source_digest?: string; state_ref?: string; summary_json?: string;
+    job_status: number; error_code?: string; error_summary?: string;
+    started_at?: string; finished_at?: string; created_at: string;
+};
+
+export type RunnerHealth = {
+    opentofu: { healthy: boolean; version?: string; error?: string };
+    ansible: { healthy: boolean; version?: string; error?: string };
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {

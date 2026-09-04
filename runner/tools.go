@@ -34,6 +34,11 @@ type (
 		Change  int `json:"change"`
 		Destroy int `json:"destroy"`
 	}
+
+	Versions struct {
+		OpenTofu string `json:"opentofu"`
+		Ansible  string `json:"ansible"`
+	}
 )
 
 // NewToolRunner creates OpenTofu and Ansible adapters over the bounded executor.
@@ -57,7 +62,40 @@ func (runner *ToolRunner) OpenTofuHealth(ctx context.Context, log LogFunc) (errR
 
 // AnsibleHealth reports whether the configured Ansible executable runs.
 func (runner *ToolRunner) AnsibleHealth(ctx context.Context, log LogFunc) (errResult error) {
-	_, errResult = runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: []string{"--version"}, Directory: "health/ansible"}, log)
+	var environment map[string]string
+	if environment, errResult = runner.ansibleEnvironment("health/ansible"); errResult != nil {
+		return
+	}
+	_, errResult = runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: []string{"--version"}, Directory: "health/ansible", Environment: environment}, log)
+	return
+}
+
+// ToolVersions returns the first version line reported by each configured tool.
+func (runner *ToolRunner) ToolVersions(ctx context.Context) (versions Versions, errResult error) {
+	if versions.OpenTofu, errResult = runner.versionLine(ctx, runner.executor.config.OpenTofuBinary, []string{"version"}, "health/tofu-version", nil); errResult != nil {
+		return
+	}
+	var environment map[string]string
+	if environment, errResult = runner.ansibleEnvironment("health/ansible-version"); errResult != nil {
+		return
+	}
+	versions.Ansible, errResult = runner.versionLine(ctx, runner.executor.config.AnsibleBinary, []string{"--version"}, "health/ansible-version", environment)
+	return
+}
+
+func (runner *ToolRunner) versionLine(ctx context.Context, executable string, arguments []string, workspace string, environment map[string]string) (versionResult string, errResult error) {
+	var capture LogFunc = func(stream db.JobLogStream, line string) (err error) {
+		if stream == db.JobLogStreamStdout && versionResult == "" {
+			versionResult = strings.TrimSpace(line)
+		}
+		return
+	}
+	if _, errResult = runner.executor.Run(ctx, Command{Executable: executable, Arguments: arguments, Directory: workspace, Environment: environment}, capture); errResult != nil {
+		return
+	}
+	if versionResult == "" {
+		errResult = fmt.Errorf("tool returned no version")
+	}
 	return
 }
 
@@ -167,11 +205,20 @@ func (runner *ToolRunner) Run(ctx context.Context, workspace string, inventoryFi
 	if check {
 		arguments = append(arguments, "--check", "--diff")
 	}
+	var environment map[string]string
+	if environment, errResult = runner.ansibleEnvironment(workspace); errResult != nil {
+		return
+	}
+	return runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: arguments, Directory: workspace, Environment: environment}, log)
+}
+
+func (runner *ToolRunner) ansibleEnvironment(workspace string) (environmentResult map[string]string, errResult error) {
 	var temporaryDirectory string = filepath.Join(runner.executor.config.WorkRoot, workspace, ".ansible", "tmp")
 	if errResult = os.MkdirAll(temporaryDirectory, 0700); errResult != nil {
 		return
 	}
-	return runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: arguments, Directory: workspace, Environment: map[string]string{"ANSIBLE_NOCOLOR": "1", "ANSIBLE_HOST_KEY_CHECKING": "True", "ANSIBLE_LOCAL_TEMP": temporaryDirectory}}, log)
+	environmentResult = map[string]string{"ANSIBLE_NOCOLOR": "1", "ANSIBLE_HOST_KEY_CHECKING": "True", "ANSIBLE_LOCAL_TEMP": temporaryDirectory}
+	return
 }
 
 func (runner *ToolRunner) safeStateFile(workspace, path string, extensions ...string) (pathResult string, errResult error) {

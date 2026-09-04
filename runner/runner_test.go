@@ -77,6 +77,10 @@ func TestRunnerRejectsPathEscapeAndRunsToolArguments(t *testing.T) {
 	if tools, err = NewToolRunner(executor); err != nil {
 		t.Fatal(err)
 	}
+	var versions Versions
+	if versions, err = tools.ToolVersions(context.Background()); err != nil || versions.OpenTofu != "version" || versions.Ansible != "--version" {
+		t.Fatalf("unexpected fake tool versions: %#v err=%v", versions, err)
+	}
 	if _, err = tools.Plan(context.Background(), "../escape", "vars.tfvars.json", nil); err == nil {
 		t.Fatal("expected workspace escape rejection")
 	}
