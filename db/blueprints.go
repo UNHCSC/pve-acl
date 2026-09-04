@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/z46-dev/gosqlite"
 )
+
+var allocationMu sync.Mutex
 
 type (
 	Blueprint struct {
@@ -237,4 +240,69 @@ func ValidateBlueprintDocument(document BlueprintDocument) (errResult error) {
 
 func contentDigest(body []byte) (valueResult string) {
 	return fmt.Sprintf("sha256:%x", sha256.Sum256(body))
+}
+
+// CreateAllocationPool creates a project-scoped numeric or address allocation pool.
+func CreateAllocationPool(projectID int, name, kind string, start, end int, cidr string) (poolResult *AllocationPool, errResult error) {
+	name = strings.TrimSpace(name)
+	kind = strings.TrimSpace(kind)
+	cidr = strings.TrimSpace(cidr)
+	if projectID <= 0 || name == "" || !validAllocationKind(kind) || start < 0 || end < start {
+		return nil, fmt.Errorf("project, name, supported kind, and valid range are required")
+	}
+	if kind == "ipv4" || kind == "ipv6" {
+		var prefix netip.Prefix
+		if prefix, errResult = netip.ParsePrefix(cidr); errResult != nil || (kind == "ipv4") != prefix.Addr().Is4() {
+			return nil, fmt.Errorf("pool CIDR does not match kind %s", kind)
+		}
+	}
+	var uuid string
+	if uuid, errResult = randomUUID(); errResult != nil {
+		return
+	}
+	poolResult = &AllocationPool{UUID: uuid, ProjectID: projectID, Name: name, Kind: kind, Start: start, End: end, CIDR: cidr, CreatedAt: time.Now().UTC()}
+	errResult = AllocationPools.Insert(poolResult)
+	return
+}
+
+// AllocationPoolsForProject lists active pools and their available capacity.
+func AllocationPoolsForProject(projectID int) (results []*AllocationPool, errResult error) {
+	results, errResult = AllocationPools.SelectAllWithFilter(gosqlite.NewFilter().KeyCmp(AllocationPools.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID))
+	if errResult != nil {
+		return
+	}
+	var active []*AllocationPool
+	for _, pool := range results {
+		if pool.ArchivedAt == nil {
+			active = append(active, pool)
+		}
+	}
+	return active, nil
+}
+
+// AllocationPoolAvailable returns unallocated values remaining in a pool.
+func AllocationPoolAvailable(pool *AllocationPool) (availableResult int, errResult error) {
+	if pool == nil || pool.ArchivedAt != nil {
+		return 0, fmt.Errorf("allocation pool was not found")
+	}
+	allocationMu.Lock()
+	defer allocationMu.Unlock()
+	var allocations []*Allocation
+	if allocations, errResult = Allocations.SelectAllWithFilter(gosqlite.NewFilter().KeyCmp(Allocations.FieldBySQLName("pool_id"), gosqlite.OpEqual, pool.ID)); errResult != nil {
+		return
+	}
+	availableResult = pool.End - pool.Start + 1
+	for _, allocation := range allocations {
+		if allocation.ReleasedAt == nil {
+			availableResult--
+		}
+	}
+	if availableResult < 0 {
+		availableResult = 0
+	}
+	return
+}
+
+func validAllocationKind(kind string) bool {
+	return kind == "vmid" || kind == "vlan" || kind == "vxlan" || kind == "external_port" || kind == "ipv4" || kind == "ipv6"
 }

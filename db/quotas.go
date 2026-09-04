@@ -43,6 +43,33 @@ type (
 
 var quotaReservationMu sync.Mutex
 
+// CheckProjectQuota validates intended capacity without creating a reservation.
+func CheckProjectQuota(projectID int, dimensions QuotaDimensions) (errResult error) {
+	quotaReservationMu.Lock()
+	defer quotaReservationMu.Unlock()
+	var (
+		usage        QuotaDimensions
+		policy       *QuotaPolicy
+		reservations []*QuotaReservation
+		now          time.Time = time.Now().UTC()
+	)
+	if usage, errResult = ProjectQuotaUsage(projectID); errResult != nil {
+		return
+	}
+	if policy, errResult = EffectiveProjectQuota(projectID); errResult != nil {
+		return
+	}
+	if reservations, errResult = QuotaReservations.SelectAllWithFilter(gosqlite.NewFilter().KeyCmp(QuotaReservations.FieldBySQLName("project_id"), gosqlite.OpEqual, projectID)); errResult != nil {
+		return
+	}
+	for _, reservation := range reservations {
+		if reservation.State == QuotaReservationPending && reservation.ExpiresAt.After(now) {
+			usage = addQuotaDimensions(usage, quotaDimensionsForReservation(reservation))
+		}
+	}
+	return validateQuotaDimensions(policy, addQuotaDimensions(usage, dimensions))
+}
+
 // CreateQuotaPolicy creates a reusable quota policy.
 func CreateQuotaPolicy(input QuotaPolicyInput) (policyResult *QuotaPolicy, errResult error) {
 	var policy *QuotaPolicy

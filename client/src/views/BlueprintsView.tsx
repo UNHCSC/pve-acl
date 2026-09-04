@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { Blueprint, BlueprintDocument, Project } from "../types";
+import type { AllocationPool, Blueprint, BlueprintDocument, Project } from "../types";
 
 const starterDocument: BlueprintDocument = {
     format_version: 1,
@@ -15,11 +15,17 @@ const starterDocument: BlueprintDocument = {
 export function BlueprintsView({ projects, showToast }: { projects: Project[]; showToast: (message: string, kind: "success" | "warning") => void }) {
     const [projectID, setProjectID] = useState<number>(projects[0]?.id || 0);
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
+    const [pools, setPools] = useState<AllocationPool[]>([]);
     const [name, setName] = useState("");
     const [slug, setSlug] = useState("");
     const [document, setDocument] = useState(JSON.stringify(starterDocument, null, 2));
     const [groupIDs, setGroupIDs] = useState("");
     const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+    const [poolName, setPoolName] = useState("");
+    const [poolKind, setPoolKind] = useState<AllocationPool["kind"]>("vmid");
+    const [poolStart, setPoolStart] = useState("100");
+    const [poolEnd, setPoolEnd] = useState("999");
+    const [poolCIDR, setPoolCIDR] = useState("");
 
     useEffect(() => {
         if (!projectID && projects.length > 0) setProjectID(projects[0].id);
@@ -28,7 +34,12 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
     const load = async () => {
         if (!projectID) return;
         try {
-            setBlueprints(await apiFetch<Blueprint[]>(`/api/v1/projects/${projectID}/blueprints`));
+            const [nextBlueprints, nextPools] = await Promise.all([
+                apiFetch<Blueprint[]>(`/api/v1/projects/${projectID}/blueprints`),
+                apiFetch<AllocationPool[]>(`/api/v1/projects/${projectID}/allocation-pools`)
+            ]);
+            setBlueprints(nextBlueprints);
+            setPools(nextPools);
         } catch (error) {
             showToast(error instanceof Error ? error.message : "Failed to load blueprints", "warning");
         }
@@ -50,10 +61,17 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         } catch (error) { showToast(error instanceof Error ? error.message : "Blueprint publication failed", "warning"); }
     };
 
+    const createPool = async () => {
+        try {
+            await apiFetch(`/api/v1/projects/${projectID}/allocation-pools`, { method: "POST", body: JSON.stringify({ name: poolName, kind: poolKind, start: Number(poolStart), end: Number(poolEnd), cidr: poolCIDR }) });
+            setPoolName(""); await load(); showToast("Allocation pool created", "success");
+        } catch (error) { showToast(error instanceof Error ? error.message : "Allocation pool creation failed", "warning"); }
+    };
+
     const generatePreview = async (versionID: number) => {
         try {
             const ids = groupIDs.split(",").map((value) => Number(value.trim())).filter(Boolean);
-            setPreview(await apiFetch<Record<string, unknown>>(`/api/v1/projects/${projectID}/deployment-previews`, { method: "POST", body: JSON.stringify({ blueprintVersionID: versionID, groupIDs: ids }) }));
+            setPreview(await apiFetch<Record<string, unknown>>(`/api/v1/projects/${projectID}/deployment-previews`, { method: "POST", body: JSON.stringify({ blueprintVersionID: versionID, groupIDs: ids, allocationPoolIDs: Object.fromEntries(pools.map((pool) => [pool.kind, pool.id])) }) }));
         } catch (error) { showToast(error instanceof Error ? error.message : "Preview failed", "warning"); }
     };
 
@@ -62,8 +80,20 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
             <PanelHeading label="Desired state" title="Versioned lab blueprints" />
             <p className="panel-copy">Blueprints reference pinned OpenTofu and Ansible sources. Publishing creates an immutable version; previews never change infrastructure.</p>
             <label>Project<select value={projectID} onChange={(event) => setProjectID(Number(event.target.value))}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-            <div className="form-grid"><label>Name<input value={name} onChange={(event) => setName(event.target.value)} /></label><label>Slug<input value={slug} onChange={(event) => setSlug(event.target.value)} /></label></div>
+            <div className="form-grid"><label>Blueprint name<input value={name} onChange={(event) => setName(event.target.value)} /></label><label>Slug<input value={slug} onChange={(event) => setSlug(event.target.value)} /></label></div>
             <TextButton onClick={createBlueprint}>Create blueprint</TextButton>
+        </article>
+        <article className="dashboard-panel">
+            <PanelHeading label="Collision boundaries" title="Allocation pools" />
+            <div className="form-grid">
+                <label>Pool name<input value={poolName} onChange={(event) => setPoolName(event.target.value)} /></label>
+                <label>Kind<select value={poolKind} onChange={(event) => setPoolKind(event.target.value as AllocationPool["kind"])}>{["vmid", "vlan", "vxlan", "external_port", "ipv4", "ipv6"].map((kind) => <option key={kind}>{kind}</option>)}</select></label>
+                <label>Start offset/value<input type="number" value={poolStart} onChange={(event) => setPoolStart(event.target.value)} /></label>
+                <label>End offset/value<input type="number" value={poolEnd} onChange={(event) => setPoolEnd(event.target.value)} /></label>
+                {(poolKind === "ipv4" || poolKind === "ipv6") && <label>CIDR<input value={poolCIDR} onChange={(event) => setPoolCIDR(event.target.value)} /></label>}
+            </div>
+            <TextButton onClick={createPool}>Create allocation pool</TextButton>
+            <div className="compact-list">{pools.map((pool) => <div className="compact-list-row" key={pool.id}><strong>{pool.name}</strong><span>{pool.kind} · {pool.available} available</span></div>)}</div>
         </article>
         <article className="dashboard-panel">
             <PanelHeading label="Runner contract" title="Blueprint document" />

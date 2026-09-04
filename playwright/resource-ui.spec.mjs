@@ -110,7 +110,7 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     });
 
     await page.goto(`${baseURL}/dashboard?view=blueprints`);
-    await page.getByLabel("Name").fill("Generic Lab");
+    await page.getByLabel("Blueprint name").fill("Generic Lab");
     await page.getByLabel("Slug").fill("generic-lab");
     await page.getByRole("button", { name: "Create blueprint" }).click();
     await expect(page.getByText("Generic Lab", { exact: true })).toBeVisible();

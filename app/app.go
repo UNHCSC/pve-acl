@@ -181,6 +181,8 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Projects.Get("/:id/blueprints", getProjectBlueprints)
 	apiV1Projects.Post("/:id/blueprints", postProjectBlueprint)
 	apiV1Projects.Post("/:id/deployment-previews", postProjectDeploymentPreview)
+	apiV1Projects.Get("/:id/allocation-pools", getProjectAllocationPools)
+	apiV1Projects.Post("/:id/allocation-pools", postProjectAllocationPool)
 	apiV1.Post("/blueprints/:id/versions", postBlueprintVersion)
 	apiV1Projects.Get("/:id/quota", getProjectQuota)
 	apiV1Projects.Get("/:id/audit", getProjectAudit)

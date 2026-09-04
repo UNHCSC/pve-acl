@@ -34,6 +34,8 @@ func TestBlueprintVersionsAreImmutableAndPreviewExpandsGroups(t *testing.T) {
 	fiberApp.Post("/api/v1/projects/:id/blueprints", postProjectBlueprint)
 	fiberApp.Post("/api/v1/blueprints/:id/versions", postBlueprintVersion)
 	fiberApp.Post("/api/v1/projects/:id/deployment-previews", postProjectDeploymentPreview)
+	fiberApp.Get("/api/v1/projects/:id/allocation-pools", getProjectAllocationPools)
+	fiberApp.Post("/api/v1/projects/:id/allocation-pools", postProjectAllocationPool)
 	var token string = authenticateTestUser(t, manager.Username, false)
 	var response *http.Response = resourceAPIRequest(t, fiberApp, token, http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/blueprints", `{"name":"Generic lab","slug":"generic-lab"}`)
 	if response.StatusCode != fiber.StatusCreated {
@@ -81,6 +83,19 @@ func TestBlueprintVersionsAreImmutableAndPreviewExpandsGroups(t *testing.T) {
 	var stored *db.BlueprintVersion
 	if stored, _ = db.BlueprintVersions.Select(int(version["id"].(float64))); stored == nil || stored.DocumentJSON == "" {
 		t.Fatal("published document was not persisted")
+	}
+	response = resourceAPIRequest(t, fiberApp, token, http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/allocation-pools", `{"name":"Tiny VMIDs","kind":"vmid","start":900,"end":901}`)
+	if response.StatusCode != fiber.StatusCreated {
+		t.Fatalf("create allocation pool status=%d", response.StatusCode)
+	}
+	var pool db.AllocationPool
+	if err = json.NewDecoder(response.Body).Decode(&pool); err != nil {
+		t.Fatal(err)
+	}
+	previewBody = fmt.Sprintf(`{"blueprintVersionID":%d,"groupIDs":[%s],"namePrefix":"it666-fa26","allocationPoolIDs":{"vmid":%d}}`, int(version["id"].(float64)), strings.Join(groupIDs, ","), pool.ID)
+	response = resourceAPIRequest(t, fiberApp, token, http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/deployment-previews", previewBody)
+	if response.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected exhausted VMID preflight conflict, got %d", response.StatusCode)
 	}
 }
 

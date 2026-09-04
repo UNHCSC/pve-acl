@@ -356,6 +356,11 @@ export type Blueprint = {
     versions: Array<{ id: number; uuid: string; version: number; document_digest: string; document: BlueprintDocument; created_at: string }>;
 };
 
+export type AllocationPool = {
+    id: number; uuid: string; project_id: number; name: string; kind: "vmid" | "vlan" | "vxlan" | "external_port" | "ipv4" | "ipv6";
+    start: number; end: number; cidr?: string; available: number;
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {

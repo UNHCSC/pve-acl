@@ -20,11 +20,59 @@ type (
 	}
 
 	deploymentPreviewRequest struct {
-		BlueprintVersionID int    `json:"blueprintVersionID"`
-		GroupIDs           []int  `json:"groupIDs"`
-		NamePrefix         string `json:"namePrefix"`
+		BlueprintVersionID int            `json:"blueprintVersionID"`
+		GroupIDs           []int          `json:"groupIDs"`
+		NamePrefix         string         `json:"namePrefix"`
+		AllocationPoolIDs  map[string]int `json:"allocationPoolIDs"`
+	}
+
+	allocationPoolRequest struct {
+		Name  string `json:"name"`
+		Kind  string `json:"kind"`
+		Start int    `json:"start"`
+		End   int    `json:"end"`
+		CIDR  string `json:"cidr"`
 	}
 )
+
+// getProjectAllocationPools lists capacity available for deployment planning.
+func getProjectAllocationPools(c *fiber.Ctx) (errResult error) {
+	var project *db.Project
+	if project, errResult = requireBlueprintProject(c, true); errResult != nil || project == nil {
+		return
+	}
+	var pools []*db.AllocationPool
+	if pools, errResult = db.AllocationPoolsForProject(project.ID); errResult != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load allocation pools"})
+	}
+	var response []fiber.Map = make([]fiber.Map, 0, len(pools))
+	for _, pool := range pools {
+		var available int
+		if available, errResult = db.AllocationPoolAvailable(pool); errResult != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to calculate allocation capacity"})
+		}
+		response = append(response, fiber.Map{"id": pool.ID, "uuid": pool.UUID, "project_id": pool.ProjectID, "name": pool.Name, "kind": pool.Kind, "start": pool.Start, "end": pool.End, "cidr": pool.CIDR, "available": available})
+	}
+	return c.JSON(response)
+}
+
+// postProjectAllocationPool creates a project-scoped allocation boundary.
+func postProjectAllocationPool(c *fiber.Ctx) (errResult error) {
+	var project *db.Project
+	if project, errResult = requireBlueprintProject(c, true); errResult != nil || project == nil {
+		return
+	}
+	var request allocationPoolRequest
+	if errResult = c.BodyParser(&request); errResult != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	var pool *db.AllocationPool
+	if pool, errResult = db.CreateAllocationPool(project.ID, request.Name, request.Kind, request.Start, request.End, request.CIDR); errResult != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errResult.Error()})
+	}
+	_ = auditRequest(c, "allocation_pool.create", "allocation_pool", &pool.ID, &project.ID, map[string]any{"kind": pool.Kind, "start": pool.Start, "end": pool.End, "cidr": pool.CIDR})
+	return c.Status(fiber.StatusCreated).JSON(pool)
+}
 
 // getProjectBlueprints lists generic blueprints and their immutable versions.
 func getProjectBlueprints(c *fiber.Ctx) (errResult error) {
@@ -155,15 +203,53 @@ func postProjectDeploymentPreview(c *fiber.Ctx) (errResult error) {
 			var name string = strings.ReplaceAll(document.NamePattern, "{{deployment}}", deploymentName)
 			name = strings.ReplaceAll(name, "{{resource}}", resource.Key)
 			resources = append(resources, fiber.Map{"key": resource.Key, "name": name, "kind": resource.Kind, "template": resource.Template, "vcpu": resource.VCPU, "memory_mb": resource.MemoryMB, "disk_gb": resource.DiskGB, "networks": resource.Networks, "configuration_role": resource.ConfigurationRole})
-			totals.VMs++
+			if resource.Kind == "ct" {
+				totals.Containers++
+			} else {
+				totals.VMs++
+			}
 			totals.VCPU += resource.VCPU
 			totals.MemoryMB += resource.MemoryMB
 			totals.StorageGB += resource.DiskGB
 		}
 		totals.Networks += len(document.Networks)
+		for _, network := range document.Networks {
+			if network.Public {
+				totals.PublicIPs++
+			}
+		}
 		deployments = append(deployments, fiber.Map{"name": deploymentName, "group": fiber.Map{"id": group.ID, "name": group.Name, "slug": group.Slug}, "resources": resources, "networks": document.Networks})
 	}
-	return c.JSON(fiber.Map{"blueprint": fiber.Map{"id": blueprint.ID, "name": blueprint.Name, "version": version.Version, "digest": version.DocumentDigest}, "runner": fiber.Map{"opentofu_module": document.OpenTofuModule, "ansible_project": document.AnsibleProject}, "deployments": deployments, "totals": totals, "mutates": false})
+	var allocationNeeds map[string]int = map[string]int{"vmid": totals.VMs + totals.Containers, "vlan": totals.Networks}
+	for _, network := range document.Networks {
+		if network.Public {
+			allocationNeeds["ipv4"] += len(request.GroupIDs)
+			allocationNeeds["external_port"] += len(request.GroupIDs)
+		}
+	}
+	if errResult = db.CheckProjectQuota(project.ID, totals); errResult != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": errResult.Error()})
+	}
+	var capacity []fiber.Map
+	for kind, needed := range allocationNeeds {
+		var poolID int = request.AllocationPoolIDs[kind]
+		if poolID == 0 {
+			continue
+		}
+		var pool *db.AllocationPool
+		if pool, errResult = db.AllocationPools.Select(poolID); errResult != nil || pool == nil || pool.ProjectID != project.ID || pool.Kind != kind || pool.ArchivedAt != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "allocation pool does not match project or kind " + kind})
+		}
+		var available int
+		if available, errResult = db.AllocationPoolAvailable(pool); errResult != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to calculate allocation capacity"})
+		}
+		if available < needed {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": fmt.Sprintf("%s pool has %d available but %d are required", kind, available, needed)})
+		}
+		capacity = append(capacity, fiber.Map{"kind": kind, "pool_id": pool.ID, "needed": needed, "available": available})
+	}
+	return c.JSON(fiber.Map{"blueprint": fiber.Map{"id": blueprint.ID, "name": blueprint.Name, "version": version.Version, "digest": version.DocumentDigest}, "runner": fiber.Map{"opentofu_module": document.OpenTofuModule, "ansible_project": document.AnsibleProject}, "deployments": deployments, "totals": totals, "allocation_needs": allocationNeeds, "allocation_capacity": capacity, "mutates": false})
 }
 
 func requireBlueprintProject(c *fiber.Ctx, manage bool) (projectResult *db.Project, errResult error) {
