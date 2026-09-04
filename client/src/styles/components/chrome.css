@@ -97,6 +97,19 @@
     text-transform: uppercase;
 }
 
+.settings-section-label {
+    border-top: 1px solid var(--color-line);
+    margin-top: 12px;
+    padding-top: 14px;
+}
+
+.indent-glyph {
+    color: var(--color-accent-strong);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    width: 18px;
+}
+
 .theme-options {
     display: grid;
     gap: 6px;

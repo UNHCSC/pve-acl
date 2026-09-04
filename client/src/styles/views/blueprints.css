@@ -53,11 +53,26 @@
 
 .blueprint-document {
     height: 25rem;
-    line-height: 1.55;
     min-height: 14rem;
-    padding: 14px 16px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
     resize: vertical;
-    tab-size: 2;
+}
+
+.blueprint-document:focus-within {
+    border-color: var(--color-accent);
+}
+
+.blueprint-document .cm-editor,
+.blueprint-document .cm-scroller {
+    height: 100%;
+}
+
+.code-editor-loading {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 16px;
 }
 
 .blueprint-group-field {

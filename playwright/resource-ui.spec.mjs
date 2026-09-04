@@ -116,6 +116,10 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     });
 
     await page.goto(`${baseURL}/dashboard?view=blueprints`);
+    await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("banner").getByRole("radio", { name: "2 spaces" }).click();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("organesson-editor-indent"))).toBe("2");
+    await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
     await page.getByLabel("Blueprint name").fill("Generic Lab");
     await page.getByLabel("Slug").fill("generic-lab");
     await page.getByRole("button", { name: "Create blueprint" }).click();

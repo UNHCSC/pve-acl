@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { apiFetch, requestKey } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
 import type { AllocationPool, Blueprint, BlueprintDocument, Deployment, Project } from "../types";
+
+const CodeEditor = lazy(async () => ({ default: (await import("../components/CodeEditor")).CodeEditor }));
 
 const starterDocument: BlueprintDocument = {
     format_version: 1,
@@ -130,7 +132,7 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
         <article className="dashboard-panel">
             <PanelHeading label="Runner contract" title="Blueprint document" />
             <div className="blueprint-panel-body">
-                <label className="field-group"><span className="field-label">Version document (JSON)</span><textarea className="field-input blueprint-document" rows={18} value={document} onChange={(event) => setDocument(event.target.value)} spellCheck={false} /></label>
+                <label className="field-group"><span className="field-label">Version document (JSON)</span><div className="blueprint-document"><Suspense fallback={<div className="code-editor-loading">Loading editor…</div>}><CodeEditor ariaLabel="Version document (JSON)" language="json" value={document} onChange={setDocument} /></Suspense></div></label>
                 <label className="field-group blueprint-group-field"><span className="field-label">Preview group IDs</span><input className="field-input" aria-label="Preview group IDs, comma-separated" value={groupIDs} onChange={(event) => setGroupIDs(event.target.value)} placeholder="12, 13, 14" /><span className="field-help">Enter one or more numeric group IDs, separated by commas.</span></label>
             </div>
         </article>
@@ -142,6 +144,6 @@ export function BlueprintsView({ projects, showToast }: { projects: Project[]; s
             <PanelHeading label="Reserved desired state" title={`Deployment plans (${deployments.length})`} />
             {deployments.length === 0 ? <EmptyState>No deployment plans have been reserved.</EmptyState> : <div className="compact-list">{deployments.map((deployment) => <div className="compact-list-row" key={deployment.id}><span><strong>{deployment.name}</strong><span>{deployment.status} · group {deployment.group_id} · blueprint version {deployment.blueprint_version_id}</span></span><span className="inline-actions"><TextButton onClick={() => runDeployment(deployment, "tofu.plan")}>Plan</TextButton><TextButton onClick={() => runDeployment(deployment, "tofu.apply")}>Apply…</TextButton><TextButton onClick={() => runDeployment(deployment, "ansible.check")}>Ansible check</TextButton></span></div>)}</div>}
         </article>
-        {preview && <article className="dashboard-panel"><PanelHeading label="No infrastructure changes" title="Deployment preview" action={<TextButton onClick={reservePlan}>Reserve deployment plan</TextButton>} /><pre className="blueprint-preview">{JSON.stringify(preview, null, 2)}</pre></article>}
+        {preview && <article className="dashboard-panel"><PanelHeading label="No infrastructure changes" title="Deployment preview" action={<TextButton onClick={reservePlan}>Reserve deployment plan</TextButton>} /><div className="blueprint-preview"><Suspense fallback={<div className="code-editor-loading">Loading preview…</div>}><CodeEditor ariaLabel="Deployment preview JSON" language="json" value={JSON.stringify(preview, null, 2)} readOnly /></Suspense></div></article>}
     </section>;
 }
