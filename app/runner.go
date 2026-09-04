@@ -267,7 +267,14 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 	var finished time.Time = time.Now().UTC()
 	run.FinishedAt = &finished
 	var summary []byte
-	summary, _ = json.Marshal(commandResult)
+	var persistedSummary map[string]any = map[string]any{"command": commandResult}
+	if run.SummaryJSON != "" {
+		var planSummary runner.PlanSummary
+		if json.Unmarshal([]byte(run.SummaryJSON), &planSummary) == nil {
+			persistedSummary["plan"] = planSummary
+		}
+	}
+	summary, _ = json.Marshal(persistedSummary)
 	run.SummaryJSON = string(summary)
 	_ = db.RunnerRuns.Update(run)
 	result.Success = true
@@ -299,6 +306,12 @@ func executeRunnerAction(ctx context.Context, deployment *db.Deployment, run *db
 		*commandResult, errResult = runnerIntegration.tools.Plan(ctx, run.Workspace, "organesson.auto.tfvars.json", log)
 		if errResult == nil {
 			run.StateRef = filepath.Join(run.Workspace, "planned.tfplan")
+			var planSummary runner.PlanSummary
+			if planSummary, errResult = runnerIntegration.tools.PlanSummary(ctx, run.Workspace, "planned.tfplan"); errResult == nil {
+				var summary []byte
+				summary, _ = json.Marshal(planSummary)
+				run.SummaryJSON = string(summary)
+			}
 		}
 	case "tofu.apply":
 		*commandResult, errResult = runnerIntegration.tools.Apply(ctx, run.Workspace, "planned.tfplan", log)

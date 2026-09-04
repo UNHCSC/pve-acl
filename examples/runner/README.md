@@ -13,3 +13,14 @@ runner and the form:
 ```
 
 The source directory must also be below one of `runner.allowed_source_roots`.
+
+Run the installed-tool smoke test from the repository root with:
+
+```text
+ORGANESSON_RUNNER_SMOKE=1 go test ./runner -run TestRealInstalledToolsRunHarmlessExample -count=1 -v
+```
+
+This test executes OpenTofu init, plan, structured plan inspection, and apply,
+then executes the Ansible playbook in check mode. Its work and state directories
+are temporary and are removed when the test finishes. It never contacts
+Proxmox or another remote host.

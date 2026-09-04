@@ -100,6 +100,37 @@ func TestRunnerRejectsPathEscapeAndRunsToolArguments(t *testing.T) {
 	}
 }
 
+func TestPlanSummaryRejectsMalformedOutput(t *testing.T) {
+	var executor *LocalExecutor = newTestExecutor(t, time.Second, 4096)
+	var executable string = writeExecutable(t, "tofu-malformed", "#!/bin/sh\nprintf '%s\\n' 'not-json'\n")
+	executor.config.OpenTofuBinary = executable
+	var tools *ToolRunner
+	var err error
+	if tools, err = NewToolRunner(executor); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Join(executor.config.StateRoot, "deployment-summary"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(executor.config.StateRoot, "deployment-summary", "planned.tfplan"), []byte("plan"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tools.PlanSummary(context.Background(), "deployment-summary", "planned.tfplan"); err == nil || !strings.Contains(err.Error(), "invalid OpenTofu plan summary") {
+		t.Fatalf("expected malformed summary error, got %v", err)
+	}
+}
+
+func TestLocalExecutorReportsFailureAndTimeout(t *testing.T) {
+	var executor *LocalExecutor = newTestExecutor(t, 50*time.Millisecond, 4096)
+	var err error
+	if _, err = executor.Run(context.Background(), Command{Executable: writeExecutable(t, "failure", "#!/bin/sh\nexit 7\n"), Directory: "failure"}, nil); err == nil || !strings.Contains(err.Error(), "code 7") {
+		t.Fatalf("expected exit failure, got %v", err)
+	}
+	if _, err = executor.Run(context.Background(), Command{Executable: writeExecutable(t, "timeout", "#!/bin/sh\nsleep 30\n"), Directory: "timeout"}, nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+}
+
 func TestMaterializeLocalSourceRequiresAllowlistAndDigest(t *testing.T) {
 	var executor *LocalExecutor = newTestExecutor(t, time.Second, 4096)
 	var source string = executor.config.AllowedSources[0]

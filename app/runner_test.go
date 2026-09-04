@@ -31,7 +31,7 @@ func TestOpenTofuPlanRunsThroughSchedulerAndPersistsArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var executable string = filepath.Join(root, "tofu-test")
-	if err = os.WriteFile(executable, []byte("#!/bin/sh\nfor argument in \"$@\"; do case \"$argument\" in -out=*) touch \"${argument#-out=}\";; esac; done\nprintf '%s\\n' 'token=runner-secret' \"tofu $*\"\n"), 0700); err != nil {
+	if err = os.WriteFile(executable, []byte("#!/bin/sh\nif [ \"$1\" = show ]; then printf '%s\\n' '{\"resource_changes\":[{\"change\":{\"actions\":[\"create\"]}}]}'; exit 0; fi\nfor argument in \"$@\"; do case \"$argument\" in -out=*) touch \"${argument#-out=}\";; esac; done\nprintf '%s\\n' 'token=runner-secret' \"tofu $*\"\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	var executor *runner.LocalExecutor
@@ -111,6 +111,9 @@ func TestOpenTofuPlanRunsThroughSchedulerAndPersistsArtifacts(t *testing.T) {
 	var runs []*db.RunnerRun
 	if runs, err = db.RunnerRunsForDeployment(deployment.ID); err != nil || len(runs) != 1 || runs[0].StateRef == "" || runs[0].SourceDigest != digest {
 		t.Fatalf("runner artifacts were not persisted: %#v err=%v", runs, err)
+	}
+	if !strings.Contains(runs[0].SummaryJSON, `"add":1`) {
+		t.Fatalf("plan summary was not persisted: %s", runs[0].SummaryJSON)
 	}
 	var logs []*db.JobLog
 	if logs, err = db.JobLogsForJob(job.ID); err != nil || len(logs) == 0 {

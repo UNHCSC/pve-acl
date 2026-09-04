@@ -2,10 +2,13 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/UNHCSC/organesson/db"
 )
 
 type (
@@ -14,6 +17,7 @@ type (
 		Plan(ctx context.Context, workspace string, variablesFile string, log LogFunc) (Result, error)
 		Apply(ctx context.Context, workspace string, planFile string, log LogFunc) (Result, error)
 		Destroy(ctx context.Context, workspace string, variablesFile string, log LogFunc) (Result, error)
+		PlanSummary(ctx context.Context, workspace string, planFile string) (PlanSummary, error)
 	}
 
 	Ansible interface {
@@ -23,6 +27,12 @@ type (
 
 	ToolRunner struct {
 		executor *LocalExecutor
+	}
+
+	PlanSummary struct {
+		Add     int `json:"add"`
+		Change  int `json:"change"`
+		Destroy int `json:"destroy"`
 	}
 )
 
@@ -81,6 +91,50 @@ func (runner *ToolRunner) Apply(ctx context.Context, workspace string, planFile 
 	return runner.executor.Run(ctx, Command{Executable: runner.executor.config.OpenTofuBinary, Arguments: []string{"apply", "-input=false", "-no-color", "-auto-approve", planFile}, Directory: workspace}, log)
 }
 
+// PlanSummary reads a saved plan and returns its resource action counts.
+func (runner *ToolRunner) PlanSummary(ctx context.Context, workspace string, planFile string) (summary PlanSummary, errResult error) {
+	if workspace, errResult = cleanRelativeWorkspace(workspace); errResult != nil {
+		return
+	}
+	if planFile, errResult = runner.safeStateFile(workspace, planFile, ".tfplan"); errResult != nil {
+		return
+	}
+	var output strings.Builder
+	var capture LogFunc = func(stream db.JobLogStream, line string) (err error) {
+		if stream == db.JobLogStreamStdout {
+			output.WriteString(line)
+		}
+		return
+	}
+	if _, errResult = runner.executor.Run(ctx, Command{Executable: runner.executor.config.OpenTofuBinary, Arguments: []string{"show", "-json", planFile}, Directory: workspace}, capture); errResult != nil {
+		return
+	}
+	var plan struct {
+		ResourceChanges []struct {
+			Change struct {
+				Actions []string `json:"actions"`
+			} `json:"change"`
+		} `json:"resource_changes"`
+	}
+	if errResult = json.Unmarshal([]byte(output.String()), &plan); errResult != nil {
+		errResult = fmt.Errorf("invalid OpenTofu plan summary: %w", errResult)
+		return
+	}
+	for _, resource := range plan.ResourceChanges {
+		for _, action := range resource.Change.Actions {
+			switch action {
+			case "create":
+				summary.Add++
+			case "update":
+				summary.Change++
+			case "delete":
+				summary.Destroy++
+			}
+		}
+	}
+	return
+}
+
 // Destroy performs an explicitly requested OpenTofu destroy operation.
 func (runner *ToolRunner) Destroy(ctx context.Context, workspace string, variablesFile string, log LogFunc) (result Result, errResult error) {
 	if workspace, errResult = cleanRelativeWorkspace(workspace); errResult != nil {
@@ -113,7 +167,11 @@ func (runner *ToolRunner) Run(ctx context.Context, workspace string, inventoryFi
 	if check {
 		arguments = append(arguments, "--check", "--diff")
 	}
-	return runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: arguments, Directory: workspace, Environment: map[string]string{"ANSIBLE_NOCOLOR": "1", "ANSIBLE_HOST_KEY_CHECKING": "True"}}, log)
+	var temporaryDirectory string = filepath.Join(runner.executor.config.WorkRoot, workspace, ".ansible", "tmp")
+	if errResult = os.MkdirAll(temporaryDirectory, 0700); errResult != nil {
+		return
+	}
+	return runner.executor.Run(ctx, Command{Executable: runner.executor.config.AnsibleBinary, Arguments: arguments, Directory: workspace, Environment: map[string]string{"ANSIBLE_NOCOLOR": "1", "ANSIBLE_HOST_KEY_CHECKING": "True", "ANSIBLE_LOCAL_TEMP": temporaryDirectory}}, log)
 }
 
 func (runner *ToolRunner) safeStateFile(workspace, path string, extensions ...string) (pathResult string, errResult error) {
