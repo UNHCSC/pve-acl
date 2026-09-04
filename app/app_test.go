@@ -100,5 +100,8 @@ func TestPageTemplatesRenderReactRoots(t *testing.T) {
 		if !strings.Contains(string(body), marker) {
 			t.Fatalf("expected %s response to contain %q", path, marker)
 		}
+		if !strings.Contains(string(body), `<script type="module" src="/static/build/site.js"></script>`) {
+			t.Fatalf("expected %s response to load the bundled JavaScript as an ES module", path)
+		}
 	}
 }
