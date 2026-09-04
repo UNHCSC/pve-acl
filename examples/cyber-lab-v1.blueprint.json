@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "opentofu_module": "git::ssh://git.example.edu/labs.git//modules/proxmox-lab?ref=v1.0.0",
+  "ansible_project": "git::ssh://git.example.edu/labs.git//ansible/cyber-lab?ref=v1.0.0",
+  "name_pattern": "{{deployment}}-{{resource}}",
+  "resources": [
+    { "key": "fw", "kind": "vm", "template": "pfsense-v1", "vcpu": 2, "memory_mb": 4096, "disk_gb": 32, "networks": ["wan", "lan", "dmz"], "configuration_role": "firewall" },
+    { "key": "sw-lan", "kind": "vm", "template": "aruba-cx-v1", "vcpu": 2, "memory_mb": 4096, "disk_gb": 16, "networks": ["lan"], "configuration_role": "lan_switch" },
+    { "key": "sw-dmz", "kind": "vm", "template": "aruba-cx-v1", "vcpu": 2, "memory_mb": 4096, "disk_gb": 16, "networks": ["dmz"], "configuration_role": "dmz_switch" },
+    { "key": "ad", "kind": "vm", "template": "windows-server-ad-v1", "vcpu": 4, "memory_mb": 8192, "disk_gb": 80, "networks": ["lan"], "configuration_role": "active_directory" },
+    { "key": "win11", "kind": "vm", "template": "windows-11-v1", "vcpu": 4, "memory_mb": 8192, "disk_gb": 80, "networks": ["lan"], "configuration_role": "windows_client" },
+    { "key": "fedora", "kind": "vm", "template": "fedora-43-v1", "vcpu": 2, "memory_mb": 4096, "disk_gb": 40, "networks": ["lan"], "configuration_role": "fedora_client" },
+    { "key": "web", "kind": "vm", "template": "linux-web-v1", "vcpu": 2, "memory_mb": 2048, "disk_gb": 24, "networks": ["dmz"], "configuration_role": "web_server" },
+    { "key": "ubuntu", "kind": "vm", "template": "ubuntu-lts-v1", "vcpu": 2, "memory_mb": 2048, "disk_gb": 24, "networks": ["dmz"], "configuration_role": "dmz_client" }
+  ],
+  "networks": [
+    { "key": "wan", "kind": "routed", "ipv4_cidr": "10.180.1.0/24", "ipv6_cidr": "fd0e:f5b4:57c7:180:1::/80", "public": true },
+    { "key": "lan", "kind": "isolated", "ipv4_cidr": "192.168.1.0/24", "ipv6_cidr": "fd2d:1e61:5c2b::/48" },
+    { "key": "dmz", "kind": "isolated", "ipv4_cidr": "172.23.83.128/25", "ipv6_cidr": "fdec:1e81:2bee::/48" }
+  ]
+}

@@ -21,6 +21,7 @@ import { applyTheme, readStoredTheme } from "./theme";
 import { viewTitles } from "./types";
 import { classNames, displayUser, initialView, initials } from "./ui-helpers";
 import { DirectoryView } from "./views/DirectoryView";
+import { BlueprintsView } from "./views/BlueprintsView";
 import { HomePage } from "./views/HomePage";
 import { IdentityView } from "./views/IdentityView";
 import { InfrastructureView } from "./views/InfrastructureView";
@@ -719,6 +720,7 @@ function DashboardApp() {
                             }
                         />
                     )}
+                    {view === "blueprints" && <BlueprintsView projects={tree?.projects || []} showToast={showToast} />}
                     {view === "infrastructure" && summary?.capabilities.canManageProxmox && <InfrastructureView showToast={showToast} />}
                     {view === "operations" && <OperationsView isSiteAdmin={Boolean(summary?.currentUser.isSiteAdmin)} showToast={showToast} />}
                     {view === "people" && summary?.capabilities.canViewUsers && <PeopleView users={users} canImport={Boolean(summary.capabilities.canManageUsers)} openImport={() => openContextModal("import-users")} />}

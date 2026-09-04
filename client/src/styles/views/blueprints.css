@@ -1,0 +1,15 @@
+.blueprint-document,
+.blueprint-preview {
+    box-sizing: border-box;
+    width: 100%;
+    overflow: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .8rem;
+}
+
+.blueprint-preview {
+    max-height: 32rem;
+    padding: 1rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: .5rem;
+}
