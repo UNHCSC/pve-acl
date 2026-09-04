@@ -14,40 +14,50 @@ test.beforeAll(async () => {
             response.end('<!doctype html><html><head><meta charset="utf-8"></head><body class="dashboard-page"><div id="dashboard-root"></div><script type="module" src="/static/build/site.js"></script></body></html>');
             return;
         }
+
         if (request.url?.startsWith("/static/")) {
             const file = join(root, "client", request.url);
             response.setHeader("Content-Type", extname(file) === ".css" ? "text/css" : extname(file) === ".js" ? "text/javascript" : "application/octet-stream");
-            createReadStream(file).on("error", () => { response.statusCode = 404; response.end(); }).pipe(response);
+            createReadStream(file).on("error", () => {
+                response.statusCode = 404;
+                response.end();
+            }).pipe(response);
             return;
         }
+
         response.statusCode = 404;
         response.end();
     });
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
     baseURL = `http://127.0.0.1:${server.address().port}`;
 });
 
 test.afterAll(async () => {
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise(resolve => server.close(resolve));
 });
 
 test("assigned user operates a VM, sees job progress, and opens a popup console", async ({ page }) => {
     let powerState = 1;
     let jobPoll = 0;
+
     await mockDashboard(page, () => [{
         id: 2, project_id: 1, name: "Student VM", slug: "student-vm", resource_type: 0,
         resource_type_label: "vm", status: 0, status_label: "ready", power_state: powerState,
         proxmox_vmid: 121, proxmox_node: "tungsten", assignment_count: 1, asset_group_count: 1,
         can_start: true, can_stop: true, can_reboot: true, can_console: true
     }]);
+
     await page.route("**/api/v1/resources/2/actions/start", async (route) => {
         await fulfill(route, job(9, 0, 0));
     });
+
     await page.route("**/api/v1/jobs/9", async (route) => {
         jobPoll++;
         if (jobPoll > 1) powerState = 0;
         await fulfill(route, job(9, jobPoll > 1 ? 2 : 1, jobPoll > 1 ? 100 : 45));
     });
+
     await page.route("**/api/v1/resources/2/console-sessions", async (route) => {
         await fulfill(route, { websocket_path: "/api/v1/console-sessions/test/websocket", console_password: "scoped-ticket" }, 201);
     });
@@ -76,6 +86,7 @@ test("capability-limited and unassigned users cannot discover unavailable action
         proxmox_vmid: 121, proxmox_node: "tungsten", can_start: false, can_stop: false,
         can_reboot: false, can_console: true
     }]);
+
     await page.goto(`${baseURL}/dashboard?view=directory`);
     await page.getByRole("button", { name: "Limited VM power actions" }).click();
     await expect(page.getByRole("menuitem", { name: "Open console" })).toBeVisible();
@@ -103,14 +114,17 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
             deployments = [{ id: 10, uuid: "deployment", project_id: 1, blueprint_version_id: 7, group_id: 12, name: "class-lab-g01", status: "planned", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
             return fulfill(route, { deployments }, 201);
         }
+    
         if (path === "/api/v1/projects/1/blueprints") {
             blueprints = [{ id: 4, uuid: "blueprint", project_id: 1, name: "Generic Lab", slug: "generic-lab", versions: [] }];
             return fulfill(route, blueprints[0], 201);
         }
+    
         if (path === "/api/v1/blueprints/4/versions") {
             blueprints[0].versions = [{ id: 7, uuid: "version", version: 1, document_digest: "sha256:test", document: {}, created_at: new Date().toISOString() }];
             return fulfill(route, blueprints[0].versions[0], 201);
         }
+    
         if (path === "/api/v1/projects/1/deployment-previews") return fulfill(route, { blueprint: { name: "Generic Lab", version: 1 }, runner: { opentofu_module: "module", ansible_project: "playbooks" }, deployments: [{ name: "class-lab-g01", resources: [{ name: "class-lab-g01-server" }] }], mutates: false });
         if (path === "/api/v1/deployments/10/runs" && route.request().method() === "GET") return fulfill(route, [{ id: 21, job_id: 31, deployment_id: 10, tool: "tofu", action: "tofu.plan", workspace: "deployment-10/run-31", summary_json: '{"plan":{"add":8,"change":0,"destroy":0}}', job_status: 2, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), created_at: new Date().toISOString() }]);
         return fulfill(route, []);

@@ -120,8 +120,13 @@ func immutableCommit(value string) bool {
 }
 
 func directoryDigest(root string) (valueResult string, errResult error) {
+	var rootDirectory *os.Root
+	if rootDirectory, errResult = os.OpenRoot(root); errResult != nil {
+		return
+	}
+	defer rootDirectory.Close()
 	var paths []string
-	if errResult = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	if errResult = fs.WalkDir(os.DirFS(root), ".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -129,11 +134,7 @@ func directoryDigest(root string) (valueResult string, errResult error) {
 			return fmt.Errorf("source contains a symlink")
 		}
 		if !entry.IsDir() {
-			var relative string
-			if relative, walkErr = filepath.Rel(root, path); walkErr != nil {
-				return walkErr
-			}
-			paths = append(paths, filepath.ToSlash(relative))
+			paths = append(paths, path)
 		}
 		return nil
 	}); errResult != nil {
@@ -146,7 +147,7 @@ func directoryDigest(root string) (valueResult string, errResult error) {
 		if _, errResult = io.WriteString(hash, relative+"\x00"); errResult != nil {
 			return
 		}
-		if file, errResult = os.Open(filepath.Join(root, filepath.FromSlash(relative))); errResult != nil {
+		if file, errResult = rootDirectory.Open(relative); errResult != nil {
 			return
 		}
 		if _, errResult = io.Copy(hash, file); errResult != nil {
@@ -161,28 +162,38 @@ func directoryDigest(root string) (valueResult string, errResult error) {
 }
 
 func copySourceTree(source, destination string) (errResult error) {
-	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) (callbackErr error) {
+	var (
+		sourceDirectory      *os.Root
+		destinationDirectory *os.Root
+	)
+	if sourceDirectory, errResult = os.OpenRoot(source); errResult != nil {
+		return
+	}
+	defer sourceDirectory.Close()
+	if destinationDirectory, errResult = os.OpenRoot(destination); errResult != nil {
+		return
+	}
+	defer destinationDirectory.Close()
+	errResult = fs.WalkDir(os.DirFS(source), ".", func(path string, entry fs.DirEntry, walkErr error) (callbackErr error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		var relative string
-		if relative, callbackErr = filepath.Rel(source, path); callbackErr != nil {
-			return
-		}
-		var target string = filepath.Join(destination, relative)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0700)
+			if path == "." {
+				return nil
+			}
+			return destinationDirectory.MkdirAll(path, 0700)
 		}
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("source contains a non-regular file")
 		}
 		var input *os.File
 		var output *os.File
-		if input, callbackErr = os.Open(path); callbackErr != nil {
+		if input, callbackErr = sourceDirectory.Open(path); callbackErr != nil {
 			return
 		}
 		defer input.Close()
-		if output, callbackErr = os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600); callbackErr != nil {
+		if output, callbackErr = destinationDirectory.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600); callbackErr != nil {
 			return
 		}
 		if _, callbackErr = io.Copy(output, input); callbackErr != nil {
@@ -191,4 +202,5 @@ func copySourceTree(source, destination string) (errResult error) {
 		}
 		return output.Close()
 	})
+	return
 }

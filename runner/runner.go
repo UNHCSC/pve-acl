@@ -93,6 +93,7 @@ func (executor *LocalExecutor) Run(ctx context.Context, command Command, log Log
 	var cancel context.CancelFunc
 	timeoutContext, cancel = context.WithTimeout(ctx, executor.config.Timeout)
 	defer cancel()
+	// #nosec G204 -- the executable is configured or selected internally and arguments are passed without a shell.
 	var process *exec.Cmd = exec.Command(command.Executable, command.Arguments...)
 	process.Dir = command.Directory
 	process.Env = cleanEnvironment(command.Environment)
@@ -132,6 +133,9 @@ func (executor *LocalExecutor) Run(ctx context.Context, command Command, log Log
 	if errResult != nil && !errors.Is(errResult, context.Canceled) && !errors.Is(errResult, context.DeadlineExceeded) {
 		errResult = fmt.Errorf("command exited with code %d", result.ExitCode)
 	}
+	if errResult == nil {
+		errResult = output.err()
+	}
 	return
 }
 
@@ -167,6 +171,7 @@ type boundedOutput struct {
 	limit     int
 	count     int
 	truncated bool
+	scanError error
 	log       LogFunc
 	secrets   []string
 }
@@ -198,6 +203,20 @@ func (output *boundedOutput) read(reader io.Reader, stream db.JobLogStream, done
 			_ = output.log(stream, line)
 		}
 	}
+	if scanner.Err() != nil && !errors.Is(scanner.Err(), os.ErrClosed) {
+		output.mu.Lock()
+		if output.scanError == nil {
+			output.scanError = fmt.Errorf("read command stream %v: %w", stream, scanner.Err())
+		}
+		output.mu.Unlock()
+	}
+}
+
+func (output *boundedOutput) err() (errResult error) {
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	errResult = output.scanError
+	return
 }
 
 func cleanEnvironment(values map[string]string) []string {
@@ -228,6 +247,7 @@ func secureRoot(path string) (pathResult string, errResult error) {
 	if errResult = os.MkdirAll(pathResult, 0700); errResult != nil {
 		return
 	}
+	// #nosec G302 -- this is a private directory and requires its owner execute bit for traversal.
 	errResult = os.Chmod(pathResult, 0700)
 	return
 }

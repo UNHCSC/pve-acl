@@ -19,6 +19,8 @@ const (
 	TaskTypeSystemDemo    = "system.demo"
 	TaskTypeProxmoxAction = "proxmox.action"
 	TaskTypeRunnerAction  = "runner.action"
+	taskInsertRetryCount  = 500
+	taskInsertRetryDelay  = 10 * time.Millisecond
 )
 
 type (
@@ -91,7 +93,7 @@ func newWithConcurrency(databaseFile string, globalLimit, perNodeLimit int, drai
 	client, err = gasket.NewClient(
 		databaseFile,
 		gasket.PollInterval(250*time.Millisecond),
-		gasket.DatabaseLockRetry(50, 10*time.Millisecond),
+		gasket.DatabaseLockRetry(500, 10*time.Millisecond),
 		gasket.TaskRecoveryTimeout(10*time.Minute),
 	)
 	if err != nil {
@@ -218,7 +220,7 @@ func (s *Service) EnqueueJobTask(job *db.Job, taskType string, payload JobPayloa
 	}
 	var taskInfo *gasket.TaskInfo
 
-	taskInfo, err = s.client.NewTask(taskType, encoded, opts...)
+	taskInfo, err = s.newTask(taskType, encoded, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +229,21 @@ func (s *Service) EnqueueJobTask(job *db.Job, taskType string, payload JobPayloa
 	}
 	job.QueueID = strconv.Itoa(taskInfo.ID())
 	return taskInfo, nil
+}
+
+// newTask retries lock contention before gasket has inserted any task records.
+func (s *Service) newTask(taskType string, payload []byte, opts ...gasket.TaskOption) (taskInfoResult *gasket.TaskInfo, errResult error) {
+	for range taskInsertRetryCount {
+		if taskInfoResult, errResult = s.client.NewTask(taskType, payload, opts...); errResult == nil {
+			return
+		}
+		var message string = errResult.Error()
+		if !strings.HasPrefix(message, "insert fail task:") || !strings.Contains(message, "database is locked") {
+			return
+		}
+		time.Sleep(taskInsertRetryDelay)
+	}
+	return
 }
 
 // EnqueueJobTask creates a task on the default scheduler.
