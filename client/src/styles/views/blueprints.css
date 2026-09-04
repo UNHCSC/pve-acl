@@ -1,15 +1,97 @@
+.blueprint-panel-body {
+    display: grid;
+    gap: 18px;
+    padding: 18px 20px 20px;
+}
+
+.blueprint-panel-body .panel-copy {
+    color: var(--color-ink-muted);
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 76ch;
+}
+
+.blueprint-form-grid,
+.blueprint-pool-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.blueprint-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.blueprint-project-field {
+    grid-column: 1 / -1;
+    max-width: 32rem;
+}
+
+.blueprint-pool-grid {
+    grid-template-columns: minmax(12rem, 1.4fr) repeat(3, minmax(9rem, 1fr));
+}
+
+.blueprint-form-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.field-help {
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .blueprint-document,
 .blueprint-preview {
     box-sizing: border-box;
-    width: 100%;
-    overflow: auto;
     font-family: "IBM Plex Mono", monospace;
     font-size: .8rem;
+    overflow: auto;
+    width: 100%;
+}
+
+.blueprint-document {
+    height: 25rem;
+    line-height: 1.55;
+    min-height: 14rem;
+    padding: 14px 16px;
+    resize: vertical;
+    tab-size: 2;
+}
+
+.blueprint-group-field {
+    max-width: 32rem;
 }
 
 .blueprint-preview {
+    border: 1px solid var(--color-line);
+    border-radius: .5rem;
     max-height: 32rem;
     padding: 1rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: .5rem;
+}
+
+@media (max-width: 1000px) {
+    .blueprint-pool-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .blueprint-panel-body {
+        padding: 16px;
+    }
+
+    .blueprint-form-grid,
+    .blueprint-pool-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .blueprint-project-field {
+        grid-column: auto;
+    }
+
+    .blueprint-document {
+        height: 20rem;
+    }
 }
