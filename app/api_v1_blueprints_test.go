@@ -97,6 +97,69 @@ func TestBlueprintVersionsAreImmutableAndPreviewExpandsGroups(t *testing.T) {
 	if response.StatusCode != fiber.StatusConflict {
 		t.Fatalf("expected exhausted VMID preflight conflict, got %d", response.StatusCode)
 	}
+	var vmidPool *db.AllocationPool
+	var vlanPool *db.AllocationPool
+	if vmidPool, err = db.CreateAllocationPool(project.ID, "Deployment VMIDs", "vmid", 1000, 1023, ""); err != nil {
+		t.Fatal(err)
+	}
+	if vlanPool, err = db.CreateAllocationPool(project.ID, "Deployment VLANs", "vlan", 200, 202, ""); err != nil {
+		t.Fatal(err)
+	}
+	var ids []int
+	for _, group := range groups {
+		ids = append(ids, group.ID)
+	}
+	var results chan error = make(chan error, 2)
+	for index := 0; index < 2; index++ {
+		go func(value int) {
+			var planErr error
+			_, planErr = db.CreateDeploymentPlan(db.DeploymentPlanInput{ProjectID: project.ID, BlueprintVersionID: int(version["id"].(float64)), GroupIDs: ids, NamePrefix: fmt.Sprintf("race-%d", value), AllocationPoolIDs: map[string]int{"vmid": vmidPool.ID, "vlan": vlanPool.ID}})
+			results <- planErr
+		}(index)
+	}
+	var successes int
+	for index := 0; index < 2; index++ {
+		if err = <-results; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("expected exactly one concurrent plan to reserve capacity, got %d", successes)
+	}
+	var allocations []*db.Allocation
+	if allocations, err = db.Allocations.SelectAll(); err != nil || len(allocations) != 27 {
+		t.Fatalf("expected 27 durable unique allocations, count=%d err=%v", len(allocations), err)
+	}
+	var values map[string]bool = make(map[string]bool, len(allocations))
+	for _, allocation := range allocations {
+		if values[allocation.AllocationKey] {
+			t.Fatalf("duplicate allocation key %s", allocation.AllocationKey)
+		}
+		values[allocation.AllocationKey] = true
+	}
+	var persistedDeployments []*db.Deployment
+	if persistedDeployments, err = db.DeploymentsForProject(project.ID); err != nil || len(persistedDeployments) != 3 {
+		t.Fatalf("expected three persisted deployments, count=%d err=%v", len(persistedDeployments), err)
+	}
+	var rollbackVMIDs *db.AllocationPool
+	var rollbackVLANs *db.AllocationPool
+	if rollbackVMIDs, err = db.CreateAllocationPool(project.ID, "Rollback VMIDs", "vmid", 3000, 3023, ""); err != nil {
+		t.Fatal(err)
+	}
+	if rollbackVLANs, err = db.CreateAllocationPool(project.ID, "Rollback VLANs", "vlan", 300, 302, ""); err != nil {
+		t.Fatal(err)
+	}
+	var existingPrefix string = strings.TrimSuffix(persistedDeployments[0].Name, "-g01")
+	if _, err = db.CreateDeploymentPlan(db.DeploymentPlanInput{ProjectID: project.ID, BlueprintVersionID: int(version["id"].(float64)), GroupIDs: ids, NamePrefix: existingPrefix, AllocationPoolIDs: map[string]int{"vmid": rollbackVMIDs.ID, "vlan": rollbackVLANs.ID}}); err == nil {
+		t.Fatal("expected duplicate deployment names to roll back")
+	}
+	if allocations, err = db.Allocations.SelectAll(); err != nil || len(allocations) != 27 {
+		t.Fatalf("failed plan leaked allocations, count=%d err=%v", len(allocations), err)
+	}
+	var reservations []*db.QuotaReservation
+	if reservations, err = db.QuotaReservations.SelectAll(); err != nil || len(reservations) != 2 || reservations[1].State != db.QuotaReservationReleased {
+		t.Fatalf("failed plan did not release quota: %#v err=%v", reservations, err)
+	}
 }
 
 func TestBlueprintDocumentRejectsInvalidReferences(t *testing.T) {

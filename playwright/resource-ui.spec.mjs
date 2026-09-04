@@ -91,12 +91,18 @@ test("capability-limited and unassigned users cannot discover unavailable action
 
 test("instructor publishes a runner-backed blueprint and previews group deployments", async ({ page }) => {
     let blueprints = [];
+    let deployments = [];
     await page.route("**/api/v1/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
         if (path === "/api/v1/system/summary") return fulfill(route, { counts: {}, currentUser: { id: 1, username: "instructor", isSiteAdmin: true }, capabilities: { canManageProxmox: true } });
         if (path === "/api/v1/projects/tree") return fulfill(route, { organizations: [{ id: 1, name: "Course", slug: "course", parent_org_id: null }], projects: [{ id: 1, organization_id: 1, name: "Class Lab", slug: "class-lab", is_active: true }] });
         if (path === "/api/v1/users/me/access") return fulfill(route, { groups: [], roles: [], roleBindings: [], isSiteAdmin: true });
         if (path === "/api/v1/projects/1/blueprints" && route.request().method() === "GET") return fulfill(route, blueprints);
+        if (path === "/api/v1/projects/1/deployments" && route.request().method() === "GET") return fulfill(route, deployments);
+        if (path === "/api/v1/projects/1/deployments") {
+            deployments = [{ id: 10, uuid: "deployment", project_id: 1, blueprint_version_id: 7, group_id: 12, name: "class-lab-g01", status: "planned", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+            return fulfill(route, { deployments }, 201);
+        }
         if (path === "/api/v1/projects/1/blueprints") {
             blueprints = [{ id: 4, uuid: "blueprint", project_id: 1, name: "Generic Lab", slug: "generic-lab", versions: [] }];
             return fulfill(route, blueprints[0], 201);
@@ -120,6 +126,8 @@ test("instructor publishes a runner-backed blueprint and previews group deployme
     await page.getByRole("button", { name: "Preview" }).click();
     await expect(page.getByText("Deployment preview")).toBeVisible();
     await expect(page.getByText(/class-lab-g01-server/)).toBeVisible();
+    await page.getByRole("button", { name: "Reserve deployment plan" }).click();
+    await expect(page.getByText("class-lab-g01", { exact: true })).toBeVisible();
 });
 
 async function mockDashboard(page, resources) {

@@ -361,6 +361,11 @@ export type AllocationPool = {
     start: number; end: number; cidr?: string; available: number;
 };
 
+export type Deployment = {
+    id: number; uuid: string; project_id: number; blueprint_version_id: number; group_id: number;
+    quota_reservation_id?: number; name: string; status: string; created_at: string; updated_at: string;
+};
+
 export type OrgNode = Organization & { children: OrgNode[]; projects: Project[] };
 
 export const viewTitles: Record<ViewKey, string> = {

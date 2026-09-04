@@ -44,6 +44,7 @@ type (
 		ProjectID          int       `gosqlite:"project_id,fkey:Project.id,notnull" json:"project_id"`
 		BlueprintVersionID int       `gosqlite:"blueprint_version_id,fkey:BlueprintVersion.id,notnull" json:"blueprint_version_id"`
 		GroupID            int       `gosqlite:"group_id,fkey:CloudGroup.id,notnull" json:"group_id"`
+		QuotaReservationID *int      `gosqlite:"quota_reservation_id,fkey:QuotaReservation.id" json:"quota_reservation_id,omitempty"`
 		Name               string    `gosqlite:"name,unique,notnull" json:"name"`
 		Status             string    `gosqlite:"status,notnull" json:"status"`
 		CreatedAt          time.Time `gosqlite:"created_at,notnull" json:"created_at"`
@@ -77,6 +78,7 @@ type (
 		PoolID        int        `gosqlite:"pool_id,fkey:AllocationPool.id,notnull" json:"pool_id"`
 		DeploymentID  int        `gosqlite:"deployment_id,fkey:Deployment.id,notnull" json:"deployment_id"`
 		AllocationKey string     `gosqlite:"allocation_key,unique,notnull" json:"allocation_key"`
+		Purpose       string     `gosqlite:"purpose,notnull" json:"purpose"`
 		Value         string     `gosqlite:"value,notnull" json:"value"`
 		CreatedAt     time.Time  `gosqlite:"created_at,notnull" json:"created_at"`
 		ReleasedAt    *time.Time `gosqlite:"released_at" json:"released_at,omitempty"`
@@ -194,6 +196,9 @@ func ValidateBlueprintDocument(document BlueprintDocument) (errResult error) {
 	if strings.TrimSpace(document.OpenTofuModule) == "" || strings.TrimSpace(document.AnsibleProject) == "" {
 		return fmt.Errorf("opentofu_module and ansible_project are required")
 	}
+	if !immutableRunnerReference(document.OpenTofuModule) || !immutableRunnerReference(document.AnsibleProject) {
+		return fmt.Errorf("opentofu_module and ansible_project must contain a pinned ref or digest")
+	}
 	if !strings.Contains(document.NamePattern, "{{deployment}}") {
 		return fmt.Errorf("name_pattern must contain {{deployment}}")
 	}
@@ -305,4 +310,8 @@ func AllocationPoolAvailable(pool *AllocationPool) (availableResult int, errResu
 
 func validAllocationKind(kind string) bool {
 	return kind == "vmid" || kind == "vlan" || kind == "vxlan" || kind == "external_port" || kind == "ipv4" || kind == "ipv6"
+}
+
+func immutableRunnerReference(value string) bool {
+	return strings.Contains(value, "ref=") || strings.Contains(value, "sha256:")
 }

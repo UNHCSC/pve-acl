@@ -35,6 +35,41 @@ type (
 	}
 )
 
+// getProjectDeployments lists durable desired-state plans without implying provisioning.
+func getProjectDeployments(c *fiber.Ctx) (errResult error) {
+	var project *db.Project
+	if project, errResult = requireBlueprintProject(c, false); errResult != nil || project == nil {
+		return
+	}
+	var deployments []*db.Deployment
+	if deployments, errResult = db.DeploymentsForProject(project.ID); errResult != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load deployments"})
+	}
+	return c.JSON(deployments)
+}
+
+// postProjectDeployment commits a validated plan and reserves its quota and pool values.
+func postProjectDeployment(c *fiber.Ctx) (errResult error) {
+	var project *db.Project
+	if project, errResult = requireBlueprintProject(c, true); errResult != nil || project == nil {
+		return
+	}
+	var request deploymentPreviewRequest
+	if errResult = c.BodyParser(&request); errResult != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	var result db.DeploymentPlanResult
+	if result, errResult = db.CreateDeploymentPlan(db.DeploymentPlanInput{ProjectID: project.ID, BlueprintVersionID: request.BlueprintVersionID, GroupIDs: request.GroupIDs, NamePrefix: request.NamePrefix, AllocationPoolIDs: request.AllocationPoolIDs}); errResult != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": errResult.Error()})
+	}
+	var deploymentIDs []int
+	for _, deployment := range result.Deployments {
+		deploymentIDs = append(deploymentIDs, deployment.ID)
+	}
+	_ = auditRequest(c, "deployment.plan.create", "deployment", nil, &project.ID, map[string]any{"deployment_ids": deploymentIDs, "blueprint_version_id": request.BlueprintVersionID, "allocation_count": len(result.Allocations), "quota_reservation_id": result.Quota.ID})
+	return c.Status(fiber.StatusCreated).JSON(result)
+}
+
 // getProjectAllocationPools lists capacity available for deployment planning.
 func getProjectAllocationPools(c *fiber.Ctx) (errResult error) {
 	var project *db.Project
