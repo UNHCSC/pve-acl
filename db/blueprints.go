@@ -308,6 +308,35 @@ func AllocationPoolAvailable(pool *AllocationPool) (availableResult int, errResu
 	return
 }
 
+// PreviewAllocationValues returns the next values without reserving them.
+func PreviewAllocationValues(pool *AllocationPool, count int) (valuesResult []string, errResult error) {
+	if pool == nil || pool.ArchivedAt != nil || count < 0 {
+		return nil, fmt.Errorf("allocation pool was not found")
+	}
+	allocationMu.Lock()
+	defer allocationMu.Unlock()
+	var allocations []*Allocation
+	if allocations, errResult = Allocations.SelectAllWithFilter(gosqlite.NewFilter().KeyCmp(Allocations.FieldBySQLName("pool_id"), gosqlite.OpEqual, pool.ID)); errResult != nil {
+		return
+	}
+	var used map[string]bool = make(map[string]bool, len(allocations)+count)
+	for _, allocation := range allocations {
+		if allocation.ReleasedAt == nil {
+			used[allocation.Value] = true
+		}
+	}
+	valuesResult = make([]string, 0, count)
+	for index := 0; index < count; index++ {
+		var value string
+		if value, errResult = nextPoolValueFromUsed(pool, used); errResult != nil {
+			return nil, errResult
+		}
+		used[value] = true
+		valuesResult = append(valuesResult, value)
+	}
+	return
+}
+
 func validAllocationKind(kind string) bool {
 	return kind == "vmid" || kind == "vlan" || kind == "vxlan" || kind == "external_port" || kind == "ipv4" || kind == "ipv6"
 }

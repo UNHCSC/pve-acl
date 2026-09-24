@@ -105,6 +105,22 @@ func TestBlueprintVersionsAreImmutableAndPreviewExpandsGroups(t *testing.T) {
 	if vlanPool, err = db.CreateAllocationPool(project.ID, "Deployment VLANs", "vlan", 200, 202, ""); err != nil {
 		t.Fatal(err)
 	}
+	previewBody = fmt.Sprintf(`{"blueprintVersionID":%d,"groupIDs":[%s],"namePrefix":"preview-values","allocationPoolIDs":{"vmid":%d,"vlan":%d}}`, int(version["id"].(float64)), strings.Join(groupIDs, ","), vmidPool.ID, vlanPool.ID)
+	response = resourceAPIRequest(t, fiberApp, token, http.MethodPost, "/api/v1/projects/"+strconv.Itoa(project.ID)+"/deployment-previews", previewBody)
+	if response.StatusCode != fiber.StatusOK {
+		t.Fatalf("allocation preview status=%d", response.StatusCode)
+	}
+	var allocationPreview map[string]any
+	if err = json.NewDecoder(response.Body).Decode(&allocationPreview); err != nil {
+		t.Fatal(err)
+	}
+	var previewDeployments []any = allocationPreview["deployments"].([]any)
+	for _, item := range previewDeployments {
+		var allocations []any = item.(map[string]any)["allocations"].([]any)
+		if len(allocations) != 9 {
+			t.Fatalf("expected eight VMID and one VLAN allocation per deployment, got %d", len(allocations))
+		}
+	}
 	var ids []int
 	for _, group := range groups {
 		ids = append(ids, group.ID)

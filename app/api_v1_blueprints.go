@@ -269,9 +269,11 @@ func postProjectDeploymentPreview(c *fiber.Ctx) (errResult error) {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": errResult.Error()})
 	}
 	var capacity []fiber.Map
+	var previewValues map[string][]string = make(map[string][]string, len(allocationNeeds))
 	for kind, needed := range allocationNeeds {
 		var poolID int = request.AllocationPoolIDs[kind]
 		if poolID == 0 {
+			capacity = append(capacity, fiber.Map{"kind": kind, "pool_id": 0, "needed": needed, "available": 0})
 			continue
 		}
 		var pool *db.AllocationPool
@@ -285,9 +287,36 @@ func postProjectDeploymentPreview(c *fiber.Ctx) (errResult error) {
 		if available < needed {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": fmt.Sprintf("%s pool has %d available but %d are required", kind, available, needed)})
 		}
+		if previewValues[kind], errResult = db.PreviewAllocationValues(pool, needed); errResult != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to preview allocation values"})
+		}
 		capacity = append(capacity, fiber.Map{"kind": kind, "pool_id": pool.ID, "needed": needed, "available": available})
 	}
+	var allocationIndexes map[string]int = make(map[string]int, len(allocationNeeds))
+	for _, deployment := range deployments {
+		var allocations []fiber.Map
+		for _, resource := range document.Resources {
+			appendPreviewAllocation(&allocations, "vmid", "vmid:"+resource.Key, previewValues, allocationIndexes)
+		}
+		for _, network := range document.Networks {
+			appendPreviewAllocation(&allocations, "vlan", "vlan:"+network.Key, previewValues, allocationIndexes)
+			if network.Public {
+				appendPreviewAllocation(&allocations, "ipv4", "ipv4:"+network.Key, previewValues, allocationIndexes)
+				appendPreviewAllocation(&allocations, "external_port", "external_port:"+network.Key, previewValues, allocationIndexes)
+			}
+		}
+		deployment["allocations"] = allocations
+	}
 	return c.JSON(fiber.Map{"blueprint": fiber.Map{"id": blueprint.ID, "name": blueprint.Name, "version": version.Version, "digest": version.DocumentDigest}, "runner": fiber.Map{"opentofu_module": document.OpenTofuModule, "ansible_project": document.AnsibleProject}, "deployments": deployments, "totals": totals, "allocation_needs": allocationNeeds, "allocation_capacity": capacity, "mutates": false})
+}
+
+func appendPreviewAllocation(allocations *[]fiber.Map, kind, purpose string, values map[string][]string, indexes map[string]int) {
+	var index int = indexes[kind]
+	if index >= len(values[kind]) {
+		return
+	}
+	*allocations = append(*allocations, fiber.Map{"kind": kind, "purpose": purpose, "value": values[kind][index]})
+	indexes[kind] = index + 1
 }
 
 func requireBlueprintProject(c *fiber.Ctx, manage bool) (projectResult *db.Project, errResult error) {

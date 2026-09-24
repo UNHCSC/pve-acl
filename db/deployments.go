@@ -196,6 +196,10 @@ func nextPoolValue(pool *AllocationPool) (valueResult string, errResult error) {
 			used[allocation.Value] = true
 		}
 	}
+	return nextPoolValueFromUsed(pool, used)
+}
+
+func nextPoolValueFromUsed(pool *AllocationPool, used map[string]bool) (valueResult string, errResult error) {
 	for offset := pool.Start; offset <= pool.End; offset++ {
 		var candidate string
 		if candidate, errResult = allocationValue(pool, offset); errResult != nil {

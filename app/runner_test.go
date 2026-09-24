@@ -109,6 +109,10 @@ func TestRunnerActionsRunThroughSchedulerAndPersistArtifacts(t *testing.T) {
 	if job.Status != db.JobStatusSucceeded {
 		t.Fatalf("runner job did not succeed: %#v", job)
 	}
+	var storedDeployment *db.Deployment
+	if storedDeployment, err = db.Deployments.Select(deployment.ID); err != nil || storedDeployment == nil || storedDeployment.Status != "planned" {
+		t.Fatalf("plan did not update deployment state: deployment=%#v err=%v", storedDeployment, err)
+	}
 	var runs []*db.RunnerRun
 	if runs, err = db.RunnerRunsForDeployment(deployment.ID); err != nil || len(runs) != 1 || runs[0].StateRef == "" || runs[0].SourceDigest != digest {
 		if len(runs) == 1 {
@@ -137,6 +141,9 @@ func TestRunnerActionsRunThroughSchedulerAndPersistArtifacts(t *testing.T) {
 	if applyJob = waitForRunnerJob(t, applyJob.ID); applyJob.Status != db.JobStatusSucceeded {
 		t.Fatalf("apply job did not succeed: %#v", applyJob)
 	}
+	if storedDeployment, err = db.Deployments.Select(deployment.ID); err != nil || storedDeployment == nil || storedDeployment.Status != "provisioned" {
+		t.Fatalf("apply did not update deployment state: deployment=%#v err=%v", storedDeployment, err)
+	}
 	var ansibleJob *db.Job
 	response = runnerAPIRequest(t, fiberApp, token, deployment.ID, `{"action":"ansible.check"}`, "ansible-check")
 	if response.StatusCode != fiber.StatusAccepted {
@@ -147,6 +154,9 @@ func TestRunnerActionsRunThroughSchedulerAndPersistArtifacts(t *testing.T) {
 	}
 	if ansibleJob = waitForRunnerJob(t, ansibleJob.ID); ansibleJob.Status != db.JobStatusSucceeded {
 		t.Fatalf("Ansible job did not succeed: %#v", ansibleJob)
+	}
+	if storedDeployment, err = db.Deployments.Select(deployment.ID); err != nil || storedDeployment == nil || storedDeployment.Status != "ready" {
+		t.Fatalf("Ansible job did not update deployment state: deployment=%#v err=%v", storedDeployment, err)
 	}
 	response = runnerAPIRequest(t, fiberApp, token, deployment.ID, `{"action":"tofu.destroy","confirm":false}`, "destroy-unconfirmed")
 	if response.StatusCode != fiber.StatusBadRequest {
@@ -162,6 +172,9 @@ func TestRunnerActionsRunThroughSchedulerAndPersistArtifacts(t *testing.T) {
 	}
 	if destroyJob = waitForRunnerJob(t, destroyJob.ID); destroyJob.Status != db.JobStatusSucceeded {
 		t.Fatalf("destroy job did not succeed: %#v", destroyJob)
+	}
+	if storedDeployment, err = db.Deployments.Select(deployment.ID); err != nil || storedDeployment == nil || storedDeployment.Status != "destroyed" {
+		t.Fatalf("destroy did not update deployment state: deployment=%#v err=%v", storedDeployment, err)
 	}
 	cancel()
 	if err = <-done; err != nil && !errors.Is(err, context.Canceled) {

@@ -91,6 +91,9 @@ func configureRunnerIntegration() (errResult error) {
 	if config.Config.Runner.AnsibleExecutable == "" {
 		config.Config.Runner.AnsibleExecutable = "ansible-playbook"
 	}
+	config.Config.Runner.WorkDir = workRoot
+	config.Config.Runner.StateDir = stateRoot
+	config.Config.Runner.AllowedSourceRoots = sources
 	var executor *runner.LocalExecutor
 	if executor, errResult = runner.NewLocalExecutor(runner.Config{WorkRoot: workRoot, StateRoot: stateRoot, AllowedSources: sources, OpenTofuBinary: config.Config.Runner.OpenTofuExecutable, AnsibleBinary: config.Config.Runner.AnsibleExecutable, Timeout: timeout, MaxOutputBytes: outputLimit}); errResult != nil {
 		return
@@ -254,6 +257,9 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 		result.Error = err
 		return
 	}
+	deployment.Status = runnerDeploymentStatus(jobPayload.Operation, false)
+	deployment.UpdatedAt = time.Now().UTC()
+	_ = db.Deployments.Update(deployment)
 	var run *db.RunnerRun
 	var workspace string = fmt.Sprintf("deployment-%d/run-%d", deployment.ID, job.ID)
 	if jobPayload.Operation == "tofu.apply" || jobPayload.Operation == "tofu.destroy" {
@@ -322,13 +328,47 @@ func consumeRunnerAction(_ int, payload []byte) (result gasket.TaskConsumerResul
 	_ = db.RunnerRuns.Update(run)
 	if err == nil {
 		_ = db.MarkJobFinished(job.ID, db.JobStatusSucceeded)
+		deployment.Status = runnerDeploymentStatus(jobPayload.Operation, true)
+		deployment.UpdatedAt = time.Now().UTC()
+		_ = db.Deployments.Update(deployment)
 	} else if cancelled {
 		_ = db.MarkJobFinished(job.ID, db.JobStatusCancelled)
 	} else {
 		_ = db.FailJob(job.ID, "runner_failed", db.RedactSensitiveText(err.Error()), "permanent")
+		deployment.Status = "error"
+		deployment.UpdatedAt = time.Now().UTC()
+		_ = db.Deployments.Update(deployment)
 	}
 	result.Success = true
 	return
+}
+
+// runnerDeploymentStatus maps a runner action to its durable deployment lifecycle state.
+func runnerDeploymentStatus(action string, finished bool) (status string) {
+	if finished {
+		switch action {
+		case "tofu.plan":
+			return "planned"
+		case "tofu.apply":
+			return "provisioned"
+		case "tofu.destroy":
+			return "destroyed"
+		case "ansible.run", "ansible.check":
+			return "ready"
+		}
+	}
+	switch action {
+	case "tofu.plan":
+		return "planning"
+	case "tofu.apply":
+		return "provisioning"
+	case "tofu.destroy":
+		return "destroying"
+	case "ansible.run", "ansible.check":
+		return "configuring"
+	default:
+		return "error"
+	}
 }
 
 func executeRunnerAction(ctx context.Context, deployment *db.Deployment, run *db.RunnerRun, action string, commandResult *runner.Result, log runner.LogFunc) (errResult error) {
