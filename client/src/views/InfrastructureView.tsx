@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { EmptyState, PanelHeading, TextButton } from "../components/common";
-import type { ProxmoxHealth, ProxmoxInventory, RunnerHealth } from "../types";
+import type { ProxmoxHealth, ProxmoxInventory, ProxmoxInventoryGuest, RunnerHealth } from "../types";
 
 const byteCount = (value = 0) => {
     if (!value) {
@@ -32,6 +32,14 @@ export function InfrastructureView({ showToast }: { showToast: (message: string,
             showToast(`Inventory synchronized: ${inventory.guests.length} managed guests`, "success");
         },
         onError: (error) => showToast(error instanceof Error ? error.message : "Proxmox inventory sync failed", "warning")
+    });
+    const removeMutation = useMutation({
+        mutationFn: (guest: ProxmoxInventoryGuest) => apiFetch(`/api/v1/proxmox/inventory/${guest.id}`, { method: "DELETE" }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["proxmox", "inventory"] });
+            showToast("Missing inventory record removed", "success");
+        },
+        onError: (error) => showToast(error instanceof Error ? error.message : "Inventory record removal failed", "warning")
     });
     const health = healthQuery.data;
     const inventory = inventoryQuery.data;
@@ -79,7 +87,7 @@ export function InfrastructureView({ showToast }: { showToast: (message: string,
                                 <span><strong>{guest.name || `VM ${guest.vmid}`}</strong><span>{guest.is_template ? "Template" : guest.kind.toUpperCase()} · VMID {guest.vmid}</span></span>
                                 <span><strong>{guest.node}</strong><span>{guest.cluster_identity}</span></span>
                                 <span><strong className={`drift-state drift-${guest.drift_state}`}>{driftLabel(guest.drift_state)}</strong><span>{guest.last_error || "Reconciled"}</span></span>
-                                <span><strong>{guest.status || "unknown"}</strong><span>{guest.missing_since ? "Missing from latest sync" : "Tag verified"}</span></span>
+                                <span><strong>{guest.status || "unknown"}</strong><span>{guest.missing_since ? "Missing from latest sync" : "Tag verified"}</span>{guest.missing_since && <button className="button-secondary compact-button" type="button" disabled={removeMutation.isPending} onClick={() => { if (window.confirm(`Remove the retained inventory record for ${guest.name || `VM ${guest.vmid}`}?`)) removeMutation.mutate(guest); }}>Remove record</button>}</span>
                             </div>
                         ))}
                     </div>

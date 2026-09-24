@@ -86,6 +86,7 @@ func InitAndListen(parentLog *golog.Logger) (app *fiber.App, err error) {
 	apiV1Proxmox.Get("/health", getProxmoxHealth)
 	apiV1Proxmox.Get("/inventory", getProxmoxInventory)
 	apiV1Proxmox.Post("/inventory/sync", postProxmoxInventorySync)
+	apiV1Proxmox.Delete("/inventory/:id", deleteProxmoxInventoryGuest)
 	apiV1Jobs.Get("/", getJobs)
 	apiV1Jobs.Post("/demo", postDemoJob)
 	apiV1Jobs.Get("/:id", getJob)

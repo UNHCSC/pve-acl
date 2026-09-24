@@ -97,8 +97,9 @@ func addResourceCapabilities(c *fiber.Ctx, project *db.Project, resources []*db.
 	var permissions []db.PermissionKey = []db.PermissionKey{db.PermissionVMStart, db.PermissionVMStop, db.PermissionVMReboot, db.PermissionVMConsole}
 	var names []string = []string{"can_start", "can_stop", "can_reboot", "can_console"}
 	for index, resource := range resources {
+		var allowed bool
+
 		for permissionIndex, permission := range permissions {
-			var allowed bool
 			if allowed, errResult = currentUserCan(c, permission, db.RoleBindingScopeResource, &resource.ID); errResult != nil {
 				return
 			}
@@ -109,6 +110,10 @@ func addResourceCapabilities(c *fiber.Ctx, project *db.Project, resources []*db.
 			}
 			items[index][names[permissionIndex]] = allowed
 		}
+		if allowed, errResult = currentUserCanDeleteResource(c, project, resource); errResult != nil {
+			return
+		}
+		items[index]["can_delete"] = allowed
 	}
 	return
 }
@@ -307,8 +312,8 @@ func deleteProjectResource(c *fiber.Ctx) (errResult error) {
 	if !allowed {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "permission denied"})
 	}
-	if err = db.ArchiveAssetAssignmentsForResource(resource.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove resource assignments"})
+	if err = db.DetachResource(resource.ID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove resource associations"})
 	}
 	if err = db.ArchiveResource(resource); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete resource"})

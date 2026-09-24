@@ -199,6 +199,7 @@ export type ProjectResource = {
     can_stop?: boolean;
     can_reboot?: boolean;
     can_console?: boolean;
+    can_delete?: boolean;
     created_at?: string;
     updated_at?: string;
 };
