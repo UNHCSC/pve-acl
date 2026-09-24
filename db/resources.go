@@ -174,6 +174,19 @@ func ArchiveResource(resource *Resource) (errResult error) {
 	return Resources.Update(resource)
 }
 
+// DetachResource removes all access and ownership associations for a resource.
+func DetachResource(resourceID int) (errResult error) {
+	if errResult = ArchiveAssetAssignmentsForResource(resourceID); errResult != nil {
+		return
+	}
+	if _, errResult = ResourceOwners.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(ResourceOwners.FieldBySQLName("resource_id"), gosqlite.OpEqual, resourceID)); errResult != nil {
+		return
+	}
+	errResult = RemoveResourceRoleBindings(resourceID)
+	return
+}
+
 // LocalInventoryResourceType reports whether a resource type is user-manageable here.
 func LocalInventoryResourceType(value ResourceType) (okResult bool) {
 	return value == ResourceTypeVM || value == ResourceTypeCT || value == ResourceTypeNetwork

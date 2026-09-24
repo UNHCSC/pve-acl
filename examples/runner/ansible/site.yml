@@ -1,0 +1,8 @@
+---
+- name: Verify the Organesson Ansible runner
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Report successful isolated execution
+      ansible.builtin.debug:
+        msg: "Organesson Ansible runner reached {{ inventory_hostname }}"

@@ -333,6 +333,17 @@ func RemoveResourceRoleBindingsForSource(resourceID int, sourceType string, sour
 	return err
 }
 
+// RemoveResourceRoleBindings removes all role bindings scoped to a resource.
+func RemoveResourceRoleBindings(resourceID int) (errResult error) {
+	var err error
+
+	_, err = RoleBindings.DeleteWithFilter(gosqlite.NewFilter().
+		KeyCmp(RoleBindings.FieldBySQLName("scope_type"), gosqlite.OpEqual, RoleBindingScopeResource).
+		And().
+		KeyCmp(RoleBindings.FieldBySQLName("scope_id"), gosqlite.OpEqual, resourceID))
+	return err
+}
+
 // RoleBindingsForUserAndGroups returns role bindings for a user and their groups.
 func RoleBindingsForUserAndGroups(userID int, groupIDs []int) (itemsResult []*RoleBinding, errResult error) {
 	var (

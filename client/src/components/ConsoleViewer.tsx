@@ -17,10 +17,14 @@ export function ConsoleViewer({ path, password, targetWindow, onClose }: { path:
         }
         const releaseConsole = () => {
             disconnect.current();
-            try {
-                if (targetWindow.document.pointerLockElement) {
-                    void targetWindow.document.exitPointerLock();
+            const releasePointerLock = (document: Document) => {
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
                 }
+            };
+            releasePointerLock(window.document);
+            try {
+                releasePointerLock(targetWindow.document);
             } catch {
                 // The popup document may already be gone.
             }

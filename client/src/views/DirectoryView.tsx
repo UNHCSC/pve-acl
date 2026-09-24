@@ -675,7 +675,7 @@ function ProjectResourcesPanel(props: {
                                     <button className="button-secondary compact-button" type="button" aria-expanded={expandedResourceID === resource.id} onClick={() => setExpandedResourceID((current) => current === resource.id ? null : resource.id)}>Details</button>
                                     <RowActionMenu ariaLabel={`${resource.name} actions`} className="tree-actions access-row-actions" menuClassName="tree-inline-menu">
                                         <button type="button" role="menuitem" onClick={props.createAssetAssignment}>Assign access</button>
-                                        <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>Archive resource</button>
+                                        {resource.can_delete && <button type="button" role="menuitem" className="danger-action" onClick={() => props.deleteResource(resource)}>Archive resource</button>}
                                     </RowActionMenu>
                                 </div>
                             </div>

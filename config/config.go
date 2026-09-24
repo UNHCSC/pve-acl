@@ -31,6 +31,16 @@ type Configuration struct {
 		ShutdownDrainSeconds int    `toml:"shutdown_drain_seconds" default:"20"`
 	} `toml:"scheduler"` // Embedded task scheduler configuration
 
+	Runner struct {
+		WorkDir            string   `toml:"work_dir" default:"runner-data/work"`
+		StateDir           string   `toml:"state_dir" default:"runner-data/state"`
+		AllowedSourceRoots []string `toml:"allowed_source_roots" default:"[\"examples\"]"`
+		OpenTofuExecutable string   `toml:"opentofu_executable" default:"tofu"`
+		AnsibleExecutable  string   `toml:"ansible_executable" default:"ansible-playbook"`
+		TimeoutSeconds     int      `toml:"timeout_seconds" default:"1800"`
+		MaxOutputBytes     int      `toml:"max_output_bytes" default:"1048576"`
+	} `toml:"runner"`
+
 	Secrets struct {
 		MasterKey string `toml:"master_key" default:""` // Base64-encoded 32-byte application encryption key.
 	} `toml:"secrets"`

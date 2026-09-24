@@ -2,11 +2,45 @@ package app
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/UNHCSC/organesson/db"
 	"github.com/gofiber/fiber/v2"
 )
+
+// deleteProxmoxInventoryGuest removes a retained missing guest from local discovery history.
+func deleteProxmoxInventoryGuest(c *fiber.Ctx) (errResult error) {
+	if !currentUserIsSiteAdmin(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "site administrator access required"})
+	}
+	var guestID int
+	if guestID, errResult = strconv.Atoi(c.Params("id")); errResult != nil || guestID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid inventory guest id"})
+	}
+	var guest *db.ProxmoxInventoryGuest
+	if guest, errResult = db.ProxmoxInventoryGuests.Select(guestID); errResult != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load Proxmox inventory guest"})
+	}
+	if guest == nil || guest.ClusterIdentity != proxmoxIntegration.clusterIdentity {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Proxmox inventory guest not found"})
+	}
+	if guest.MissingSince == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "only missing inventory guests can be removed"})
+	}
+	if errResult = db.ProxmoxInventoryGuests.Delete(guest.ID); errResult != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to remove Proxmox inventory guest"})
+	}
+	var actorUserID *int
+	var user *db.User
+	if user = currentDBUser(c); user != nil {
+		actorUserID = &user.ID
+	}
+	if _, errResult = db.WriteAudit(db.AuditInput{ActorUserID: actorUserID, Action: "proxmox.inventory.guest.remove", TargetType: "proxmox_inventory_guest", TargetID: &guest.ID, Metadata: map[string]any{"identity": guest.Identity}}); errResult != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "inventory guest removed but audit recording failed"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
 
 // getProxmoxHealth reports configured connectivity without exposing credentials.
 func getProxmoxHealth(c *fiber.Ctx) (errResult error) {

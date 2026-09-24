@@ -52,7 +52,7 @@ func TestProjectManagerCanManageResourceWorkflow(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("expected one resource, got %#v", resources)
 	}
-	for _, capability := range []string{"can_start", "can_stop", "can_reboot", "can_console"} {
+	for _, capability := range []string{"can_start", "can_stop", "can_reboot", "can_console", "can_delete"} {
 		if resources[0][capability] != true {
 			t.Fatalf("expected manager capability %s, got %#v", capability, resources[0])
 		}

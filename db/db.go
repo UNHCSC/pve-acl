@@ -56,6 +56,7 @@ var (
 	DeploymentResources            *gosqlite.RegisteredStruct[DeploymentResource]
 	AllocationPools                *gosqlite.RegisteredStruct[AllocationPool]
 	Allocations                    *gosqlite.RegisteredStruct[Allocation]
+	RunnerRuns                     *gosqlite.RegisteredStruct[RunnerRun]
 )
 
 // Init initializes this package.
@@ -246,6 +247,10 @@ func Init(parentLog *golog.Logger) (err error) {
 	}
 
 	if err = registerAndMigrate("Allocations", &Allocations, Allocation{}, migrationOpts); err != nil {
+		return
+	}
+
+	if err = registerAndMigrate("RunnerRuns", &RunnerRuns, RunnerRun{}, migrationOpts); err != nil {
 		return
 	}
 
