@@ -8,7 +8,7 @@ require (
 	github.com/casbin/govaluate v1.10.0
 	github.com/creasty/defaults v1.8.0
 	github.com/fasthttp/websocket v1.5.12
-	github.com/go-ldap/ldap/v3 v3.4.14
+	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/gofiber/contrib/websocket v1.3.4
 	github.com/gofiber/fiber/v2 v2.52.15
